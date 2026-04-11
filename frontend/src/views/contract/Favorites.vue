@@ -125,10 +125,10 @@ const getStatusType = (status: string) => {
     APPROVING: 'warning',
     APPROVED: 'success',
     SIGNED: 'success',
-    ARCHIVED: '',
+    ARCHIVED: 'info',
     TERMINATED: 'danger'
   }
-  return map[status] || ''
+  return map[status] || 'info'
 }
 
 const formatDate = (date: string) => {

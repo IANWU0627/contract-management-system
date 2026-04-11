@@ -644,16 +644,16 @@ const formatStatus = (status: string) => {
 
 const getTypeTagType = (type: string) => {
   const cat = categories.value.find(c => c.code === type)
-  if (cat) return cat.color ? 'primary' : ''
+  if (cat) return cat.color ? 'primary' : 'info'
   const map: Record<string, string> = {
     PURCHASE: 'success',
     SALES: 'primary',
     LEASE: 'warning',
     EMPLOYMENT: 'info',
-    SERVICE: '',
+    SERVICE: 'danger',
     OTHER: 'info'
   }
-  return map[type] || ''
+  return map[type] || 'info'
 }
 
 const getStatusTagType = (status: string) => {
@@ -662,10 +662,10 @@ const getStatusTagType = (status: string) => {
     PENDING: 'warning',
     APPROVING: 'warning',
     SIGNED: 'success',
-    ARCHIVED: '',
+    ARCHIVED: 'info',
     TERMINATED: 'danger'
   }
-  return map[status] || ''
+  return map[status] || 'info'
 }
 
 const loadDynamicFieldsForType = async (type: string) => {

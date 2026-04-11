@@ -174,8 +174,8 @@ const formatRole = (role: string) => {
 }
 
 const getRoleTagType = (role: string) => {
-  const map: Record<string, string> = { ADMIN: 'danger', LEGAL: 'warning', USER: '' }
-  return map[role] || ''
+  const map: Record<string, string> = { ADMIN: 'danger', LEGAL: 'warning', USER: 'info' }
+  return map[role] || 'info'
 }
 
 const fetchRoles = async () => {

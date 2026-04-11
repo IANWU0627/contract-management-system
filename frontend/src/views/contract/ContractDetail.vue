@@ -501,9 +501,9 @@ const formatStatus = (status: string) => {
 const getStatusTagType = (status: string) => {
   const map: Record<string, string> = {
     DRAFT: 'info', PENDING: 'warning', APPROVING: 'warning',
-    APPROVED: 'success', SIGNED: 'success', ARCHIVED: '', TERMINATED: 'danger'
+    APPROVED: 'success', SIGNED: 'success', ARCHIVED: 'info', TERMINATED: 'danger'
   }
-  return map[status] || ''
+  return map[status] || 'info'
 }
 
 const getPartyLabel = (type: string) => {
@@ -520,7 +520,7 @@ const getPartyTagType = (type: string) => {
   const map: Record<string, string> = {
     partyA: 'primary', partyB: 'success', partyC: 'warning', partyD: 'info'
   }
-  return map[type] || ''
+  return map[type] || 'info'
 }
 
 const getPaymentMethodLabel = (method: string) => {

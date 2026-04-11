@@ -197,7 +197,7 @@ const getOperationType = (operation: string) => {
     APPROVE: 'success',
     REJECT: 'danger',
     SIGN: 'success',
-    ARCHIVE: '',
+    ARCHIVE: 'info',
     SUBMIT: 'warning',
     FAVORITE: 'warning',
     COPY: 'primary',
@@ -205,7 +205,7 @@ const getOperationType = (operation: string) => {
     TERMINATE: 'danger',
     ANALYZE: 'info'
   }
-  return map[operation] || ''
+  return map[operation] || 'info'
 }
 
 const formatOperation = (operation: string) => {

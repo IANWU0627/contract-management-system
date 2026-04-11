@@ -119,7 +119,7 @@ const handleReset = () => {
 const getDaysTagType = (days: number) => {
   if (days === 0) return 'danger'
   if (days <= 7) return 'warning'
-  return ''
+  return 'info'
 }
 
 const fetchData = async () => {

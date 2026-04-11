@@ -63,7 +63,7 @@ const formatChangeType = (type: string) => {
   return translated !== key ? translated : type
 }
 
-const getChangeTypeTag = (type: string) => {
+const getTypeTagType = (type: string) => {
   const map: Record<string, string> = {
     CREATE: 'success',
     UPDATE: 'primary',
@@ -75,7 +75,7 @@ const getChangeTypeTag = (type: string) => {
     ARCHIVE: 'info',
     TERMINATE: 'danger'
   }
-  return map[type] || ''
+  return map[type] || 'info'
 }
 
 const formatRemark = (fieldName: string, changeType: string) => {

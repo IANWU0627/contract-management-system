@@ -201,7 +201,7 @@ const getChangeTypeTag = (type: string) => {
     ARCHIVE: 'info',
     TERMINATE: 'danger'
   }
-  return map[type] || ''
+  return map[type] || 'info'
 }
 
 const formatRemark = (fieldName: string, changeType: string) => {

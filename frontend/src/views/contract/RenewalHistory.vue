@@ -138,7 +138,7 @@ const getRenewalTypeTag = (type: string) => {
     UPDATE: 'warning',
     REPLACE: 'info'
   }
-  return map[type] || ''
+  return map[type] || 'info'
 }
 
 const getStatusTagType = (status: string) => {
@@ -147,7 +147,7 @@ const getStatusTagType = (status: string) => {
     APPROVED: 'success',
     REJECTED: 'danger'
   }
-  return map[status] || ''
+  return map[status] || 'info'
 }
 
 const fetchRenewals = async () => {

@@ -298,17 +298,17 @@ const formatStatus = (status: string) => {
 const getTypeTagType = (type: string) => {
   const map: Record<string, string> = { 
     PURCHASE: 'success', SALES: 'primary', LEASE: 'warning', 
-    EMPLOYMENT: 'info', SERVICE: '', OTHER: 'info' 
+    EMPLOYMENT: 'info', SERVICE: 'danger', OTHER: 'info' 
   }
-  return map[type] || ''
+  return map[type] || 'info'
 }
 
 const getStatusTagType = (status: string) => {
   const map: Record<string, string> = { 
     DRAFT: 'info', PENDING: 'warning', APPROVING: 'warning', 
-    APPROVED: 'success', SIGNED: 'success', ARCHIVED: '', TERMINATED: 'danger' 
+    APPROVED: 'success', SIGNED: 'success', ARCHIVED: 'info', TERMINATED: 'danger' 
   }
-  return map[status] || ''
+  return map[status] || 'info'
 }
 
 const initCharts = async (allContracts: any[]) => {
