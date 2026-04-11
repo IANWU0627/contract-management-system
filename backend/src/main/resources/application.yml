@@ -1,0 +1,83 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: toy-contract
+  task:
+    scheduling:
+      pool:
+        size: 2
+
+  # MySQL Database
+  datasource:
+    url: jdbc:mysql://localhost:3306/contract_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: root 
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql,classpath:db/migration/V1__init_schema.sql
+      data-locations: classpath:data.sql
+      continue-on-error: true
+  h2:
+    console:
+      enabled: false
+
+  # H2 Database (开发用 - 已禁用)
+  # datasource:
+  #   url: jdbc:h2:file:./data/contractdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
+  #   driver-class-name: org.h2.Driver
+  #   username: sa
+  #   password: 
+
+  servlet:
+    multipart:
+      max-file-size: 40MB
+      max-request-size: 40MB
+
+# MyBatis Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.contracthub.entity
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET:ToyContract-Secret-Key-For-JWT-Token-Generation-2024}
+  expiration: 86400000  # 24小时
+  refresh-expiration: 604800000  # 7天
+
+# File Upload
+file:
+  upload-dir: ./uploads
+
+# CORS
+cors:
+  allowed-origins: ${CORS_ORIGINS:*}
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.contracthub: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ./logs/application.log
+    max-size: 10MB
+    max-history: 30
+
+# Rate Limiting
+rate-limit:
+  enabled: false
+  max-requests-per-minute: 60

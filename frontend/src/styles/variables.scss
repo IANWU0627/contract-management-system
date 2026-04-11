@@ -1,0 +1,324 @@
+/* ===== CSS 变量主题系统 ===== */
+/* 支持: light / dark / system(跟随系统) */
+
+:root {
+  /* === 主色调 === */
+  --primary: #667eea;
+  --primary-light: #818cf8;
+  --primary-dark: #5a67d8;
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  
+  /* === 统一渐变色系 === */
+  --gradient-success: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  --gradient-warning: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --gradient-danger: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  --gradient-info: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  
+  /* === 语义色 === */
+  --success: #10b981;
+  --success-light: #34d399;
+  --success-bg: rgba(16, 185, 129, 0.1);
+  
+  --warning: #f59e0b;
+  --warning-light: #fbbf24;
+  --warning-bg: rgba(245, 158, 11, 0.1);
+  
+  --danger: #ef4444;
+  --danger-light: #f87171;
+  --danger-bg: rgba(239, 68, 68, 0.1);
+  
+  --info: #3b82f6;
+  --info-light: #60a5fa;
+  --info-bg: rgba(59, 130, 246, 0.1);
+  
+  /* === 中性色 - 浅色模式 === */
+  --text-primary: #1f2937;
+  --text-regular: #4b5563;
+  --text-secondary: #6b7280;
+  --text-placeholder: #9ca3af;
+  --text-disabled: #d1d5db;
+  
+  --bg-page: #f3f4f6;
+  --bg-card: #ffffff;
+  --bg-hover: #f9fafb;
+  --bg-input: #ffffff;
+  --bg-mask: rgba(0, 0, 0, 0.5);
+  
+  --border-color: #e5e7eb;
+  --border-light: #f3f4f6;
+  --border-dark: #d1d5db;
+  
+  /* === 阴影 === */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  
+  /* === 圆角 === */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  
+  /* === 过渡 === */
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* === 字体 === */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  
+  /* === 间距 === */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  
+  /* === 骨架屏 === */
+  --skeleton-base: #e5e7eb;
+  --skeleton-highlight: #f3f4f6;
+  
+  /* === 侧边栏 === */
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 64px;
+  --sidebar-bg: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  
+  /* === 顶部导航 === */
+  --navbar-height: 56px;
+  --tags-view-height: 44px;
+  
+  /* === 导航栏工具按钮 === */
+  --nav-btn-bg: transparent;
+  --nav-btn-color: #52525b;
+  --nav-btn-hover-bg: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+  --nav-btn-hover-color: #667eea;
+  
+  /* === 弹窗/对话框 === */
+  --dialog-bg: #ffffff;
+  --dialog-header-bg: var(--primary-gradient);
+  --dialog-overlay-bg: rgba(0, 0, 0, 0.45);
+  
+  /* === 下拉菜单 === */
+  --dropdown-bg: #ffffff;
+  --dropdown-item-hover: var(--bg-hover);
+  --dropdown-border: var(--border-color);
+}
+
+/* ===== 深色模式 ===== */
+.dark {
+  /* === 主色调 - 深色模式（更柔和、护眼） === */
+  --primary: #818cf8;
+  --primary-light: #a5b4fc;
+  --primary-dark: #6366f1;
+  --primary-gradient: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  
+  /* === 统一渐变色系 - 深色模式 === */
+  --gradient-success: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  --gradient-warning: linear-gradient(135deg, #d946ef 0%, #f093fb 100%);
+  --gradient-danger: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+  --gradient-info: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  --gradient-secondary: linear-gradient(135deg, #d946ef 0%, #f093fb 100%);
+  
+  /* === 语义色 - 深色模式（降低饱和度避免刺眼）=== */
+  --success: #34d399;
+  --success-light: #6ee7b7;
+  --success-bg: rgba(52, 211, 153, 0.12);
+  
+  --warning: #fbbf24;
+  --warning-light: #fcd34d;
+  --warning-bg: rgba(251, 191, 36, 0.12);
+  
+  --danger: #f87171;
+  --danger-light: #fca5a5;
+  --danger-bg: rgba(248, 113, 113, 0.12);
+  
+  --info: #60a5fa;
+  --info-light: #93c5fd;
+  --info-bg: rgba(96, 165, 250, 0.12);
+  
+  /* === 中性色 - 深色模式（基于 slate 色系） === */
+  --text-primary: #f1f5f9;
+  --text-regular: #cbd5e1;
+  --text-secondary: #94a3b8;
+  --text-placeholder: #64748b;
+  --text-disabled: #475569;
+  
+  --bg-page: #0f172a;
+  --bg-card: #1e293b;
+  --bg-hover: #334155;
+  --bg-input: #1e293b;
+  --bg-mask: rgba(0, 0, 0, 0.72);
+  
+  --border-color: #334155;
+  --border-light: #334155;
+  --border-dark: #1e293b;
+  
+  /* === 阴影 - 深色模式（使用深色阴影） === */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.35);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.35), 0 4px 6px -4px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+  
+  /* === 骨架屏 - 深色模式 === */
+  --skeleton-base: #334155;
+  --skeleton-highlight: #475569;
+  
+  /* === 侧边栏 - 深色模式（加深渐变） === */
+  --sidebar-bg: linear-gradient(180deg, #4c51bf 0%, #5b21b6 100%);
+  
+  /* === 导航栏工具按钮 - 暗色模式 === */
+  --nav-btn-bg: transparent;
+  --nav-btn-color: #94a3b8;
+  --nav-btn-hover-bg: rgba(129, 140, 248, 0.15);
+  --nav-btn-hover-color: #a5b4fc;
+  
+  /* === 弹窗/对话框 - 淗色模式 === */
+  --dialog-bg: #1e293b;
+  --dialog-overlay-bg: rgba(0, 0, 0, 0.65);
+  
+  /* === 下拉菜单 - 淗色模式 === */
+  --dropdown-bg: #1e293b;
+  --dropdown-item-hover: #334155;
+  --dropdown-border: #334155;
+}
+
+/* ===== Element Plus 变量覆盖 ===== */
+:root {
+  --el-color-primary: var(--primary);
+  --el-color-primary-light-3: var(--primary-light);
+  --el-color-primary-light-5: var(--primary-light);
+  --el-color-primary-light-7: var(--primary-light);
+  --el-color-primary-light-8: var(--primary-light);
+  --el-color-primary-light-9: rgba(102, 126, 234, 0.1);
+  --el-color-primary-dark-2: var(--primary-dark);
+  
+  --el-color-success: var(--success);
+  --el-color-warning: var(--warning);
+  --el-color-danger: var(--danger);
+  --el-color-info: var(--info);
+  
+  --el-bg-color: var(--bg-card);
+  --el-bg-color-page: var(--bg-page);
+  --el-bg-color-overlay: var(--bg-card);
+  
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-regular);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-placeholder);
+  --el-text-color-disabled: var(--text-disabled);
+  
+  --el-border-color: var(--border-color);
+  --el-border-color-light: var(--border-light);
+  --el-border-color-lighter: var(--border-light);
+  --el-border-color-extra-light: var(--border-light);
+  --el-border-color-dark: var(--border-dark);
+  
+  --el-fill-color: var(--bg-hover);
+  --el-fill-color-light: var(--bg-hover);
+  --el-fill-color-lighter: var(--bg-hover);
+  --el-fill-color-extra-light: var(--bg-hover);
+  --el-fill-color-dark: var(--bg-hover);
+  --el-fill-color-darker: var(--bg-hover);
+  --el-fill-color-blank: var(--bg-card);
+  
+  --el-box-shadow: var(--shadow);
+  --el-box-shadow-light: var(--shadow-sm);
+  --el-box-shadow-lighter: var(--shadow-xs);
+  --el-box-shadow-dark: var(--shadow-md);
+  
+  --el-border-radius-base: var(--radius);
+  --el-border-radius-small: var(--radius-sm);
+  --el-border-radius-round: var(--radius-full);
+  --el-border-radius-circle: var(--radius-full);
+  
+  /* Element Plus 组件特定变量覆盖 */
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: rgba(255, 255, 255, 0.75);
+  --el-menu-active-color: #ffffff;
+  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.1);
+  
+  --el-dialog-bg-color: var(--dialog-bg);
+  --el-overlay-color: var(--dialog-overlay-bg);
+  --el-overlay-background: var(--dialog-overlay-bg);
+  
+  --el-dropdown-menu-box-shadow: var(--shadow-md);
+  
+  --el-table-bg-color: var(--bg-card);
+  --el-table-tr-bg-color: var(--bg-card);
+  --el-table-header-bg-color: var(--bg-hover);
+  --el-table-row-hover-bg-color: var(--bg-hover);
+  --el-table-border-color: var(--border-color);
+  
+  --el-pagination-button-bg-color: var(--bg-card);
+  --el-pagination-hover-color: var(--primary);
+}
+
+.dark {
+  --el-color-primary-light-9: rgba(129, 140, 248, 0.15);
+  --el-bg-color: var(--bg-card);
+  --el-bg-color-page: var(--bg-page);
+  --el-bg-color-overlay: var(--bg-card);
+  
+  /* Element Plus 暗色组件变量 */
+  --el-dialog-bg-color: var(--dialog-bg);
+  --el-overlay-color: var(--dialog-overlay-bg);
+  --el-overlay-background: var(--dialog-overlay-bg);
+  
+  --el-dropdown-menu-box-shadow: var(--shadow-lg);
+  
+  --el-table-bg-color: var(--bg-card);
+  --el-table-tr-bg-color: var(--bg-card);
+  --el-table-header-bg-color: var(--bg-hover);
+  --el-table-row-hover-bg-color: var(--bg-hover);
+  --el-table-border-color: var(--border-color);
+  
+  --el-pagination-button-bg-color: var(--bg-hover);
+
+  /* Tag 标签暗色适配 */
+  --el-tag-bg-color: var(--bg-hover);
+  --el-tag-border-color: var(--border-color);
+  --el-tag-text-color: var(--text-secondary);
+}
+
+/* ===== 全局主题过渡动画 ===== */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, fill 0.3s ease, stroke 0.3s ease !important;
+}

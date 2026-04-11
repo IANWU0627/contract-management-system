@@ -1,0 +1,40 @@
+import { get, post, put, del } from './index'
+
+export interface User {
+  id?: number
+  username: string
+  nickname?: string
+  email?: string
+  phone?: string
+  role: string
+  status: string
+  createdAt?: string
+  avatar?: string
+  lastLoginAt?: string
+  contractCount?: number
+  roles?: string[]
+  permissions?: string[]
+}
+
+// 用户列表
+export const getUserList = (params?: { page?: number; pageSize?: number; role?: string; keyword?: string }) => 
+  get('/users', { params })
+
+// 用户详情
+export const getUser = (id: number) => 
+  get(`/users/${id}`)
+
+// 创建用户
+export const createUser = (data: Partial<User>) => 
+  post('/users', data)
+
+// 更新用户
+export const updateUser = (id: number, data: Partial<User>) => 
+  put(`/users/${id}`, data)
+
+// 删除用户
+export const deleteUser = (id: number) => 
+  del(`/users/${id}`)
+
+// 获取所有角色
+export const getRoles = () => get('/users/roles')
