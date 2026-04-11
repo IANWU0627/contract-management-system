@@ -8,9 +8,9 @@
         
         <el-form-item :label="t('settings.theme')">
           <el-radio-group v-model="theme" @change="handleThemeChange">
-            <el-radio label="light">{{ t('settings.themeLight') }}</el-radio>
-            <el-radio label="dark">{{ t('settings.themeDark') }}</el-radio>
-            <el-radio label="system">{{ t('settings.themeSystem') }}</el-radio>
+            <el-radio value="light">{{ t('settings.themeLight') }}</el-radio>
+            <el-radio value="dark">{{ t('settings.themeDark') }}</el-radio>
+            <el-radio value="system">{{ t('settings.themeSystem') }}</el-radio>
           </el-radio-group>
         </el-form-item>
         

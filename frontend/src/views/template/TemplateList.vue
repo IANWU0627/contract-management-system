@@ -156,8 +156,8 @@
       <el-form :model="watermarkForm" label-width="100px">
         <el-form-item :label="$t('template.watermarkType')">
           <el-radio-group v-model="watermarkForm.type">
-            <el-radio label="text">{{ $t('template.watermarkTypeText') }}</el-radio>
-            <el-radio label="image">{{ $t('template.watermarkTypeImage') }}</el-radio>
+            <el-radio value="text">{{ $t('template.watermarkTypeText') }}</el-radio>
+            <el-radio value="image">{{ $t('template.watermarkTypeImage') }}</el-radio>
           </el-radio-group>
         </el-form-item>
         
