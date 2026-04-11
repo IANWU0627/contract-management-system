@@ -1,7 +1,13 @@
 # 合同管理系统
-
 一个功能完整的自己做着玩的合同管理系统，支持合同全生命周期管理、模板管理、审批流程、到期提醒等功能。
+
 作为一个IT咨询顾问，完全使用AI做的，我个人还是比较满意的，后续有空自己在慢慢修改吧
+未来可以对接企业的前端数据，后端电子签章，以及审批流，进行完善，先就这样吧。
+
+首页是找的一个很有趣的登录页面
+<img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/c2ccfbd0-e238-4d63-a5d0-51214edf44e6" />
+工作台首页
+<img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/14fb8b5c-afe2-45a2-9d0a-da92a83b828f" />
 
 ## ✨ 功能特性
 
@@ -128,8 +134,8 @@ contract-management-system/
 ## 📝 开发文档
 
 - [快速启动指南](./QUICKSTART.md)
-- [API文档](./docs/API.md) (待添加)
-- [数据库设计](./docs/DATABASE.md) (待添加)
+- [API文档](./docs/API_DOC.md) 
+- [数据库设计](./docs/DATABASE.md) 
 
 ## 🤝 贡献指南
 
