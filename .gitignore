@@ -10,6 +10,7 @@ backend/backend.log
 backend/data/
 backend/logs/
 backend/uploads/
+uploads/
 backend/.DS_Store
 
 # IDE
