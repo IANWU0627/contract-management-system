@@ -1081,6 +1081,140 @@ Authorization: Bearer <token>
 
 ---
 
+## 13. 快速代码管理
+
+### 13.1 快速代码头列表
+
+**GET** `/api/quick-codes`
+
+#### 请求参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| page | int | 页码 |
+| pageSize | int | 每页条数 |
+| keyword | string | 关键词搜索 |
+| status | int | 状态（默认1） |
+
+---
+
+### 13.2 创建快速代码头
+
+**POST** `/api/quick-codes`
+
+#### 请求参数
+
+```json
+{
+  "name": "模板变量分类",
+  "nameEn": "Template Variable Category",
+  "code": "TEMPLATE_VARIABLE_CATEGORY",
+  "description": "模板变量的分类选项",
+  "descriptionEn": "Category options for template variables"
+}
+```
+
+---
+
+### 13.3 快速代码头详情
+
+**GET** `/api/quick-codes/{id}`
+
+---
+
+### 13.4 更新快速代码头
+
+**PUT** `/api/quick-codes/{id}`
+
+#### 请求参数
+
+同创建快速代码头。
+
+---
+
+### 13.5 删除快速代码头
+
+**DELETE** `/api/quick-codes/{id}`
+
+---
+
+### 13.6 快速代码项列表
+
+**GET** `/api/quick-codes/{headerId}/items`
+
+#### 请求参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| enabled | boolean | 只返回启用的代码项 |
+
+---
+
+### 13.7 创建快速代码项
+
+**POST** `/api/quick-codes/{headerId}/items`
+
+#### 请求参数
+
+```json
+{
+  "code": "system",
+  "meaning": "系统变量",
+  "meaningEn": "System Variables",
+  "description": "系统预设变量",
+  "descriptionEn": "System predefined variables",
+  "tag": "system",
+  "validFrom": "2026-01-01",
+  "validTo": "2026-12-31",
+  "enabled": true,
+  "sortOrder": 1
+}
+```
+
+---
+
+### 13.8 更新快速代码项
+
+**PUT** `/api/quick-codes/{headerId}/items/{itemId}`
+
+#### 请求参数
+
+同创建快速代码项。
+
+---
+
+### 13.9 删除快速代码项
+
+**DELETE** `/api/quick-codes/{headerId}/items/{itemId}`
+
+---
+
+### 13.10 根据代码获取快速代码项
+
+**GET** `/api/quick-codes/by-code/{code}`
+
+获取指定代码的所有启用的代码项。
+
+#### 响应示例
+
+```json
+{
+  "code": 200,
+  "data": [
+    {
+      "id": 1,
+      "code": "system",
+      "meaning": "系统变量",
+      "meaningEn": "System Variables",
+      "enabled": true,
+      "sortOrder": 1
+    }
+  ]
+}
+```
+
+---
+
 ## 📝 附录
 
 ### 错误码对照表
@@ -1099,4 +1233,4 @@ Authorization: Bearer <token>
 
 ---
 
-*API文档最后更新：2026-04-01*
+*API文档最后更新：2026-04-11*

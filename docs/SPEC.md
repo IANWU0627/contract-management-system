@@ -537,15 +537,58 @@ CREATE TABLE reminder_rule (
 );
 ```
 
+#### quick_code_header (快速代码头表)【NEW!】
+```sql
+CREATE TABLE quick_code_header (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL COMMENT '名称(中文)',
+    name_en VARCHAR(100) COMMENT '名称(英文)',
+    code VARCHAR(50) NOT NULL UNIQUE COMMENT '代码编码',
+    description VARCHAR(500) COMMENT '描述(中文)',
+    description_en VARCHAR(500) COMMENT '描述(英文)',
+    status INT DEFAULT 1 COMMENT '状态：1-启用，0-禁用',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_code (code),
+    INDEX idx_status (status)
+);
+```
+
+#### quick_code_item (快速代码项表)【NEW!】
+```sql
+CREATE TABLE quick_code_item (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    header_id BIGINT NOT NULL COMMENT '快速代码头ID',
+    code VARCHAR(50) NOT NULL COMMENT '代码项编码',
+    meaning VARCHAR(100) NOT NULL COMMENT '含义(中文)',
+    meaning_en VARCHAR(100) COMMENT '含义(英文)',
+    description VARCHAR(500) COMMENT '描述(中文)',
+    description_en VARCHAR(500) COMMENT '描述(英文)',
+    tag VARCHAR(50) COMMENT '标签',
+    valid_from DATE COMMENT '生效日期',
+    valid_to DATE COMMENT '失效日期',
+    enabled BOOLEAN DEFAULT TRUE COMMENT '是否启用',
+    sort_order INT DEFAULT 0 COMMENT '排序',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_header_id (header_id),
+    INDEX idx_code (code),
+    INDEX idx_enabled (enabled),
+    FOREIGN KEY (header_id) REFERENCES quick_code_header(id) ON DELETE CASCADE
+);
+```
+
 #### template_variable (模板变量表)【NEW!】
 ```sql
 CREATE TABLE template_variable (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     code VARCHAR(100) NOT NULL UNIQUE COMMENT '变量编码',
-    name VARCHAR(100) NOT NULL COMMENT '变量名称',
+    name VARCHAR(100) NOT NULL COMMENT '变量名称(中文)',
+    name_en VARCHAR(100) COMMENT '变量名称(英文)',
     label VARCHAR(100) COMMENT '显示名称',
     type VARCHAR(20) NOT NULL DEFAULT 'text' COMMENT '变量类型',
-    category VARCHAR(50) COMMENT '所属分类',
+    category VARCHAR(50) COMMENT '所属分类(使用快速代码)',
+    quick_code_code VARCHAR(100) COMMENT '关联的快速代码编码',
     default_value VARCHAR(500) COMMENT '默认值',
     description VARCHAR(500) COMMENT '变量描述',
     required INT DEFAULT 0 COMMENT '是否必填',
@@ -555,7 +598,8 @@ CREATE TABLE template_variable (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_category (category),
     INDEX idx_status (status),
-    INDEX idx_code (code)
+    INDEX idx_code (code),
+    INDEX idx_quick_code (quick_code_code)
 );
 ```
 
@@ -618,6 +662,14 @@ contract_template ──┐
                    │
                    ▼
 template_variable (一对多)
+                   │
+                   ▼
+quick_code_header (通过quick_code_code关联)
+
+quick_code_header ──┐
+                   │
+                   ▼
+quick_code_item (一对多)
 
 role ──┐
        │
