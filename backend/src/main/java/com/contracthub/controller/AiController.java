@@ -12,7 +12,6 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/ai")
-@PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
 public class AiController {
     
     private final ContractMapper contractMapper;
@@ -26,6 +25,7 @@ public class AiController {
     }
     
     @PostMapping("/test")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> testConnection(@RequestBody Map<String, String> config) {
         try {
             String apiUrl = config.get("apiUrl");
@@ -59,7 +59,39 @@ public class AiController {
         }
     }
     
+    @GetMapping("/ollama/models")
+    public ApiResponse<List<Map<String, String>>> getOllamaModels(@RequestParam(defaultValue = "http://localhost:11434") String baseUrl) {
+        try {
+            String modelsUrl = baseUrl + "/api/tags";
+            ResponseEntity<String> response = restTemplate.getForEntity(modelsUrl, String.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> result = objectMapper.readValue(response.getBody(), Map.class);
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> models = (List<Map<String, Object>>) result.get("models");
+                
+                List<Map<String, String>> formattedModels = new ArrayList<>();
+                if (models != null) {
+                    for (Map<String, Object> model : models) {
+                        Map<String, String> formatted = new HashMap<>();
+                        String name = (String) model.get("name");
+                        formatted.put("value", name);
+                        formatted.put("label", name);
+                        formattedModels.add(formatted);
+                    }
+                }
+                return ApiResponse.success(formattedModels);
+            } else {
+                return ApiResponse.error("Failed to fetch models: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to fetch models: " + e.getMessage());
+        }
+    }
+    
     @PostMapping("/analyze/{id}")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> analyze(@PathVariable Long id, @RequestBody Map<String, String> config) {
         try {
             Contract contract = contractMapper.selectById(id);

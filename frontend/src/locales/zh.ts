@@ -225,7 +225,7 @@ const messages = {
       loginFailed: '登录失败',
       twoFactorAuth: '双因素认证',
       enable2FA: '启用双因素认证',
-      2FAEnableInfo: '请按照提示完成双因素认证设置',
+      '2FAEnableInfo': '请按照提示完成双因素认证设置',
       sessionManagement: '会话管理',
       currentSessions: '当前会话',
       viewSessions: '查看会话',
@@ -1254,7 +1254,7 @@ const messages = {
       loginFailed: 'Failed',
       twoFactorAuth: 'Two-Factor Authentication',
       enable2FA: 'Enable Two-Factor Auth',
-      2FAEnableInfo: 'Please complete the two-factor authentication setup as prompted',
+      '2FAEnableInfo': 'Please complete the two-factor authentication setup as prompted',
       sessionManagement: 'Session Management',
       currentSessions: 'Current Sessions',
       viewSessions: 'View Sessions',
@@ -2069,3 +2069,5 @@ export const t = (key: string) => {
 }
 
 export default i18n
+export { messages }
+export const zh = messages.zh

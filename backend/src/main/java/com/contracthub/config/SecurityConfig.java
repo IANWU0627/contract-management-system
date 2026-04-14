@@ -41,6 +41,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/categories/**").permitAll()
                 .requestMatchers("/api/folders/**").permitAll()
                 .requestMatchers("/api/external/**").permitAll()
+                .requestMatchers("/api/ai/ollama/models").permitAll()
+                .requestMatchers("/api/system/**").authenticated()
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/favicon.ico").permitAll()

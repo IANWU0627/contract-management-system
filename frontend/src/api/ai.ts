@@ -1,4 +1,4 @@
-import { post } from './index'
+import { get, post } from './index'
 
 export interface AiConfig {
   provider: string
@@ -12,3 +12,6 @@ export const testAiConnection = (config: AiConfig) =>
 
 export const analyzeWithAi = (contractId: number, config: AiConfig) => 
   post(`/ai/analyze/${contractId}`, config)
+
+export const getOllamaModels = (baseUrl: string) => 
+  get('/ai/ollama/models', { params: { baseUrl } })

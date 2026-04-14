@@ -10,6 +10,7 @@ import com.contracthub.entity.ContractTemplate;
 import com.contracthub.mapper.ContractCategoryMapper;
 import com.contracthub.mapper.ContractMapper;
 import com.contracthub.mapper.ContractTemplateMapper;
+import jakarta.annotation.PostConstruct;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,10 +35,17 @@ public class ContractCategoryController {
         this.categoryMapper = categoryMapper;
         this.contractMapper = contractMapper;
         this.templateMapper = templateMapper;
-        
-        // 初始化默认分类
-        if (categoryMapper.selectCount(null) == 0) {
-            initDefaultCategories();
+    }
+    
+    @PostConstruct
+    public void init() {
+        try {
+            // 初始化默认分类
+            if (categoryMapper.selectCount(null) == 0) {
+                initDefaultCategories();
+            }
+        } catch (Exception e) {
+            // 忽略数据库表不存在的错误，表会通过Flyway创建
         }
     }
     

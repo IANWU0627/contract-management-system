@@ -4,13 +4,16 @@ import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.User;
 import com.contracthub.entity.Role;
 import com.contracthub.entity.Permission;
+import com.contracthub.entity.UserSession;
 import com.contracthub.mapper.UserMapper;
 import com.contracthub.mapper.RoleMapper;
 import com.contracthub.mapper.PermissionMapper;
 import com.contracthub.mapper.RolePermissionMapper;
+import com.contracthub.mapper.UserSessionMapper;
 import com.contracthub.util.JwtUtils;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,22 +25,25 @@ public class AuthController {
     private final RoleMapper roleMapper;
     private final PermissionMapper permissionMapper;
     private final RolePermissionMapper rolePermissionMapper;
+    private final UserSessionMapper userSessionMapper;
     private final JwtUtils jwtUtils;
     private final PasswordEncoder passwordEncoder;
     
     public AuthController(UserMapper userMapper, RoleMapper roleMapper, 
                           PermissionMapper permissionMapper, RolePermissionMapper rolePermissionMapper,
+                          UserSessionMapper userSessionMapper,
                           JwtUtils jwtUtils, PasswordEncoder passwordEncoder) {
         this.userMapper = userMapper;
         this.roleMapper = roleMapper;
         this.permissionMapper = permissionMapper;
         this.rolePermissionMapper = rolePermissionMapper;
+        this.userSessionMapper = userSessionMapper;
         this.jwtUtils = jwtUtils;
         this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/login")
-    public ApiResponse<Map<String, Object>> login(@RequestBody Map<String, String> req) {
+    public ApiResponse<Map<String, Object>> login(@RequestBody Map<String, String> req, HttpServletRequest request) {
         String username = req.get("username");
         String password = req.get("password");
         
@@ -90,7 +96,51 @@ public class AuthController {
         data.put("phone", user.getPhone());
         data.put("avatar", user.getAvatar());
         
+        // 创建会话记录
+        try {
+            UserSession session = new UserSession();
+            session.setUserId(user.getId());
+            session.setUsername(user.getUsername());
+            session.setToken(token);
+            String ip = getClientIp(request);
+            session.setIpAddress(ip);
+            String userAgent = request.getHeader("User-Agent");
+            session.setUserAgent(userAgent);
+            session.setDevice(userAgent);
+            session.setLocation(getLocationFromIp(ip));
+            session.setLoginTime(java.time.LocalDateTime.now());
+            session.setLastActiveTime(java.time.LocalDateTime.now());
+            userSessionMapper.insert(session);
+        } catch (Exception e) {
+            // 记录日志但不阻止登录
+            System.err.println("创建会话记录失败: " + e.getMessage());
+        }
+        
         return ApiResponse.success(data);
+    }
+    
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip;
+    }
+    
+    private String getLocationFromIp(String ip) {
+        if (ip == null || ip.isEmpty()) {
+            return "未知";
+        }
+        if ("127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip) || "localhost".equals(ip)) {
+            return "本地";
+        }
+        return "未知";
     }
     
     @PostMapping("/register")

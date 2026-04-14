@@ -113,10 +113,20 @@ public class ReminderRuleController {
         }
         
         if (ruleData.containsKey("minAmount")) {
-            rule.setMinAmount(new BigDecimal(ruleData.get("minAmount").toString()));
+            Object minAmountObj = ruleData.get("minAmount");
+            if (minAmountObj != null) {
+                rule.setMinAmount(new BigDecimal(minAmountObj.toString()));
+            } else {
+                rule.setMinAmount(null);
+            }
         }
         if (ruleData.containsKey("maxAmount")) {
-            rule.setMaxAmount(new BigDecimal(ruleData.get("maxAmount").toString()));
+            Object maxAmountObj = ruleData.get("maxAmount");
+            if (maxAmountObj != null) {
+                rule.setMaxAmount(new BigDecimal(maxAmountObj.toString()));
+            } else {
+                rule.setMaxAmount(null);
+            }
         }
         
         rule.setRemindDays((Integer) ruleData.getOrDefault("remindDays", 30));
@@ -172,10 +182,20 @@ public class ReminderRuleController {
         }
         
         if (ruleData.containsKey("minAmount")) {
-            rule.setMinAmount(new BigDecimal(ruleData.get("minAmount").toString()));
+            Object minAmountObj = ruleData.get("minAmount");
+            if (minAmountObj != null && !minAmountObj.toString().isEmpty()) {
+                rule.setMinAmount(new BigDecimal(minAmountObj.toString()));
+            } else {
+                rule.setMinAmount(null);
+            }
         }
         if (ruleData.containsKey("maxAmount")) {
-            rule.setMaxAmount(new BigDecimal(ruleData.get("maxAmount").toString()));
+            Object maxAmountObj = ruleData.get("maxAmount");
+            if (maxAmountObj != null && !maxAmountObj.toString().isEmpty()) {
+                rule.setMaxAmount(new BigDecimal(maxAmountObj.toString()));
+            } else {
+                rule.setMaxAmount(null);
+            }
         }
         if (ruleData.containsKey("remindDays")) {
             rule.setRemindDays((Integer) ruleData.get("remindDays"));

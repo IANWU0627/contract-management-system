@@ -9,6 +9,7 @@ import com.contracthub.mapper.RoleMapper;
 import com.contracthub.mapper.RolePermissionMapper;
 import com.contracthub.mapper.PermissionMapper;
 import com.contracthub.util.SecurityUtils;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,7 +37,10 @@ public class UserController {
         this.roleMapper = roleMapper;
         this.rolePermissionMapper = rolePermissionMapper;
         this.permissionMapper = permissionMapper;
-        
+    }
+    
+    @PostConstruct
+    public void init() {
         try {
             if (userMapper.selectCount(null) == 0) {
                 initDefaultUsers();
@@ -45,32 +49,7 @@ public class UserController {
                 upgradeLegacyPasswords();
             }
         } catch (Exception e) {
-            createUserTable();
-            initDefaultUsers();
-        }
-    }
-    
-    private void createUserTable() {
-        try {
-            String createTableSql = "CREATE TABLE IF NOT EXISTS \"user\" (" +
-                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
-                "username VARCHAR(50) NOT NULL UNIQUE, " +
-                "password VARCHAR(255) NOT NULL, " +
-                "nickname VARCHAR(50) NOT NULL, " +
-                "email VARCHAR(100), " +
-                "role VARCHAR(20) NOT NULL, " +
-                "status INTEGER DEFAULT 1" +
-                ")";
-            
-            java.sql.Connection connection = java.sql.DriverManager.getConnection(
-                "jdbc:h2:file:./data/contractdb", "sa", ""
-            );
-            java.sql.Statement statement = connection.createStatement();
-            statement.executeUpdate(createTableSql);
-            statement.close();
-            connection.close();
-        } catch (Exception e) {
-            // 忽略
+            // 忽略数据库表不存在的错误，表会通过Flyway创建
         }
     }
     

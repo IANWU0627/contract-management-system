@@ -9,7 +9,7 @@ import '@/styles/mobile.scss'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import router from './router'
-import i18n from './locales/zh'
+import i18n from './locales/index'
 
 const app = createApp(App)
 const pinia = createPinia()

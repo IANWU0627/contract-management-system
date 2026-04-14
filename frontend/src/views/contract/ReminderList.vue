@@ -44,8 +44,8 @@
     <!-- 提醒列表 -->
     <el-card shadow="hover">
       <el-table :data="reminders" v-loading="loading" style="width: 100%">
-        <el-table-column prop="contractNo" :label="$t('contract.no')" width="150" />
-        <el-table-column prop="contractTitle" :label="$t('contract.name')" min-width="200" />
+        <el-table-column prop="contractNo" :label="$t('contract.no')" width="180" show-overflow-tooltip />
+        <el-table-column prop="contractTitle" :label="$t('contract.name')" min-width="200" show-overflow-tooltip />
         <el-table-column prop="expireDate" :label="$t('reminder.expireDate')" width="120">
           <template #default="{ row }">
             <span :class="{ 'expire-today': row.remindDays === 0, 'expire-soon': row.remindDays > 0 && row.remindDays <= 7 }">

@@ -90,14 +90,33 @@
         <el-card shadow="hover">
           <template #header><span>{{ t('profile.loginHistory') }}</span></template>
           
-          <el-table :data="loginHistory" stripe style="width: 100%">
-            <el-table-column :prop="'loginTime'" :label="t('profile.loginTime')" width="180" />
-            <el-table-column :prop="'ipAddress'" :label="t('profile.ipAddress')" width="150" />
-            <el-table-column :prop="'device'" :label="t('profile.device')" />
-            <el-table-column :prop="'location'" :label="t('profile.location')" />
+          <el-table :data="loginHistory" stripe style="width: 100%" size="default">
+            <el-table-column :prop="'loginTime'" :label="t('profile.loginTime')" width="180">
+              <template #default="{ row }">
+                {{ formatTime(row.loginTime) }}
+              </template>
+            </el-table-column>
+            <el-table-column :prop="'ipAddress'" :label="t('profile.ipAddress')" width="140">
+              <template #default="{ row }">
+                <el-tag size="small" type="info">{{ row.ipAddress || '-' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :prop="'device'" :label="t('profile.device')" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">
+                <div class="device-cell">
+                  <el-icon><Monitor /></el-icon>
+                  <span class="device-text">{{ formatDevice(row.device) }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column :prop="'location'" :label="t('profile.location')" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" type="success">{{ row.location || '未知' }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column :prop="'status'" :label="t('profile.status')" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.status === 'success' ? 'success' : 'danger'">
+                <el-tag :type="row.status === 'success' ? 'success' : 'danger'" size="small">
                   {{ row.status === 'success' ? t('profile.loginSuccess') : t('profile.loginFailed') }}
                 </el-tag>
               </template>
@@ -130,7 +149,7 @@
             
             <el-divider content-position="left">{{ t('profile.sessionManagement') }}</el-divider>
             <el-form-item :label="t('profile.currentSessions')">
-              <el-button type="primary" @click="showSessionsDialog = true">{{ t('profile.viewSessions') }}</el-button>
+              <el-button type="primary" @click="openSessionsDialog">{{ t('profile.viewSessions') }}</el-button>
             </el-form-item>
             <el-form-item :label="t('profile.logoutOtherSessions')">
               <el-button type="danger" @click="handleLogoutOtherSessions">{{ t('profile.logoutAll') }}</el-button>
@@ -184,7 +203,7 @@
         <el-card shadow="hover">
           <template #header><span>{{ t('profile.bigDataSettings') }}</span></template>
           
-          <el-form label-width="120px">
+          <el-form label-width="160px">
             <el-divider content-position="left">{{ t('profile.aiConfig') }}</el-divider>
             
             <el-form-item :label="t('profile.aiProvider')">
@@ -237,6 +256,7 @@
                   allow-create
                   :allow-create-fn="(input: string) => ({ value: input, label: input })"
                   :placeholder="t('profile.aiModelPlaceholder')"
+                  :loading="ollamaLoading"
                 >
                   <el-option
                     v-for="model in availableModels"
@@ -245,6 +265,15 @@
                     :value="model.value"
                   />
                 </el-select>
+                <el-button 
+                  v-if="aiConfig.provider === 'ollama'" 
+                  size="small" 
+                  @click="loadOllamaModels"
+                  :loading="ollamaLoading"
+                  style="margin-left: 8px"
+                >
+                  {{ t('profile.refreshModels') }}
+                </el-button>
               </el-form-item>
               
               <el-form-item :label="t('profile.aiTestConnection')">
@@ -255,10 +284,80 @@
                   {{ aiTestResult === 'success' ? t('profile.aiTestSuccess') : t('profile.aiTestError') }}
                 </span>
               </el-form-item>
+              
+              <el-form-item>
+                <el-button type="primary" @click="handleSaveAiConfig">{{ t('common.save') }}</el-button>
+              </el-form-item>
             </template>
+
+            <el-divider content-position="left">{{ t('profile.dataAnalysis') }}</el-divider>
+
+            <el-form-item :label="t('profile.riskThreshold')" class="data-analysis-item">
+              <div class="form-item-content">
+                <el-slider 
+                  v-model="bigDataConfig.riskThreshold" 
+                  :min="0" 
+                  :max="100" 
+                  :step="5"
+                  show-input
+                  style="width: 300px"
+                />
+                <span class="form-item-hint">{{ t('profile.riskThresholdHint') }}</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item :label="t('profile.maxTokens')" class="data-analysis-item">
+              <div class="form-item-content">
+                <el-input-number 
+                  v-model="bigDataConfig.maxTokens" 
+                  :min="100" 
+                  :max="8192" 
+                  :step="100"
+                  style="width: 200px"
+                />
+                <span class="form-item-hint">{{ t('profile.maxTokensHint') }}</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item :label="t('profile.temperature')" class="data-analysis-item">
+              <div class="form-item-content">
+                <el-slider 
+                  v-model="bigDataConfig.temperature" 
+                  :min="0" 
+                  :max="2" 
+                  :step="0.1"
+                  show-input
+                  style="width: 300px"
+                />
+                <span class="form-item-hint">{{ t('profile.temperatureHint') }}</span>
+              </div>
+            </el-form-item>
+
+            <el-divider content-position="left">{{ t('profile.advancedSettings') }}</el-divider>
+
+            <el-form-item :label="t('profile.enableCache')" class="data-analysis-item">
+              <div class="form-item-content">
+                <el-switch v-model="bigDataConfig.enableCache" />
+                <span class="form-item-hint">{{ t('profile.enableCacheHint') }}</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item :label="t('profile.cacheTimeout')" class="data-analysis-item">
+              <div class="form-item-content">
+                <el-input-number 
+                  v-model="bigDataConfig.cacheTimeout" 
+                  :min="5" 
+                  :max="1440" 
+                  :step="5"
+                  style="width: 200px"
+                />
+                <span class="form-item-hint">{{ t('profile.cacheTimeoutHint') }}</span>
+              </div>
+            </el-form-item>
             
             <el-form-item>
-              <el-button type="primary" @click="handleSaveAiConfig">{{ t('common.save') }}</el-button>
+              <el-button type="primary" @click="handleSaveBigDataConfig">{{ t('common.save') }}</el-button>
+              <el-button @click="handleResetBigDataConfig">{{ t('common.reset') }}</el-button>
             </el-form-item>
           </el-form>
         </el-card>
@@ -266,14 +365,29 @@
     </el-tabs>
 
     <!-- 会话管理对话框 -->
-    <el-dialog v-model="showSessionsDialog" :title="t('profile.currentSessions')" width="600px">
-      <el-table :data="activeSessions" stripe style="width: 100%">
-        <el-table-column :prop="'device'" :label="t('profile.device')" />
-        <el-table-column :prop="'ipAddress'" :label="t('profile.ipAddress')" width="130" />
-        <el-table-column :prop="'loginTime'" :label="t('profile.loginTime')" width="180" />
-        <el-table-column :label="t('common.operation')" width="100">
+    <el-dialog v-model="showSessionsDialog" :title="t('profile.currentSessions')" width="800px">
+      <el-table :data="activeSessions" stripe style="width: 100%" size="default">
+        <el-table-column :prop="'device'" :label="t('profile.device')" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-button type="danger" size="small" @click="handleTerminateSession(row.id)">{{ t('profile.terminate') }}</el-button>
+            <div class="device-cell">
+              <el-icon><Monitor /></el-icon>
+              <span class="device-text">{{ formatDevice(row.device) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column :prop="'ipAddress'" :label="t('profile.ipAddress')" width="140">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">{{ row.ipAddress || '-' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :prop="'loginTime'" :label="t('profile.loginTime')" width="180">
+          <template #default="{ row }">
+            {{ formatTime(row.loginTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.operation')" width="100" align="center">
+          <template #default="{ row }">
+            <el-button type="danger" size="small" link @click="handleTerminateSession(row.id)">{{ t('profile.terminate') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -282,14 +396,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import type { FormInstance } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { getUserInfo, updateUserInfo, changePassword } from '@/api/auth'
-import { testAiConnection } from '@/api/ai'
+import { testAiConnection, getOllamaModels } from '@/api/ai'
+import { getSystemConfigs, saveSystemConfigs, getLoginHistory, getActiveSessions, terminateSession } from '@/api/system'
+import { Monitor } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 
@@ -337,6 +453,33 @@ const formatRole = (role: string) => {
     USER: t('user.roles.user')
   }
   return map[role] || role
+}
+
+const formatDevice = (device: string) => {
+  if (!device) return t('profile.deviceUnknown')
+  if (device.includes('Chrome')) return t('profile.deviceChrome')
+  if (device.includes('Firefox')) return t('profile.deviceFirefox')
+  if (device.includes('Safari')) return t('profile.deviceSafari')
+  if (device.includes('Edge')) return t('profile.deviceEdge')
+  if (device.includes('Windows')) return t('profile.deviceWindows')
+  if (device.includes('Mac')) return t('profile.deviceMacOS')
+  if (device.includes('Linux')) return t('profile.deviceLinux')
+  if (device.length > 50) {
+    return device.substring(0, 50) + '...'
+  }
+  return device
+}
+
+const formatTime = (time: string) => {
+  if (!time) return '-'
+  const date = new Date(time)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 const handleSubmit = async () => {
@@ -449,16 +592,25 @@ const loadUserData = async () => {
   }
 }
 
-const loginHistory = ref<any[]>([
-  { loginTime: '2026-04-14 10:22:00', ipAddress: '192.168.1.100', device: 'Chrome / MacOS', location: '中国 北京', status: 'success' },
-  { loginTime: '2026-04-13 15:30:00', ipAddress: '192.168.1.101', device: 'Safari / MacOS', location: '中国 北京', status: 'success' },
-  { loginTime: '2026-04-12 09:15:00', ipAddress: '192.168.1.102', device: 'Firefox / Windows', location: '中国 上海', status: 'success' }
-])
+const loginHistory = ref<any[]>([])
 const historyPage = ref(1)
 const historyPageSize = ref(10)
-const historyTotal = ref(3)
+const historyTotal = ref(0)
 
-const loadLoginHistory = () => {}
+const loadLoginHistory = async () => {
+  try {
+    const response = await getLoginHistory({
+      page: historyPage.value,
+      pageSize: historyPageSize.value
+    })
+    if (response && response.data) {
+      loginHistory.value = response.data.list
+      historyTotal.value = response.data.total
+    }
+  } catch (error) {
+    console.error('加载登录历史失败:', error)
+  }
+}
 
 const securitySettings = reactive({
   twoFAEnabled: false,
@@ -467,18 +619,31 @@ const securitySettings = reactive({
 })
 
 const handle2FAChange = async (val: boolean) => {
-  if (val) {
-    ElMessage.info(t('profile.2FAEnableInfo'))
-  } else {
-    ElMessage.success(t('common.success'))
-  }
-}
+      if (val) {
+        ElMessage.info(t('profile.twoFAEnableInfo'))
+      } else {
+        ElMessage.success(t('common.success'))
+      }
+    }
 
 const showSessionsDialog = ref(false)
-const activeSessions = ref<any[]>([
-  { id: 1, device: 'Chrome / MacOS', ipAddress: '192.168.1.100', loginTime: '2026-04-14 10:22:00' },
-  { id: 2, device: 'Safari / iPhone', ipAddress: '192.168.1.103', loginTime: '2026-04-13 18:45:00' }
-])
+const activeSessions = ref<any[]>([])
+
+const loadActiveSessions = async () => {
+  try {
+    const response = await getActiveSessions()
+    if (response && response.data) {
+      activeSessions.value = response.data.map((s: any) => ({
+        id: s.id,
+        device: s.device,
+        ipAddress: s.ip,
+        loginTime: s.loginTime
+      }))
+    }
+  } catch (error) {
+    console.error('加载活跃会话失败:', error)
+  }
+}
 
 const handleLogoutOtherSessions = async () => {
   try {
@@ -492,9 +657,19 @@ const handleLogoutOtherSessions = async () => {
   }
 }
 
-const handleTerminateSession = (id: number) => {
-  activeSessions.value = activeSessions.value.filter(s => s.id !== id)
-  ElMessage.success(t('common.success'))
+const handleTerminateSession = async (id: number) => {
+  try {
+    await terminateSession(id)
+    await loadActiveSessions()
+    ElMessage.success(t('common.success'))
+  } catch {
+    ElMessage.error(t('common.error'))
+  }
+}
+
+const openSessionsDialog = async () => {
+  await loadActiveSessions()
+  showSessionsDialog.value = true
 }
 
 const notificationSettings = reactive({
@@ -505,8 +680,19 @@ const notificationSettings = reactive({
   systemNotification: true
 })
 
-const handleSaveNotificationSettings = () => {
-  ElMessage.success(t('common.success'))
+const handleSaveNotificationSettings = async () => {
+  try {
+    await saveSystemConfigs({
+      ntf_expiration_reminder: notificationSettings.expirationReminder,
+      ntf_approval_notification: notificationSettings.approvalNotification,
+      ntf_comment_notification: notificationSettings.commentNotification,
+      ntf_email_notification: notificationSettings.emailNotification,
+      ntf_system_notification: notificationSettings.systemNotification
+    })
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    ElMessage.error(t('common.error'))
+  }
 }
 
 interface AiConfig {
@@ -517,10 +703,10 @@ interface AiConfig {
 }
 
 const aiConfig = reactive<AiConfig>({
-  provider: localStorage.getItem('ai_provider') || 'none',
-  apiUrl: localStorage.getItem('ai_api_url') || '',
-  apiKey: localStorage.getItem('ai_api_key') || '',
-  model: localStorage.getItem('ai_model') || ''
+  provider: 'none',
+  apiUrl: '',
+  apiKey: '',
+  model: ''
 })
 
 interface AiProvider {
@@ -650,14 +836,35 @@ const providerPresets: Record<string, AiProvider> = {
   }
 }
 
+const aiTesting = ref(false)
+const aiTestResult = ref<'success' | 'error' | ''>('')
+const ollamaLoading = ref(false)
+const dynamicOllamaModels = ref<{ value: string; label: string }[]>([])
+
+interface BigDataConfig {
+  riskThreshold: number
+  maxTokens: number
+  temperature: number
+  enableCache: boolean
+  cacheTimeout: number
+}
+
+const bigDataConfig = reactive<BigDataConfig>({
+  riskThreshold: 50,
+  maxTokens: 2048,
+  temperature: 0.7,
+  enableCache: false,
+  cacheTimeout: 60
+})
+
 const availableModels = computed(() => {
+  if (aiConfig.provider === 'ollama' && dynamicOllamaModels.value.length > 0) {
+    return dynamicOllamaModels.value
+  }
   if (!aiConfig.provider || aiConfig.provider === 'none') return []
   const preset = providerPresets[aiConfig.provider]
   return preset?.models || []
 })
-
-const aiTesting = ref(false)
-const aiTestResult = ref<'success' | 'error' | ''>('')
 
 const handleAiProviderChange = (provider: string) => {
   if (provider === 'none') {
@@ -671,10 +878,38 @@ const handleAiProviderChange = (provider: string) => {
     aiConfig.apiUrl = preset.apiUrl
     aiConfig.model = preset.models[0]?.value || ''
   }
+  
+  if (provider === 'ollama') {
+    loadOllamaModels()
+  }
+}
+
+const loadOllamaModels = async () => {
+  try {
+    ollamaLoading.value = true
+    dynamicOllamaModels.value = []
+    
+    const baseUrl = aiConfig.apiUrl.replace('/v1/chat/completions', '')
+    const response = await getOllamaModels(baseUrl)
+    
+    if (response && response.data && response.data.length > 0) {
+      dynamicOllamaModels.value = response.data
+      if (!aiConfig.model && response.data.length > 0) {
+        aiConfig.model = response.data[0].value
+      }
+      ElMessage.success(`已加载 ${response.data.length} 个Ollama模型`)
+    } else {
+      ElMessage.warning('未找到Ollama模型，请确保Ollama已运行并已下载模型')
+    }
+  } catch (error: any) {
+    ElMessage.error('获取Ollama模型失败: ' + (error.message || '请检查Ollama是否运行'))
+  } finally {
+    ollamaLoading.value = false
+  }
 }
 
 const handleTestAiConnection = async () => {
-  if (!aiConfig.apiKey) {
+  if (!aiConfig.apiKey && aiConfig.provider !== 'ollama') {
     ElMessage.warning(t('profile.aiApiKeyRequired'))
     return
   }
@@ -699,17 +934,92 @@ const handleTestAiConnection = async () => {
   }
 }
 
-const handleSaveAiConfig = () => {
-  localStorage.setItem('ai_provider', aiConfig.provider)
-  localStorage.setItem('ai_api_url', aiConfig.apiUrl)
-  localStorage.setItem('ai_api_key', aiConfig.apiKey)
-  localStorage.setItem('ai_model', aiConfig.model)
+const loadConfigs = async () => {
+  try {
+    const response = await getSystemConfigs()
+    if (response && response.data) {
+      const configs = response.data
+      
+      if (configs.ai_provider) aiConfig.provider = configs.ai_provider
+      if (configs.ai_api_url) aiConfig.apiUrl = configs.ai_api_url
+      if (configs.ai_api_key) aiConfig.apiKey = configs.ai_api_key
+      if (configs.ai_model) aiConfig.model = configs.ai_model
+      
+      if (configs.bd_risk_threshold !== undefined) bigDataConfig.riskThreshold = Number(configs.bd_risk_threshold)
+      if (configs.bd_max_tokens !== undefined) bigDataConfig.maxTokens = Number(configs.bd_max_tokens)
+      if (configs.bd_temperature !== undefined) bigDataConfig.temperature = Number(configs.bd_temperature)
+      if (configs.bd_enable_cache !== undefined) bigDataConfig.enableCache = configs.bd_enable_cache === true || configs.bd_enable_cache === 'true'
+      if (configs.bd_cache_timeout !== undefined) bigDataConfig.cacheTimeout = Number(configs.bd_cache_timeout)
+      
+      if (configs.ntf_expiration_reminder !== undefined) notificationSettings.expirationReminder = configs.ntf_expiration_reminder === true || configs.ntf_expiration_reminder === 'true'
+      if (configs.ntf_approval_notification !== undefined) notificationSettings.approvalNotification = configs.ntf_approval_notification === true || configs.ntf_approval_notification === 'true'
+      if (configs.ntf_comment_notification !== undefined) notificationSettings.commentNotification = configs.ntf_comment_notification === true || configs.ntf_comment_notification === 'true'
+      if (configs.ntf_email_notification !== undefined) notificationSettings.emailNotification = configs.ntf_email_notification === true || configs.ntf_email_notification === 'true'
+      if (configs.ntf_system_notification !== undefined) notificationSettings.systemNotification = configs.ntf_system_notification === true || configs.ntf_system_notification === 'true'
+    }
+  } catch (error) {
+    console.error('加载配置失败:', error)
+  }
+}
+
+const handleSaveAiConfig = async () => {
+  try {
+    await saveSystemConfigs({
+      ai_provider: aiConfig.provider,
+      ai_api_url: aiConfig.apiUrl,
+      ai_api_key: aiConfig.apiKey,
+      ai_model: aiConfig.model
+    })
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    ElMessage.error(t('common.error'))
+  }
+}
+
+const handleSaveBigDataConfig = async () => {
+  try {
+    await saveSystemConfigs({
+      ai_provider: aiConfig.provider,
+      ai_api_url: aiConfig.apiUrl,
+      ai_api_key: aiConfig.apiKey,
+      ai_model: aiConfig.model,
+      bd_risk_threshold: bigDataConfig.riskThreshold,
+      bd_max_tokens: bigDataConfig.maxTokens,
+      bd_temperature: bigDataConfig.temperature,
+      bd_enable_cache: bigDataConfig.enableCache,
+      bd_cache_timeout: bigDataConfig.cacheTimeout
+    })
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    ElMessage.error(t('common.error'))
+  }
+}
+
+const handleResetBigDataConfig = async () => {
+  bigDataConfig.riskThreshold = 50
+  bigDataConfig.maxTokens = 2048
+  bigDataConfig.temperature = 0.7
+  bigDataConfig.enableCache = false
+  bigDataConfig.cacheTimeout = 60
   
-  ElMessage.success(t('common.success'))
+  try {
+    await saveSystemConfigs({
+      bd_risk_threshold: bigDataConfig.riskThreshold,
+      bd_max_tokens: bigDataConfig.maxTokens,
+      bd_temperature: bigDataConfig.temperature,
+      bd_enable_cache: bigDataConfig.enableCache,
+      bd_cache_timeout: bigDataConfig.cacheTimeout
+    })
+    ElMessage.success(t('common.success'))
+  } catch (error) {
+    ElMessage.error(t('common.error'))
+  }
 }
 
 onMounted(() => {
   loadUserData()
+  loadConfigs()
+  loadLoginHistory()
 })
 </script>
 
@@ -733,6 +1043,28 @@ onMounted(() => {
     }
   }
   
+  .data-analysis-item {
+    :deep(.el-form-item__content) {
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+  }
+  
+  .form-item-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  
+  .form-item-hint {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  
   .test-success {
     color: #67c23a;
     margin-left: 12px;
@@ -741,6 +1073,21 @@ onMounted(() => {
   .test-error {
     color: #f56c6c;
     margin-left: 12px;
+  }
+}
+
+.device-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .el-icon {
+    color: var(--primary);
+    font-size: 16px;
+  }
+  
+  .device-text {
+    font-weight: 500;
   }
 }
 </style>

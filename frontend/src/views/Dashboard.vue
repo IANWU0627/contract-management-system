@@ -807,7 +807,7 @@ onUnmounted(() => {
     
     /* 经典高饱和配色 - 每张卡片有独特性格 */
     &.gradient-purple {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #259C71 0%, #1e7d5a 100%);
       color: #fff;
       
       .stat-icon {
@@ -816,7 +816,7 @@ onUnmounted(() => {
     }
     
     &.gradient-green {
-      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      background: linear-gradient(135deg, #EF0056 0%, #c40047 100%);
       color: #fff;
       
       .stat-icon {
@@ -825,7 +825,7 @@ onUnmounted(() => {
     }
     
     &.gradient-orange {
-      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      background: linear-gradient(135deg, #003153 0%, #00243d 100%);
       color: #fff;
       
       .stat-icon {
@@ -834,7 +834,7 @@ onUnmounted(() => {
     }
     
     &.gradient-red {
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      background: linear-gradient(135deg, #EA642D 0%, #c45124 100%);
       color: #fff;
       
       .stat-icon {
