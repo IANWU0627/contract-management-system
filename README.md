@@ -1,13 +1,13 @@
 # 合同管理系统
+
 一个功能完整的自己做着玩的合同管理系统，支持合同全生命周期管理、模板管理、审批流程、到期提醒等功能。
 
 作为一个IT咨询顾问，完全使用AI做的，我个人还是比较满意的，后续有空自己在慢慢修改吧
-未来可以对接企业的前端数据，后端电子签章，以及审批流，进行完善，先就这样吧。
 
-首页是找的一个很有趣的登录页面
-<img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/c2ccfbd0-e238-4d63-a5d0-51214edf44e6" />
-工作台首页
-<img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/14fb8b5c-afe2-45a2-9d0a-da92a83b828f" />
+未来可以对接企业的前端业务数据，后端电子签章，以及OA审批流，进行完善，先就这样吧。
+
+首页是找的一个很有趣的登录页面 <img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/c2ccfbd0-e238-4d63-a5d0-51214edf44e6" />
+工作台首页 <img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/14fb8b5c-afe2-45a2-9d0a-da92a83b828f" />
 
 ## ✨ 功能特性
 
@@ -46,17 +46,15 @@
    cd backend
    mvnw.cmd spring-boot:run
    ```
-
 2. **启动前端**
    ```bash
    cd frontend
    npm install
    npm run dev
    ```
-
 3. **访问应用**
-   - 前端地址: http://localhost:3000
-   - 后端地址: http://localhost:8081
+   - 前端地址: <http://localhost:3000>
+   - 后端地址: <http://localhost:8081>
    - 默认账号: admin / admin123
 
 ### 方式二：使用MySQL数据库
@@ -65,16 +63,13 @@
    ```sql
    CREATE DATABASE contract_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
-
 2. **修改配置**
    编辑 `backend/src/main/resources/application.yml`，配置数据库连接
-
 3. **启动后端**
    ```bash
    cd backend
    ./mvnw spring-boot:run
    ```
-
 4. **启动前端**
    ```bash
    cd frontend
@@ -87,6 +82,7 @@
 ## 🛠️ 技术栈
 
 ### 前端
+
 - Vue 3 + TypeScript
 - Vite
 - Element Plus
@@ -96,6 +92,7 @@
 - AntV G2Plot
 
 ### 后端
+
 - Java 17
 - Spring Boot
 - Spring Security + JWT
@@ -127,15 +124,15 @@ contract-management-system/
 
 ## 🔐 默认账号
 
-| 用户名 | 密码 | 角色 |
-|--------|------|------|
-| admin  | admin123 | 超级管理员 |
+| 用户名   | 密码       | 角色    |
+| ----- | -------- | ----- |
+| admin | admin123 | 超级管理员 |
 
 ## 📝 开发文档
 
 - [快速启动指南](./QUICKSTART.md)
-- [API文档](./docs/API_DOC.md) 
-- [数据库设计](./docs/DATABASE.md) 
+- [API文档](./docs/API_DOC.md)
+- [数据库设计](./docs/DATABASE.md)
 
 ## 🤝 贡献指南
 
