@@ -30,7 +30,7 @@
           </div>
           <div class="info-row">
             <span class="label">{{ $t('contract.amount') }}:</span>
-            <span class="value">¥{{ formatAmount(item.amount) }}</span>
+            <span class="value">{{ getCurrencySymbol(item.currency) }}{{ formatAmount(item.amount) }}</span>
           </div>
           <div class="info-row">
             <span class="label">{{ $t('contract.endDate') }}:</span>
@@ -76,8 +76,9 @@ import { ElMessage } from 'element-plus'
 import { getFavorites, removeFavorite, addFavorite } from '@/api/favorite'
 import { getContractCategories } from '@/api/contractCategory'
 import { Document, Star, StarFilled } from '@element-plus/icons-vue'
+import { formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(false)
 const favorites = ref<any[]>([])
@@ -87,8 +88,7 @@ const total = ref(0)
 const categories = ref<any[]>([])
 
 const formatAmount = (amount: number) => {
-  if (!amount) return '0'
-  return new Intl.NumberFormat('zh-CN').format(amount)
+  return formatAmountByLocale(amount, locale.value)
 }
 
 const formatType = (type: string) => {
@@ -179,6 +179,7 @@ onMounted(async () => {
 .favorites-page {
   .page-header {
     margin-bottom: 24px;
+    min-width: 0;
     
     .page-title {
       font-size: 24px;
@@ -188,6 +189,10 @@ onMounted(async () => {
       -webkit-text-fill-color: transparent;
       background-clip: text;
       margin: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 }
@@ -325,6 +330,7 @@ onMounted(async () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     padding-top: 10px;
     border-top: 1px solid var(--border-color);
     margin-top: 10px;
@@ -333,6 +339,10 @@ onMounted(async () => {
     .favorited-time {
       font-size: 11px;
       color: var(--text-secondary);
+      max-width: 70%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 }
@@ -346,5 +356,6 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   margin-top: 24px;
+  min-width: 0;
 }
 </style>

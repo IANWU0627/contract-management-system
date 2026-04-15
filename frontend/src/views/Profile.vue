@@ -89,8 +89,20 @@
       <el-tab-pane :label="t('profile.loginHistory')" name="history">
         <el-card shadow="hover">
           <template #header><span>{{ t('profile.loginHistory') }}</span></template>
+          <el-alert
+            v-if="historyLoadFailed"
+            type="error"
+            :title="t('profile.loginHistory') + t('common.error')"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px"
+          >
+            <template #default>
+              <el-button link type="primary" @click="loadLoginHistory">{{ t('common.retry') }}</el-button>
+            </template>
+          </el-alert>
           
-          <el-table :data="loginHistory" stripe style="width: 100%" size="default">
+          <el-table :data="loginHistory" stripe style="width: 100%" size="default" v-loading="historyLoading">
             <el-table-column :prop="'loginTime'" :label="t('profile.loginTime')" width="180">
               <template #default="{ row }">
                 {{ formatTime(row.loginTime) }}
@@ -111,7 +123,7 @@
             </el-table-column>
             <el-table-column :prop="'location'" :label="t('profile.location')" width="100">
               <template #default="{ row }">
-                <el-tag size="small" type="success">{{ row.location || '未知' }}</el-tag>
+                <el-tag size="small" type="success">{{ row.location || t('profile.deviceUnknown') }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column :prop="'status'" :label="t('profile.status')" width="100">
@@ -142,11 +154,6 @@
           <template #header><span>{{ t('profile.securitySettings') }}</span></template>
           
           <el-form label-width="180px">
-            <el-divider content-position="left">{{ t('profile.twoFactorAuth') }}</el-divider>
-            <el-form-item :label="t('profile.enable2FA')">
-              <el-switch v-model="securitySettings.twoFAEnabled" @change="handle2FAChange" />
-            </el-form-item>
-            
             <el-divider content-position="left">{{ t('profile.sessionManagement') }}</el-divider>
             <el-form-item :label="t('profile.currentSessions')">
               <el-button type="primary" @click="openSessionsDialog">{{ t('profile.viewSessions') }}</el-button>
@@ -154,24 +161,7 @@
             <el-form-item :label="t('profile.logoutOtherSessions')">
               <el-button type="danger" @click="handleLogoutOtherSessions">{{ t('profile.logoutAll') }}</el-button>
             </el-form-item>
-            
-            <el-divider content-position="left">{{ t('profile.loginAlerts') }}</el-divider>
-            <el-form-item :label="t('profile.emailAlerts')">
-              <el-switch v-model="securitySettings.emailAlerts" />
-            </el-form-item>
-            <el-form-item :label="t('profile.smsAlerts')">
-              <el-switch v-model="securitySettings.smsAlerts" />
-            </el-form-item>
-          </el-form>
-        </el-card>
-      </el-tab-pane>
 
-      <!-- 通知设置 -->
-      <el-tab-pane :label="t('profile.notificationSettings')" name="notification">
-        <el-card shadow="hover">
-          <template #header><span>{{ t('profile.notificationSettings') }}</span></template>
-          
-          <el-form label-width="200px">
             <el-divider content-position="left">{{ t('profile.contractNotifications') }}</el-divider>
             <el-form-item :label="t('profile.expirationReminder')">
               <el-switch v-model="notificationSettings.expirationReminder" />
@@ -182,12 +172,12 @@
             <el-form-item :label="t('profile.commentNotification')">
               <el-switch v-model="notificationSettings.commentNotification" />
             </el-form-item>
-            
+
             <el-divider content-position="left">{{ t('profile.notificationMethods') }}</el-divider>
             <el-form-item :label="t('profile.systemNotification')">
               <el-switch v-model="notificationSettings.systemNotification" />
             </el-form-item>
-            
+
             <el-form-item>
               <el-button type="primary" @click="handleSaveNotificationSettings">{{ t('common.save') }}</el-button>
             </el-form-item>
@@ -292,65 +282,77 @@
             <div class="smart-analysis-panel">
               <p class="smart-analysis-intro">{{ t('profile.smartAnalysisIntro') }}</p>
 
-              <el-row :gutter="24">
-                <el-col :xs="24" :md="14">
-                  <div class="analysis-section">
-                    <div class="analysis-section-title">{{ t('profile.riskThresholdSection') }}</div>
-                    <el-form-item :label="t('profile.riskThreshold')" class="smart-analysis-form-item" label-width="112px">
-                      <div class="form-item-stack">
-                        <div class="risk-presets">
-                          <el-button-group>
-                            <el-button size="small" @click="bigDataConfig.riskThreshold = 40">{{ t('profile.riskPresetStrict') }}</el-button>
-                            <el-button size="small" @click="bigDataConfig.riskThreshold = 55">{{ t('profile.riskPresetBalanced') }}</el-button>
-                            <el-button size="small" @click="bigDataConfig.riskThreshold = 70">{{ t('profile.riskPresetLenient') }}</el-button>
-                          </el-button-group>
-                        </div>
-                        <el-slider
-                          v-model="bigDataConfig.riskThreshold"
-                          :min="0"
-                          :max="100"
-                          :step="5"
-                          show-input
-                          class="risk-slider"
-                        />
-                        <span class="form-item-hint">{{ t('profile.riskThresholdHint') }}</span>
-                      </div>
-                    </el-form-item>
+              <div class="analysis-section">
+                <div class="analysis-section-title">{{ t('profile.riskThresholdSection') }}</div>
+                <el-form-item :label="t('profile.riskThreshold')" class="smart-analysis-form-item" label-width="112px">
+                  <div class="form-item-stack">
+                    <div class="risk-presets">
+                      <el-button-group>
+                        <el-button
+                          size="small"
+                          :type="isRiskPresetActive(40) ? 'primary' : 'default'"
+                          @click="setRiskThresholdPreset(40)"
+                        >
+                          {{ t('profile.riskPresetStrict') }}
+                        </el-button>
+                        <el-button
+                          size="small"
+                          :type="isRiskPresetActive(55) ? 'primary' : 'default'"
+                          @click="setRiskThresholdPreset(55)"
+                        >
+                          {{ t('profile.riskPresetBalanced') }}
+                        </el-button>
+                        <el-button
+                          size="small"
+                          :type="isRiskPresetActive(70) ? 'primary' : 'default'"
+                          @click="setRiskThresholdPreset(70)"
+                        >
+                          {{ t('profile.riskPresetLenient') }}
+                        </el-button>
+                      </el-button-group>
+                    </div>
+                    <el-slider
+                      v-model="bigDataConfig.riskThreshold"
+                      :min="0"
+                      :max="100"
+                      :step="5"
+                      show-input
+                      class="risk-slider"
+                    />
+                    <span class="form-item-hint">{{ t('profile.riskThresholdHint') }}</span>
                   </div>
-                </el-col>
+                </el-form-item>
+              </div>
 
-                <el-col :xs="24" :md="10">
-                  <div class="analysis-section">
-                    <div class="analysis-section-title">{{ t('profile.modelParamsSection') }}</div>
-                    <el-form-item :label="t('profile.maxTokens')" class="smart-analysis-form-item" label-width="112px">
-                      <div class="form-item-stack">
-                        <el-input-number
-                          v-model="bigDataConfig.maxTokens"
-                          :min="100"
-                          :max="8192"
-                          :step="100"
-                          controls-position="right"
-                          class="token-input"
-                        />
-                        <span class="form-item-hint">{{ t('profile.maxTokensHint') }}</span>
-                      </div>
-                    </el-form-item>
-                    <el-form-item :label="t('profile.temperature')" class="smart-analysis-form-item" label-width="112px">
-                      <div class="form-item-stack">
-                        <el-slider
-                          v-model="bigDataConfig.temperature"
-                          :min="0"
-                          :max="2"
-                          :step="0.1"
-                          show-input
-                          class="temp-slider"
-                        />
-                        <span class="form-item-hint">{{ t('profile.temperatureHint') }}</span>
-                      </div>
-                    </el-form-item>
+              <div class="analysis-section">
+                <div class="analysis-section-title">{{ t('profile.modelParamsSection') }}</div>
+                <el-form-item :label="t('profile.maxTokens')" class="smart-analysis-form-item" label-width="112px">
+                  <div class="form-item-stack">
+                    <el-slider
+                      v-model="bigDataConfig.maxTokens"
+                      :min="100"
+                      :max="8192"
+                      :step="100"
+                      show-input
+                      class="token-slider"
+                    />
+                    <span class="form-item-hint">{{ t('profile.maxTokensHint') }}</span>
                   </div>
-                </el-col>
-              </el-row>
+                </el-form-item>
+                <el-form-item :label="t('profile.temperature')" class="smart-analysis-form-item" label-width="112px">
+                  <div class="form-item-stack">
+                    <el-slider
+                      v-model="bigDataConfig.temperature"
+                      :min="0"
+                      :max="2"
+                      :step="0.1"
+                      show-input
+                      class="temp-slider"
+                    />
+                    <span class="form-item-hint">{{ t('profile.temperatureHint') }}</span>
+                  </div>
+                </el-form-item>
+              </div>
 
               <div class="analysis-section advanced-section">
                 <div class="analysis-section-title">{{ t('profile.advancedSettings') }}</div>
@@ -359,13 +361,13 @@
                     <el-form-item :label="t('profile.enableCache')" class="smart-analysis-form-item" label-width="112px">
                       <div class="cache-row">
                         <el-switch v-model="bigDataConfig.enableCache" />
-                        <span class="form-item-hint cache-hint">{{ t('profile.enableCacheHint') }}</span>
+                        <span class="form-item-hint">{{ t('profile.enableCacheHint') }}</span>
                       </div>
                     </el-form-item>
                   </el-col>
                   <el-col :xs="24" :sm="12">
                     <el-form-item
-                      v-show="bigDataConfig.enableCache"
+                      v-if="bigDataConfig.enableCache"
                       :label="t('profile.cacheTimeout')"
                       class="smart-analysis-form-item"
                       label-width="112px"
@@ -398,6 +400,18 @@
 
     <!-- 会话管理对话框 -->
     <el-dialog v-model="showSessionsDialog" :title="t('profile.currentSessions')" width="800px">
+      <el-alert
+        v-if="sessionsLoadFailed"
+        type="error"
+        :title="t('profile.currentSessions') + t('common.error')"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      >
+        <template #default>
+          <el-button link type="primary" @click="loadActiveSessions">{{ t('common.retry') }}</el-button>
+        </template>
+      </el-alert>
       <el-table :data="activeSessions" stripe style="width: 100%" size="default">
         <el-table-column :prop="'device'" :label="t('profile.device')" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
@@ -412,14 +426,30 @@
             <el-tag size="small" type="info">{{ row.ipAddress || '-' }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column :prop="'location'" :label="t('profile.location')" width="120">
+          <template #default="{ row }">
+            <el-tag size="small" type="success">{{ row.location || '-' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :prop="'browserVersion'" :label="t('profile.browserVersion')" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.browserVersion || t('profile.deviceUnknown') }}
+          </template>
+        </el-table-column>
         <el-table-column :prop="'loginTime'" :label="t('profile.loginTime')" width="180">
           <template #default="{ row }">
             {{ formatTime(row.loginTime) }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.operation')" width="100" align="center">
+        <el-table-column :prop="'lastActive'" :label="t('profile.lastActiveTime')" width="180">
           <template #default="{ row }">
-            <el-button type="danger" size="small" link @click="handleTerminateSession(row.id)">{{ t('profile.terminate') }}</el-button>
+            {{ formatTime(row.lastActive) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.action')" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.current" size="small" type="success">{{ t('profile.currentSessionTag') }}</el-tag>
+            <el-button v-else type="danger" size="small" link @click="handleTerminateSession(row.id)">{{ t('profile.terminate') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -436,7 +466,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { getUserInfo, updateUserInfo, changePassword } from '@/api/auth'
 import { testAiConnection, getOllamaModels } from '@/api/ai'
-import { getSystemConfigs, saveSystemConfigs, getLoginHistory, getActiveSessions, terminateSession } from '@/api/system'
+import { getSystemConfigs, saveSystemConfigs, getLoginHistory, getActiveSessions, terminateSession, terminateAllSessions } from '@/api/system'
 import { Monitor } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
@@ -474,7 +504,29 @@ const rules = {
 
 const pwdRules = {
   oldPassword: [{ required: true, message: t('profile.error.oldPassword'), trigger: 'blur' }],
-  newPassword: [{ required: true, message: t('profile.error.newPassword'), trigger: 'blur' }, { min: 6, message: t('profile.error.passwordMin'), trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: t('profile.error.newPassword'), trigger: 'blur' },
+    { min: 8, message: t('profile.error.passwordMin'), trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: (error?: Error) => void) => {
+        if (!value) {
+          callback()
+          return
+        }
+        const strongPwd = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/
+        if (!strongPwd.test(value)) {
+          callback(new Error(t('profile.error.passwordComplexity')))
+          return
+        }
+        if (value === pwdForm.oldPassword) {
+          callback(new Error(t('profile.error.passwordSameAsOld')))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur'
+    }
+  ],
   confirmPassword: [{ required: true, message: t('profile.error.confirmPassword'), trigger: 'blur' }]
 }
 
@@ -489,10 +541,11 @@ const formatRole = (role: string) => {
 
 const formatDevice = (device: string) => {
   if (!device) return t('profile.deviceUnknown')
-  if (device.includes('Chrome')) return t('profile.deviceChrome')
+  // Check Edge before Chrome because modern Edge UA also contains "Chrome".
+  if (device.includes('Edg') || device.includes('Edge')) return t('profile.deviceEdge')
   if (device.includes('Firefox')) return t('profile.deviceFirefox')
+  if (device.includes('Chrome')) return t('profile.deviceChrome')
   if (device.includes('Safari')) return t('profile.deviceSafari')
-  if (device.includes('Edge')) return t('profile.deviceEdge')
   if (device.includes('Windows')) return t('profile.deviceWindows')
   if (device.includes('Mac')) return t('profile.deviceMacOS')
   if (device.includes('Linux')) return t('profile.deviceLinux')
@@ -625,12 +678,16 @@ const loadUserData = async () => {
 }
 
 const loginHistory = ref<any[]>([])
+const historyLoading = ref(false)
+const historyLoadFailed = ref(false)
 const historyPage = ref(1)
 const historyPageSize = ref(10)
 const historyTotal = ref(0)
 
 const loadLoginHistory = async () => {
   try {
+    historyLoading.value = true
+    historyLoadFailed.value = false
     const response = await getLoginHistory({
       page: historyPage.value,
       pageSize: historyPageSize.value
@@ -640,40 +697,39 @@ const loadLoginHistory = async () => {
       historyTotal.value = response.data.total
     }
   } catch (error) {
-    console.error('加载登录历史失败:', error)
+    historyLoadFailed.value = true
+    console.error('Failed to load login history:', error)
+    ElMessage.error(t('common.error'))
+  } finally {
+    historyLoading.value = false
   }
 }
 
-const securitySettings = reactive({
-  twoFAEnabled: false,
-  emailAlerts: true,
-  smsAlerts: false
-})
-
-const handle2FAChange = async (val: boolean) => {
-      if (val) {
-        ElMessage.info(t('profile.twoFAEnableInfo'))
-      } else {
-        ElMessage.success(t('common.success'))
-      }
-    }
-
 const showSessionsDialog = ref(false)
 const activeSessions = ref<any[]>([])
+const sessionsLoadFailed = ref(false)
 
 const loadActiveSessions = async () => {
   try {
-    const sessions = await getActiveSessions()
-    if (sessions) {
+    sessionsLoadFailed.value = false
+    const response = await getActiveSessions()
+    const sessions = (response as any)?.data
+    if (Array.isArray(sessions)) {
       activeSessions.value = sessions.map((s: any) => ({
         id: s.id,
         device: s.device,
         ipAddress: s.ip,
-        loginTime: s.loginTime
+        location: s.location,
+        browserVersion: s.browserVersion,
+        loginTime: s.loginTime,
+        lastActive: s.lastActive,
+        current: !!s.current
       }))
     }
   } catch (error) {
-    console.error('加载活跃会话失败:', error)
+    sessionsLoadFailed.value = true
+    console.error('Failed to load active sessions:', error)
+    ElMessage.error(t('common.error'))
   }
 }
 
@@ -684,6 +740,9 @@ const handleLogoutOtherSessions = async () => {
       cancelButtonText: t('common.cancel'),
       type: 'warning'
     })
+    await terminateAllSessions()
+    await loadActiveSessions()
+    await loadLoginHistory()
     ElMessage.success(t('common.success'))
   } catch {
   }
@@ -748,7 +807,7 @@ const providerPresets: Record<string, AiProvider> = {
   openai: {
     apiUrl: 'https://api.openai.com/v1/chat/completions',
     models: [
-      { value: 'gpt-4o', label: 'GPT-4o (最新)' },
+      { value: 'gpt-4o', label: 'GPT-4o (Latest)' },
       { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
       { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
       { value: 'gpt-4', label: 'GPT-4' },
@@ -784,7 +843,7 @@ const providerPresets: Record<string, AiProvider> = {
   zhipu: {
     apiUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
     models: [
-      { value: 'glm-4-plus', label: 'GLM-4 Plus (最新)' },
+      { value: 'glm-4-plus', label: 'GLM-4 Plus (Latest)' },
       { value: 'glm-4', label: 'GLM-4' },
       { value: 'glm-4-flash', label: 'GLM-4 Flash' },
       { value: 'glm-3-turbo', label: 'GLM-3 Turbo' }
@@ -793,24 +852,24 @@ const providerPresets: Record<string, AiProvider> = {
   baichuan: {
     apiUrl: 'https://api.baichuan-ai.com/v1/chat/completions',
     models: [
-      { value: 'Baichuan4', label: '百川4' },
-      { value: 'Baichuan3-Turbo', label: '百川3-Turbo' },
-      { value: 'Baichuan2-Turbo', label: '百川2-Turbo' }
+      { value: 'Baichuan4', label: 'Baichuan 4' },
+      { value: 'Baichuan3-Turbo', label: 'Baichuan 3 Turbo' },
+      { value: 'Baichuan2-Turbo', label: 'Baichuan 2 Turbo' }
     ]
   },
   tongyi: {
     apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
     models: [
-      { value: 'qwen-plus', label: '通义千问 Plus' },
-      { value: 'qwen-turbo', label: '通义千问 Turbo' },
-      { value: 'qwen-max', label: '通义千问 Max' },
-      { value: 'qwen-long', label: '通义千问 Long' }
+      { value: 'qwen-plus', label: 'Qwen Plus' },
+      { value: 'qwen-turbo', label: 'Qwen Turbo' },
+      { value: 'qwen-max', label: 'Qwen Max' },
+      { value: 'qwen-long', label: 'Qwen Long' }
     ]
   },
   yi: {
     apiUrl: 'https://api.lingyiwanwu.com/v1/chat/completions',
     models: [
-      { value: 'yi-large', label: 'Yi Large (最新)' },
+      { value: 'yi-large', label: 'Yi Large (Latest)' },
       { value: 'yi-medium', label: 'Yi Medium' },
       { value: 'yi-small', label: 'Yi Small' }
     ]
@@ -835,31 +894,31 @@ const providerPresets: Record<string, AiProvider> = {
   ollama: {
     apiUrl: 'http://localhost:11434/v1/chat/completions',
     models: [
-      { value: 'gpt-oss:20b', label: 'GPT-OSS 20B (您当前使用)' },
-      { value: 'llama3.2', label: 'Llama 3.2 (最新)' },
+      { value: 'gpt-oss:20b', label: 'GPT-OSS 20B (Current)' },
+      { value: 'llama3.2', label: 'Llama 3.2 (Latest)' },
       { value: 'llama3.1', label: 'Llama 3.1' },
       { value: 'llama3', label: 'Llama 3' },
-      { value: 'llama3.2-vision', label: 'Llama 3.2 Vision (多模态)' },
+      { value: 'llama3.2-vision', label: 'Llama 3.2 Vision (Multimodal)' },
       { value: 'mistral', label: 'Mistral' },
       { value: 'mistral-nemo', label: 'Mistral Nemo' },
       { value: 'mixtral', label: 'Mixtral 8x7B' },
       { value: 'qwen2.5', label: 'Qwen 2.5' },
       { value: 'qwen2.5-coder', label: 'Qwen 2.5 Coder' },
       { value: 'deepseek-r1', label: 'DeepSeek R1' },
-      { value: 'deepseek-r1-distill-qwen', label: 'DeepSeek R1 (Qwen蒸馏)' },
-      { value: 'deepseek-r1-distill-llama', label: 'DeepSeek R1 (Llama蒸馏)' },
+      { value: 'deepseek-r1-distill-qwen', label: 'DeepSeek R1 (Qwen Distilled)' },
+      { value: 'deepseek-r1-distill-llama', label: 'DeepSeek R1 (Llama Distilled)' },
       { value: 'codellama', label: 'Code Llama' },
       { value: 'codellama:70b', label: 'Code Llama 70B' },
       { value: 'gemma2', label: 'Gemma 2' },
       { value: 'gemma2:27b', label: 'Gemma 2 27B' },
       { value: 'phi3', label: 'Phi-3' },
       { value: 'phi3.5', label: 'Phi-3.5' },
-      { value: 'nomic-embed-text', label: 'Nomic Embed Text (嵌入)' },
-      { value: 'mxbai-embed-large', label: 'MxBai Embed Large (嵌入)' },
+      { value: 'nomic-embed-text', label: 'Nomic Embed Text (Embedding)' },
+      { value: 'mxbai-embed-large', label: 'MxBai Embed Large (Embedding)' },
       { value: 'granite3.3', label: 'Granite 3.3' },
       { value: 'command-r7b', label: 'Command R7B' },
       { value: 'stablelm2', label: 'Stable LM 2' },
-      { value: 'aya', label: 'Aya (多语言)' },
+      { value: 'aya', label: 'Aya (Multilingual)' },
       { value: 'wizardlm2', label: 'WizardLM 2' },
       { value: 'neural-chat', label: 'Neural Chat' }
     ]
@@ -895,6 +954,14 @@ const availableModels = computed(() => {
   const preset = providerPresets[aiConfig.provider]
   return preset?.models || []
 })
+
+const setRiskThresholdPreset = (value: number) => {
+  bigDataConfig.riskThreshold = value
+}
+
+const isRiskPresetActive = (value: number) => {
+  return bigDataConfig.riskThreshold === value
+}
 
 const handleAiProviderChange = (provider: string) => {
   if (provider === 'none') {
@@ -985,9 +1052,11 @@ const loadConfigs = async () => {
       if (configs.ntf_approval_notification !== undefined) notificationSettings.approvalNotification = configs.ntf_approval_notification === true || configs.ntf_approval_notification === 'true'
       if (configs.ntf_comment_notification !== undefined) notificationSettings.commentNotification = configs.ntf_comment_notification === true || configs.ntf_comment_notification === 'true'
       if (configs.ntf_system_notification !== undefined) notificationSettings.systemNotification = configs.ntf_system_notification === true || configs.ntf_system_notification === 'true'
+
     }
   } catch (error) {
-    console.error('加载配置失败:', error)
+    console.error('Failed to load profile configs:', error)
+    ElMessage.error(t('common.error'))
   }
 }
 
@@ -1069,7 +1138,7 @@ onMounted(() => {
   }
   
   .smart-analysis-panel {
-    padding: 20px 22px 8px;
+    padding: 20px 24px 12px;
     margin-bottom: 8px;
     border-radius: 12px;
     border: 1px solid var(--el-border-color-lighter);
@@ -1084,7 +1153,7 @@ onMounted(() => {
   }
 
   .analysis-section {
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
 
   .analysis-section-title {
@@ -1102,9 +1171,15 @@ onMounted(() => {
   }
 
   .smart-analysis-form-item {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
+    :deep(.el-form-item__label) {
+      width: 112px !important;
+      padding-right: 12px;
+      line-height: 32px;
+    }
     :deep(.el-form-item__content) {
       align-items: flex-start;
+      min-width: 0;
     }
   }
 
@@ -1113,53 +1188,74 @@ onMounted(() => {
     flex-direction: column;
     gap: 8px;
     width: 100%;
+    max-width: 760px;
     min-width: 0;
   }
 
   .risk-presets {
     margin-bottom: 4px;
+    :deep(.el-button) {
+      min-width: 64px;
+    }
   }
 
+  .token-slider,
   .risk-slider,
   .temp-slider {
     width: 100%;
-    max-width: 420px;
+    max-width: 760px;
+    :deep(.el-slider__runway) {
+      margin-right: 8px;
+    }
+    :deep(.el-slider__input) {
+      width: 108px;
+    }
   }
 
-  .token-input,
   .cache-timeout-input {
     width: 100%;
-    max-width: 200px;
+    max-width: 320px;
   }
 
   .cache-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
-  }
-
-  .cache-hint {
-    flex: 1;
-    min-width: 160px;
-    margin-top: 0 !important;
+    gap: 8px;
+    width: 100%;
+    max-width: 760px;
   }
 
   .smart-analysis-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    margin-top: 16px;
+    margin-top: 20px;
     padding-top: 16px;
     border-top: 1px solid var(--el-border-color-lighter);
   }
 
   .form-item-hint {
     display: block;
-    margin-top: 2px;
+    margin-top: 0;
     color: var(--el-text-color-secondary);
     font-size: 12px;
     line-height: 1.45;
+  }
+
+  @media (max-width: 900px) {
+    .smart-analysis-panel {
+      padding: 16px;
+    }
+
+    .risk-slider,
+    .temp-slider {
+      max-width: 100%;
+    }
+
+    .cache-timeout-input {
+      max-width: 100%;
+    }
   }
   
   .test-success {

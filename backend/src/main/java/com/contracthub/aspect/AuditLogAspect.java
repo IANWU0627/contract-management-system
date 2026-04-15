@@ -8,23 +8,40 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Aspect
 @Component
 public class AuditLogAspect {
-    
+
+    private static final Logger log = LoggerFactory.getLogger(AuditLogAspect.class);
     private final OperationLogMapper operationLogMapper;
+    private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
-    public AuditLogAspect(OperationLogMapper operationLogMapper) {
+    private static final Set<String> SENSITIVE_KEYS = Set.of(
+            "password", "oldpassword", "newpassword", "confirmpassword",
+            "token", "authorization", "accesstoken", "refreshtoken",
+            "secret", "apikey", "api_key", "credential"
+    );
+
+    public AuditLogAspect(OperationLogMapper operationLogMapper, JdbcTemplate jdbcTemplate) {
         this.operationLogMapper = operationLogMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
     
     @Pointcut("execution(* com.contracthub.controller..*.*(..))")
@@ -81,6 +98,74 @@ public class AuditLogAspect {
             log.setCreatedAt(LocalDateTime.now());
             operationLogMapper.insert(log);
         } catch (Exception e) {
+            // 兼容历史库结构（action/content/username/create_time），避免日志表结构差异导致“空日志”
+            log.warn("标准操作日志写入失败，尝试兼容写入: {}", e.getMessage());
+            try {
+                insertCompatibleOperationLog(module, action, description, detail, userId, username, ip);
+            } catch (Exception compatibleEx) {
+                log.error("兼容写入操作日志失败", compatibleEx);
+            }
+        }
+    }
+
+    private void insertCompatibleOperationLog(String module, String action, String description, String detail,
+                                              Long userId, String username, String ip) {
+        Set<String> columns = getOperationLogColumns();
+
+        String moduleColumn = pickColumn(columns, "module");
+        String actionColumn = pickColumn(columns, "operation", "action");
+        String descriptionColumn = pickColumn(columns, "description", "content");
+        String detailColumn = pickColumn(columns, "detail");
+        String operatorIdColumn = pickColumn(columns, "operator_id", "user_id");
+        String operatorNameColumn = pickColumn(columns, "operator_name", "username", "user_name");
+        String ipColumn = pickColumn(columns, "ip", "ip_address");
+        String createdAtColumn = pickColumn(columns, "created_at", "create_time");
+
+        Map<String, Object> fieldValues = new LinkedHashMap<>();
+        putIfColumnExists(fieldValues, moduleColumn, module);
+        putIfColumnExists(fieldValues, actionColumn, action);
+        putIfColumnExists(fieldValues, descriptionColumn, description);
+        putIfColumnExists(fieldValues, detailColumn, detail);
+        putIfColumnExists(fieldValues, operatorIdColumn, userId);
+        putIfColumnExists(fieldValues, operatorNameColumn, username);
+        putIfColumnExists(fieldValues, ipColumn, ip);
+        putIfColumnExists(fieldValues, createdAtColumn, LocalDateTime.now());
+
+        if (fieldValues.isEmpty()) {
+            throw new IllegalStateException("operation_log 无可用写入列");
+        }
+
+        List<String> insertColumns = new ArrayList<>(fieldValues.keySet());
+        List<Object> values = new ArrayList<>(fieldValues.values());
+        String placeholders = String.join(", ", insertColumns.stream().map(col -> "?").toList());
+        String sql = "INSERT INTO operation_log (" + String.join(", ", insertColumns) + ") VALUES (" + placeholders + ")";
+        jdbcTemplate.update(sql, values.toArray());
+    }
+
+    private Set<String> getOperationLogColumns() {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("SHOW COLUMNS FROM operation_log");
+        Set<String> columns = new HashSet<>();
+        for (Map<String, Object> row : rows) {
+            Object field = row.get("Field");
+            if (field != null) {
+                columns.add(field.toString().toLowerCase());
+            }
+        }
+        return columns;
+    }
+
+    private String pickColumn(Set<String> columns, String... candidates) {
+        for (String candidate : candidates) {
+            if (columns.contains(candidate.toLowerCase())) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private void putIfColumnExists(Map<String, Object> target, String column, Object value) {
+        if (column != null) {
+            target.put(column, value);
         }
     }
     
@@ -189,7 +274,7 @@ public class AuditLogAspect {
                     if (arg != null) {
                         String argClass = arg.getClass().getSimpleName();
                         if (argClass.contains("Map")) {
-                            detailMap.put("requestBody", arg);
+                            detailMap.put("requestBody", sanitizeArgument(arg));
                         } else if (argClass.equals("Long") || argClass.equals("Integer") || argClass.equals("String")) {
                             if (methodName.contains("Id") || methodName.contains("id")) {
                                 detailMap.put("targetId", arg);
@@ -203,5 +288,41 @@ public class AuditLogAspect {
         } catch (Exception e) {
             return "{}";
         }
+    }
+
+    private Object sanitizeArgument(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Map<?, ?> rawMap) {
+            Map<String, Object> sanitized = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                String key = entry.getKey() == null ? "" : String.valueOf(entry.getKey());
+                Object entryValue = entry.getValue();
+                if (isSensitiveKey(key)) {
+                    sanitized.put(key, "***");
+                } else {
+                    sanitized.put(key, sanitizeArgument(entryValue));
+                }
+            }
+            return sanitized;
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> sanitized = new ArrayList<>();
+            for (Object item : collection) {
+                sanitized.add(sanitizeArgument(item));
+            }
+            return sanitized;
+        }
+        String text = String.valueOf(value);
+        if (text.length() > 500) {
+            return text.substring(0, 500) + "...";
+        }
+        return value;
+    }
+
+    private boolean isSensitiveKey(String key) {
+        String normalized = key.toLowerCase().replace("_", "");
+        return SENSITIVE_KEYS.contains(normalized);
     }
 }

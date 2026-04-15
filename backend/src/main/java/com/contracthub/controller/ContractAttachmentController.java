@@ -4,11 +4,13 @@ import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.ContractAttachment;
 import com.contracthub.mapper.ContractAttachmentMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/contract-attachments")
+@PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
 public class ContractAttachmentController {
     
     @Autowired

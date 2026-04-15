@@ -152,7 +152,7 @@ const routes: RouteRecordRaw[] = [
         path: 'change-logs',
         name: 'ChangeLogs',
         component: () => import('@/views/contract/ChangeLog.vue'),
-        meta: { title: 'contract.changeLog', roles: ['ADMIN', 'LEGAL'] }
+        meta: { title: 'contract.changeLog', roles: ['ADMIN'] }
       },
       {
         path: 'folders',
@@ -206,7 +206,7 @@ const titleMap: Record<string, { zh: string; en: string }> = {
   'menu.approvals': { zh: '审批管理', en: 'Approvals' },
   'menu.reminders': { zh: '到期提醒', en: 'Reminders' },
   'menu.statistics': { zh: '统计报表', en: 'Statistics' },
-  'menu.logs': { zh: '操作日志', en: 'Operation Logs' },
+  'menu.operationLogs': { zh: '操作日志', en: 'Operation Logs' },
   'menu.users': { zh: '用户管理', en: 'Users' },
   'menu.settings': { zh: '系统设置', en: 'Settings' },
   'menu.profile': { zh: '个人中心', en: 'Profile' }
@@ -222,10 +222,10 @@ router.beforeEach(async (to, from) => {
 
   if (titleKey && titleMap[titleKey]) {
     const pageTitle = titleMap[titleKey][locale as 'zh' | 'en'] || titleKey
-    const appTitle = locale === 'en' ? 'Contract Management System' : '合同管理系统'
+    const appTitle = localStorage.getItem('systemName') || (locale === 'en' ? 'Contract Management System' : '合同管理系统')
     document.title = `${pageTitle} - ${appTitle}`
   } else {
-    document.title = locale === 'en' ? 'Contract Management System' : '合同管理系统'
+    document.title = localStorage.getItem('systemName') || (locale === 'en' ? 'Contract Management System' : '合同管理系统')
   }
 
   // 公开页面直接访问
@@ -241,6 +241,10 @@ router.beforeEach(async (to, from) => {
   // 如果用户角色为空，尝试获取用户信息
   if (userStore.roles.length === 0) {
     await userStore.fetchUserInfo()
+    // fetchUserInfo 失败会触发 logout，这里必须二次校验登录态
+    if (!userStore.isLoggedIn) {
+      return '/login'
+    }
   }
 
   // 获取用户角色
@@ -248,7 +252,11 @@ router.beforeEach(async (to, from) => {
   const allowedRoles = to.meta.roles as string[] | undefined
 
   // 检查角色是否有权限访问
-  if (allowedRoles && userRoles.length > 0) {
+  if (allowedRoles) {
+    if (userRoles.length === 0) {
+      ElMessage.warning(t('common.noPermission'))
+      return '/dashboard'
+    }
     const hasAccess = userRoles.some(role => allowedRoles.includes(role))
     if (!hasAccess) {
       ElMessage.warning(t('common.noPermission'))

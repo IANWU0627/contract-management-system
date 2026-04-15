@@ -108,7 +108,7 @@ import { useI18n } from 'vue-i18n'
 import { getVersionHistory, getVersionDetail, restoreVersion, compareVersions } from '@/api/extra'
 import { User, Right, View, RefreshRight, Connection } from '@element-plus/icons-vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const props = defineProps<{ contractId?: number }>()
 
@@ -152,7 +152,7 @@ const handleSelectionChange = (version: any) => {
   if (version.selected) {
     if (selectedVersions.value.length >= 2) {
       version.selected = false
-      ElMessage.warning('最多选择两个版本进行对比')
+      ElMessage.warning(t('contract.versionsDetail.maxTwoWarning'))
       return
     }
     selectedVersions.value.push(version)
@@ -165,10 +165,10 @@ const handleView = async (version: any) => {
   try {
     const res = await getVersionDetail(contractId.value, version.id)
     currentVersion.value = res.data
-    currentContent.value = res.data?.content || '无内容'
+    currentContent.value = res.data?.content || t('contract.versionsDetail.noContent')
     detailVisible.value = true
   } catch (error) {
-    ElMessage.error('获取版本详情失败')
+    ElMessage.error(t('contract.versionsDetail.detailLoadFailed'))
   }
 }
 
@@ -176,20 +176,20 @@ const handleCompareWithCurrent = async (version: any) => {
   try {
     const currentVersionId = versions.value.find(v => v.version === latestVersion.value)?.id
     if (!currentVersionId) {
-      ElMessage.error('无法获取当前版本')
+      ElMessage.error(t('contract.versionsDetail.currentVersionMissing'))
       return
     }
     const res = await compareVersions(contractId.value, version.id, currentVersionId)
     compareResult.value = res.data
     compareVisible.value = true
   } catch (error) {
-    ElMessage.error('版本对比失败')
+    ElMessage.error(t('contract.versionsDetail.compareFailed'))
   }
 }
 
 const showCompareDialog = async () => {
   if (selectedVersions.value.length !== 2) {
-    ElMessage.warning('请选择两个版本进行对比')
+    ElMessage.warning(t('contract.versionsDetail.selectTwoWarning'))
     return
   }
   try {
@@ -198,30 +198,31 @@ const showCompareDialog = async () => {
     compareResult.value = res.data
     compareVisible.value = true
   } catch (error) {
-    ElMessage.error('版本对比失败')
+    ElMessage.error(t('contract.versionsDetail.compareFailed'))
   }
 }
 
 const handleRestore = async (version: any) => {
   try {
     await ElMessageBox.confirm(
-      `确定要恢复到版本 ${version.version} 吗？这将创建一个新版本。`,
-      '恢复版本',
+      t('contract.versionsDetail.restoreConfirm', { version: version.version }),
+      t('contract.versionsDetail.restoreTitle'),
       { type: 'warning' }
     )
     await restoreVersion(contractId.value, version.id)
-    ElMessage.success('版本恢复成功')
+    ElMessage.success(t('contract.versionsDetail.restoreSuccess'))
     fetchVersions()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '恢复失败')
+      ElMessage.error(error.message || t('contract.versionsDetail.restoreFailed'))
     }
   }
 }
 
 const formatTime = (time: string) => {
   if (!time) return ''
-  return new Date(time).toLocaleString('zh-CN')
+  const localeCode = locale.value === 'en' ? 'en-US' : 'zh-CN'
+  return new Date(time).toLocaleString(localeCode)
 }
 
 const getDiffMarker = (type: string) => {

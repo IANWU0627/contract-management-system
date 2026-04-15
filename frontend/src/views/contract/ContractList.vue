@@ -152,7 +152,7 @@
         </el-table-column>
         <el-table-column prop="amount" :label="$t('contract.amount')" width="100" show-overflow-tooltip>
           <template #default="{ row }">
-            ¥{{ formatAmount(row.amount) }}
+            {{ getCurrencySymbol(row.currency) }}{{ formatAmount(row.amount) }}
           </template>
         </el-table-column>
         <el-table-column prop="startDate" :label="$t('contract.startDate')" width="90" show-overflow-tooltip />
@@ -361,6 +361,7 @@ import { getQuickCodeByCode } from '@/api/quickCode'
 import { getSystemConfigs } from '@/api/system'
 import { Search, Refresh, Plus, ArrowDown, Delete, Edit, More, Download, CircleCheck, TopRight, Document, Warning, InfoFilled } from '@element-plus/icons-vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
 const router = useRouter()
 const { t, locale } = useI18n()
@@ -671,8 +672,7 @@ const handleBatchSubmit = async () => {
 }
 
 const formatAmount = (amount: number) => {
-  if (!amount) return '0'
-  return new Intl.NumberFormat('zh-CN').format(amount)
+  return formatAmountByLocale(amount, locale.value)
 }
 
 const formatType = (type: string) => {
@@ -760,10 +760,10 @@ const getDynamicColumns = (type: string) => {
 const formatDynamicValue = (value: any, fieldType: string, field?: any) => {
   if (value === null || value === undefined || value === '') return '-'
   if (fieldType === 'currency') {
-    return '¥' + new Intl.NumberFormat('zh-CN').format(Number(value))
+    return `${getCurrencySymbol(DEFAULT_CURRENCY)}${formatAmountByLocale(Number(value), locale.value)}`
   }
   if (fieldType === 'number') {
-    return new Intl.NumberFormat('zh-CN').format(Number(value))
+    return formatAmountByLocale(Number(value), locale.value)
   }
   if (fieldType === 'select' && field?.quickCodeId) {
     const items = quickCodeItemsCache.value[field.quickCodeId] || []
@@ -962,6 +962,9 @@ onUnmounted(() => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
     
     .page-title {
       font-size: 24px;
@@ -971,6 +974,10 @@ onUnmounted(() => {
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .header-actions {
@@ -985,12 +992,6 @@ onUnmounted(() => {
         text-overflow: ellipsis;
         max-width: 150px;
         font-weight: 500;
-        
-        &:hover {
-          overflow: visible;
-          white-space: normal;
-          text-overflow: clip;
-        }
       }
     }
   }
@@ -1008,10 +1009,12 @@ onUnmounted(() => {
     display: flex;
     gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
   }
   
   .filter-item-wide {
     flex: 1;
+    min-width: 240px;
     
     :deep(.el-input__wrapper) {
       border-radius: 8px;
@@ -1022,6 +1025,7 @@ onUnmounted(() => {
     display: flex;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
   }
   
   /* ── Table Section ─────────────────────────────── */
@@ -1033,9 +1037,11 @@ onUnmounted(() => {
     
     :deep(.el-table) {
       .el-table__header-wrapper th .cell {
-        word-break: break-word;
-        white-space: normal;
-        line-height: 1.4;
+        word-break: normal;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
       }
       
       .el-table__body-wrapper td .cell {
@@ -1064,6 +1070,10 @@ onUnmounted(() => {
       .table-info {
         font-size: 14px;
         color: var(--text-secondary);
+        max-width: 320px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         
         strong {
           color: var(--text-primary);
@@ -1079,6 +1089,8 @@ onUnmounted(() => {
         display: flex;
         align-items: center;
         gap: 10px;
+        flex-wrap: wrap;
+        min-width: 0;
         
         .el-checkbox {
           margin-right: 0;
@@ -1090,6 +1102,7 @@ onUnmounted(() => {
           padding: 0 8px;
           border-right: 1px solid var(--border-color);
           margin-right: 4px;
+          white-space: nowrap;
         }
         
         .batch-btn-main {
@@ -1108,6 +1121,7 @@ onUnmounted(() => {
           border-left: 1px solid var(--border-color);
           padding-left: 16px;
           border-radius: 0;
+          white-space: nowrap;
           
           .el-icon {
             margin-right: 4px;
@@ -1149,10 +1163,10 @@ onUnmounted(() => {
     }
     
     .el-table {
-      --el-table-border-color: #f0f0f0;
-      --el-table-header-bg-color: #fafafa;
-      --el-table-header-text-color: #1a1a1a;
-      --el-table-row-hover-bg-color: #f9f9f9;
+      --el-table-border-color: var(--border-color);
+      --el-table-header-bg-color: var(--bg-hover);
+      --el-table-header-text-color: var(--text-primary);
+      --el-table-row-hover-bg-color: var(--bg-hover);
       --el-table-cell-padding: 16px 12px;
       
       th {
@@ -1162,7 +1176,7 @@ onUnmounted(() => {
       
       td {
         font-size: 14px;
-        color: #595959;
+        color: var(--text-regular);
         transition: background 0.2s ease;
       }
       
@@ -1174,6 +1188,7 @@ onUnmounted(() => {
         display: flex;
         align-items: center;
         gap: 8px;
+        min-width: 0;
       }
       
       .el-link {
@@ -1189,7 +1204,8 @@ onUnmounted(() => {
       display: flex;
       justify-content: flex-end;
       padding: 16px 24px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--border-color);
+      min-width: 0;
     }
   }
   
@@ -1320,7 +1336,7 @@ onUnmounted(() => {
       margin-bottom: 12px;
       font-size: 15px;
       font-weight: 600;
-      color: var(--text-primary, #333);
+      color: var(--text-primary);
       
       .el-icon {
         color: var(--el-color-primary);
@@ -1330,16 +1346,16 @@ onUnmounted(() => {
     .sub-section-title {
       font-size: 13px;
       font-weight: 600;
-      color: var(--text-secondary, #666);
+      color: var(--text-secondary);
       margin: 16px 0 8px;
     }
     
     .summary-text {
       padding: 12px 16px;
-      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      background: var(--bg-hover);
       border-radius: 8px;
       line-height: 1.6;
-      color: var(--text-primary, #333);
+      color: var(--text-primary);
       margin: 0;
     }
   }
@@ -1356,7 +1372,7 @@ onUnmounted(() => {
       padding: 12px;
       border-radius: 8px;
       border-left: 4px solid var(--el-border-color);
-      background: var(--bg-color, #fafafa);
+      background: var(--bg-color);
       
       &.risk-high {
         border-left-color: #F56C6C;
@@ -1369,7 +1385,7 @@ onUnmounted(() => {
       }
       
       &.risk-low {
-        border-left-color: #909399;
+        border-left-color: var(--text-secondary);
         background: rgba(144, 147, 153, 0.08);
       }
       
@@ -1381,7 +1397,7 @@ onUnmounted(() => {
       .risk-content {
         flex: 1;
         line-height: 1.5;
-        color: var(--text-primary, #333);
+        color: var(--text-primary);
         word-break: break-word;
       }
     }
@@ -1394,12 +1410,12 @@ onUnmounted(() => {
     
     li {
       padding: 10px 12px 10px 32px;
-      background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%);
+      background: var(--bg-hover);
       border-radius: 6px;
       margin-bottom: 8px;
       position: relative;
       line-height: 1.5;
-      color: var(--text-primary, #333);
+      color: var(--text-primary);
       
       &:last-child {
         margin-bottom: 0;
@@ -1425,7 +1441,7 @@ onUnmounted(() => {
   
   .key-info-descriptions {
     :deep(.el-descriptions__label) {
-      background: var(--bg-color-page, #f5f7fa);
+      background: var(--bg-color-page);
       font-weight: 600;
     }
     

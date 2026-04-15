@@ -68,6 +68,10 @@ jwt:
   expiration: 86400000  # 24小时
   refresh-expiration: 604800000  # 7天
 
+# External API Security
+external:
+  api-key: ${EXTERNAL_API_KEY:}
+
 # File Upload
 file:
   upload-dir: ./uploads
@@ -75,6 +79,11 @@ file:
 # CORS
 cors:
   allowed-origins: ${CORS_ORIGINS:*}
+
+# WebSocket
+app:
+  websocket:
+    allowed-origins: ${WS_ALLOWED_ORIGINS:${CORS_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}}
 
 # Logging
 logging:

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS user (
     nickname VARCHAR(50) NOT NULL,
     email VARCHAR(100),
     phone VARCHAR(20),
-    avatar VARCHAR(255),
+    avatar LONGTEXT,
     role VARCHAR(20) NOT NULL,
     status INTEGER DEFAULT 1
 );
@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS permission (
 CREATE TABLE IF NOT EXISTS role_permission (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     role_id BIGINT NOT NULL,
-    permission_id BIGINT NOT NULL
+    permission_id BIGINT NOT NULL,
+    UNIQUE KEY uk_role_permission_pair (role_id, permission_id)
 );
 
 -- 创建合同表
@@ -50,10 +51,15 @@ CREATE TABLE IF NOT EXISTS contract (
     counterparty VARCHAR(255) NOT NULL,
     counterparties TEXT,
     amount DECIMAL(18,2),
+    currency VARCHAR(10) DEFAULT 'CNY',
     start_date DATE,
     end_date DATE,
     status VARCHAR(20) NOT NULL,
     content TEXT,
+    template_variables TEXT,
+    dynamic_field_values TEXT,
+    template_id BIGINT,
+    content_mode VARCHAR(32),
     attachment VARCHAR(255),
     attachments TEXT,
     remark TEXT,
@@ -61,6 +67,8 @@ CREATE TABLE IF NOT EXISTS contract (
     create_time TIMESTAMP,
     update_time TIMESTAMP,
     folder_id BIGINT,
+    starred BOOLEAN DEFAULT FALSE,
+    timezone VARCHAR(64),
     deleted INTEGER DEFAULT 0
 );
 
@@ -71,7 +79,9 @@ CREATE TABLE IF NOT EXISTS contract_attachment (
     file_name VARCHAR(255) NOT NULL,
     file_path VARCHAR(255) NOT NULL,
     file_size BIGINT,
-    file_type VARCHAR(50),
+    file_type VARCHAR(255),
+    description VARCHAR(255),
+    file_category VARCHAR(20) DEFAULT 'support',
     uploader_id BIGINT,
     uploader_name VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -81,11 +91,16 @@ CREATE TABLE IF NOT EXISTS contract_attachment (
 CREATE TABLE IF NOT EXISTS contract_category (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(50) NOT NULL,
+    name_en VARCHAR(100),
     code VARCHAR(50) NOT NULL UNIQUE,
+    icon VARCHAR(100),
+    color VARCHAR(50),
     description VARCHAR(255),
     sort_order INTEGER DEFAULT 0,
+    active BOOLEAN DEFAULT TRUE,
     status INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 创建合同变更日志表
@@ -95,6 +110,10 @@ CREATE TABLE IF NOT EXISTS contract_change_log (
     version VARCHAR(20),
     change_type VARCHAR(50),
     change_content TEXT,
+    field_name VARCHAR(100),
+    old_value TEXT,
+    new_value TEXT,
+    remark TEXT,
     operator_id BIGINT,
     operator_name VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -114,13 +133,20 @@ CREATE TABLE IF NOT EXISTS contract_comment (
 -- 创建合同相对方表
 CREATE TABLE IF NOT EXISTS contract_counterparty (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    type VARCHAR(50) DEFAULT 'partyA',
     name VARCHAR(255) NOT NULL,
     contact_person VARCHAR(100),
+    contact_phone VARCHAR(20),
+    contact_email VARCHAR(100),
     phone VARCHAR(20),
     email VARCHAR(100),
     address VARCHAR(255),
+    sort_order INTEGER DEFAULT 0,
     description TEXT,
     status INTEGER DEFAULT 1,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -140,6 +166,10 @@ CREATE TABLE IF NOT EXISTS contract_folder (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
     parent_id BIGINT,
+    description VARCHAR(255),
+    color VARCHAR(50),
+    created_by BIGINT,
+    created_by_name VARCHAR(100),
     creator_id BIGINT,
     sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -175,8 +205,12 @@ CREATE TABLE IF NOT EXISTS contract_renewal (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     contract_id BIGINT NOT NULL,
     original_end_date DATE,
+    old_end_date DATE,
     new_end_date DATE,
     renewal_reason TEXT,
+    renewal_type VARCHAR(50),
+    status VARCHAR(20),
+    remark TEXT,
     operator_id BIGINT,
     operator_name VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -189,6 +223,7 @@ CREATE TABLE IF NOT EXISTS contract_tag (
     color VARCHAR(20),
     description VARCHAR(255) DEFAULT '',
     creator_id BIGINT,
+    is_public BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -205,6 +240,7 @@ CREATE TABLE IF NOT EXISTS contract_template (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255) NOT NULL,
     category VARCHAR(20) NOT NULL,
+    description VARCHAR(255),
     content TEXT,
     variables TEXT,
     usage_count BIGINT DEFAULT 0,
@@ -240,6 +276,7 @@ CREATE TABLE IF NOT EXISTS contract_version (
     contract_id BIGINT NOT NULL,
     version VARCHAR(20) NOT NULL,
     content TEXT,
+    attachments TEXT,
     change_desc TEXT,
     operator_id BIGINT,
     operator_name VARCHAR(50),
@@ -298,14 +335,23 @@ CREATE TABLE IF NOT EXISTS user_session (
     last_active_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_user_session_user_id ON user_session(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_session_last_active ON user_session(last_active_time);
+CREATE INDEX IF NOT EXISTS idx_user_session_token ON user_session(token(191));
 
 -- 创建提醒规则表
 CREATE TABLE IF NOT EXISTS reminder_rule (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
-    remind_type VARCHAR(50) NOT NULL,
+    contract_type VARCHAR(255),
+    remind_type VARCHAR(50),
+    min_amount DECIMAL(18,2),
+    max_amount DECIMAL(18,2),
     remind_days INTEGER NOT NULL,
+    is_enabled BOOLEAN DEFAULT TRUE,
     enabled BOOLEAN DEFAULT TRUE,
+    creator_id BIGINT,
+    is_public BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -315,9 +361,12 @@ CREATE TABLE IF NOT EXISTS quick_code_header (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
+    name_en VARCHAR(100),
     description VARCHAR(255),
+    description_en VARCHAR(255),
     status INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 创建快速代码项表
@@ -325,10 +374,18 @@ CREATE TABLE IF NOT EXISTS quick_code_item (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     header_id BIGINT NOT NULL,
     code VARCHAR(50) NOT NULL,
-    name VARCHAR(100) NOT NULL,
+    meaning VARCHAR(100) NOT NULL,
+    meaning_en VARCHAR(100),
+    description VARCHAR(255),
+    description_en VARCHAR(255),
+    tag VARCHAR(100),
+    valid_from DATE,
+    valid_to DATE,
+    enabled BOOLEAN DEFAULT TRUE,
     sort_order INTEGER DEFAULT 0,
-    status INTEGER DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_quick_code_item_header_code (header_id, code)
 );
 
 -- 创建模板变量表

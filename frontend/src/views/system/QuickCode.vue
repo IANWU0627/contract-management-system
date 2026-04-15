@@ -127,7 +127,7 @@
     <el-dialog 
       v-model="dialogVisible" 
       :title="isEdit ? $t('quickCode.edit') : $t('quickCode.add')" 
-      width="1000px"
+      width="1120px"
       @closed="resetForm"
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
@@ -187,40 +187,38 @@
             </div>
           </div>
           
-          <el-table :data="paginatedItems" border style="width: 100%; margin-top: 12px" max-height="360" class="items-table" size="small">
-            <el-table-column :label="$t('quickCode.sortOrder')" prop="sortOrder" width="50" align="center">
-              <template #default="{ row, $index }">
-                <div class="sort-buttons">
-                  <el-button type="text" size="small" :disabled="$index === 0" @click="handleMoveItemDirect(row, -1)" class="move-btn">
-                    <el-icon><ArrowUp /></el-icon>
-                  </el-button>
-                  <el-button type="text" size="small" :disabled="$index === filteredItems.length - 1" @click="handleMoveItemDirect(row, 1)" class="move-btn">
-                    <el-icon><ArrowDown /></el-icon>
-                  </el-button>
-                </div>
+          <el-table ref="itemsTableEl" :data="paginatedItems" border style="width: 100%; margin-top: 12px" max-height="400" class="items-table" size="small">
+            <el-table-column :label="$t('quickCode.sortOrder')" prop="sortOrder" width="64" align="center">
+              <template #default="{ row }">
+                <span class="sort-index">{{ (row.sortOrder ?? 0) + 1 }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemCode')" prop="code" width="90">
+            <el-table-column width="40" align="center">
+              <template #default>
+                <span class="drag-handle" :title="$t('quickCode.sortOrder')">⋮⋮</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('quickCode.itemCode')" prop="code" min-width="120">
               <template #default="{ row }">
                 <el-input v-model="row.code" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.placeholder.code')" />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemMeaning')" prop="meaning" min-width="120">
+            <el-table-column :label="$t('quickCode.itemMeaning')" prop="meaning" min-width="160">
               <template #default="{ row }">
                 <el-input v-model="row.meaning" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.placeholder.meaningZh')" />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemMeaningEn')" prop="meaningEn" min-width="120">
+            <el-table-column :label="$t('quickCode.itemMeaningEn')" prop="meaningEn" min-width="180">
               <template #default="{ row }">
                 <el-input v-model="row.meaningEn" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.placeholder.meaningEn')" />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemTag')" prop="tag" width="70">
+            <el-table-column :label="$t('quickCode.itemTag')" prop="tag" min-width="90">
               <template #default="{ row }">
                 <el-input v-model="row.tag" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.itemTag')" />
               </template>
             </el-table-column>
-            <el-table-column :label="t('quickCode.itemValidFrom')" width="100">
+            <el-table-column :label="t('quickCode.itemValidFrom')" min-width="132">
               <template #default="{ row }">
                 <el-date-picker
                   v-model="row.validFrom"
@@ -233,7 +231,7 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column :label="t('quickCode.itemValidTo')" width="100">
+            <el-table-column :label="t('quickCode.itemValidTo')" min-width="132">
               <template #default="{ row }">
                 <el-date-picker
                   v-model="row.validTo"
@@ -246,39 +244,47 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('common.status')" width="60" align="center">
+            <el-table-column :label="$t('common.status')" width="72" align="center">
               <template #default="{ row }">
                 <el-switch v-model="row.enabled" size="small" @change="handleItemChange(row)" />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('common.action')" width="70" fixed="right" align="center">
-              <template #default="{ $index }">
-                <el-dropdown trigger="click" @command="(cmd: string) => handleItemAction($index, cmd)">
-                  <el-button type="primary" size="small" text>
-                    <el-icon><MoreFilled /></el-icon>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="moveUp" :disabled="$index === 0">
-                        <el-icon><Top /></el-icon>
-                        <span style="margin-left: 5px">{{ $t('quickCode.moveUp') }}</span>
-                      </el-dropdown-item>
-                      <el-dropdown-item command="moveDown" :disabled="$index === filteredItems.length - 1">
-                        <el-icon><Bottom /></el-icon>
-                        <span style="margin-left: 5px">{{ $t('quickCode.moveDown') }}</span>
-                      </el-dropdown-item>
-                      <el-dropdown-item divided command="delete">
-                        <el-icon><Delete /></el-icon>
-                        <span style="margin-left: 5px">{{ $t('quickCode.delete') }}</span>
-                      </el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+            <el-table-column :label="$t('common.action')" width="96" fixed="right" align="center">
+              <template #default="{ row }">
+                <div class="row-actions">
+                  <el-tooltip :content="$t('quickCode.moveUp')" placement="top">
+                    <el-button
+                      type="primary"
+                      size="small"
+                      text
+                      :disabled="allItems.findIndex(item => item === row) === 0"
+                      @click="handleMoveItemDirect(row, -1)"
+                    >
+                      <el-icon><Top /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="$t('quickCode.moveDown')" placement="top">
+                    <el-button
+                      type="primary"
+                      size="small"
+                      text
+                      :disabled="allItems.findIndex(item => item === row) === allItems.length - 1"
+                      @click="handleMoveItemDirect(row, 1)"
+                    >
+                      <el-icon><Bottom /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="$t('common.delete')" placement="top">
+                    <el-button type="danger" size="small" text @click="handleRemoveItemDirect(allItems.findIndex(item => item === row))">
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
               </template>
             </el-table-column>
           </el-table>
           
-          <div class="items-pagination" v-if="allItems.length > 5">
+          <div class="items-pagination" v-if="allItems.length > itemPageSize">
             <el-pagination
               v-model:current-page="itemPage"
               v-model:page-size="itemPageSize"
@@ -300,9 +306,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import Sortable from 'sortablejs'
 import { 
   getAllQuickCodes, 
   getQuickCode,
@@ -311,7 +318,7 @@ import {
   deleteQuickCode,
   toggleQuickCode 
 } from '@/api/quickCode'
-import { Plus, Edit, Delete, Check, Close, Search, Refresh, DocumentCopy, Download, Upload, Top, Bottom, MoreFilled, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Check, Close, Search, Refresh, DocumentCopy, Download, Upload, Top, Bottom } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 
@@ -324,6 +331,9 @@ const isEdit = ref(false)
 const headers = ref<any[]>([])
 const total = ref(0)
 const formRef = ref()
+const itemsTableEl = ref<any>(null)
+let sortableInstance: Sortable | null = null
+let dragRelatedRow: HTMLElement | null = null
 
 // Items pagination
 const allItems = ref<any[]>([])
@@ -351,9 +361,12 @@ const handleItemSearch = () => {
 
 const handleItemSizeChange = () => {
   itemPage.value = 1
+  nextTick(initRowDrag)
 }
 
-const handleItemPageChange = () => {}
+const handleItemPageChange = () => {
+  nextTick(initRowDrag)
+}
 
 const handleItemChange = (row: any) => {
   const index = allItems.value.findIndex(i => i === row)
@@ -361,6 +374,21 @@ const handleItemChange = (row: any) => {
     allItems.value[index] = { ...row }
   }
 }
+
+watch(dialogVisible, (visible) => {
+  if (visible) {
+    nextTick(initRowDrag)
+  } else {
+    sortableInstance?.destroy()
+    sortableInstance = null
+  }
+})
+
+watch(paginatedItems, () => {
+  if (dialogVisible.value) {
+    nextTick(initRowDrag)
+  }
+})
 
 const filteredHeaders = computed(() => {
   let result = headers.value
@@ -469,30 +497,6 @@ const handleImport = (file: File) => {
   return false
 }
 
-const handleItemAction = (index: number, command: string) => {
-  if (command === 'moveUp') {
-    handleMoveItem(index, -1)
-  } else if (command === 'moveDown') {
-    handleMoveItem(index, 1)
-  } else if (command === 'delete') {
-    handleRemoveItem(index)
-  }
-}
-
-const handleMoveItem = (index: number, direction: number) => {
-  const realIndex = (itemPage.value - 1) * itemPageSize.value + index
-  const newIndex = realIndex + direction
-  if (newIndex < 0 || newIndex >= allItems.value.length) return
-  
-  const temp = allItems.value[realIndex]
-  allItems.value[realIndex] = allItems.value[newIndex]
-  allItems.value[newIndex] = temp
-  
-  allItems.value.forEach((item, i) => {
-    item.sortOrder = i
-  })
-}
-
 const query = reactive({
   page: 1,
   pageSize: 10
@@ -588,11 +592,11 @@ const handleAddItem = () => {
     _isNew: true
   })
   itemPage.value = 1
-}
-
-const handleRemoveItem = (index: number) => {
-  const realIndex = (itemPage.value - 1) * itemPageSize.value + index
-  allItems.value.splice(realIndex, 1)
+  nextTick(() => {
+    const tableRoot = itemsTableEl.value?.$el || itemsTableEl.value
+    const firstInput = tableRoot?.querySelector('.el-table__body-wrapper tbody tr:first-child td:nth-child(3) input') as HTMLInputElement | null
+    firstInput?.focus()
+  })
 }
 
 const handleMoveItemDirect = (row: any, direction: number) => {
@@ -609,9 +613,54 @@ const handleMoveItemDirect = (row: any, direction: number) => {
   })
 }
 
-const handleRemoveItemDirect = (index: number) => {
-  const realIndex = (itemPage.value - 1) * itemPageSize.value + index
+const handleRemoveItemDirect = (realIndex: number) => {
+  if (realIndex < 0 || realIndex >= allItems.value.length) return
   allItems.value.splice(realIndex, 1)
+  allItems.value.forEach((item, i) => {
+    item.sortOrder = i
+  })
+}
+
+const initRowDrag = () => {
+  if (!itemsTableEl.value) return
+  const tableRoot = itemsTableEl.value.$el || itemsTableEl.value
+  const tbody = tableRoot.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
+  if (!tbody) return
+  sortableInstance?.destroy()
+  sortableInstance = Sortable.create(tbody, {
+    handle: '.drag-handle',
+    animation: 150,
+    ghostClass: 'sortable-ghost-row',
+    chosenClass: 'sortable-chosen-row',
+    dragClass: 'sortable-drag-row',
+    onMove(evt) {
+      if (dragRelatedRow && dragRelatedRow !== evt.related) {
+        dragRelatedRow.classList.remove('drop-target-row')
+      }
+      if (evt.related) {
+        dragRelatedRow = evt.related as HTMLElement
+        dragRelatedRow.classList.add('drop-target-row')
+      }
+      return true
+    },
+    onEnd(evt) {
+      if (dragRelatedRow) {
+        dragRelatedRow.classList.remove('drop-target-row')
+        dragRelatedRow = null
+      }
+      const from = evt.oldIndex ?? -1
+      const to = evt.newIndex ?? -1
+      if (from === -1 || to === -1 || from === to) return
+      const pageOffset = (itemPage.value - 1) * itemPageSize.value
+      const fromIndex = pageOffset + from
+      const toIndex = pageOffset + to
+      const moved = allItems.value.splice(fromIndex, 1)[0]
+      allItems.value.splice(toIndex, 0, moved)
+      allItems.value.forEach((item, i) => {
+        item.sortOrder = i
+      })
+    }
+  })
 }
 
 const handleSubmit = async () => {
@@ -721,6 +770,15 @@ const resetForm = () => {
 
 onMounted(() => {
   fetchData()
+})
+
+onBeforeUnmount(() => {
+  if (dragRelatedRow) {
+    dragRelatedRow.classList.remove('drop-target-row')
+    dragRelatedRow = null
+  }
+  sortableInstance?.destroy()
+  sortableInstance = null
 })
 </script>
 
@@ -892,6 +950,40 @@ onMounted(() => {
   }
   
   .items-table {
+    :deep(tr.sortable-ghost-row > td) {
+      background: rgba(99, 102, 241, 0.12) !important;
+    }
+
+    :deep(tr.sortable-chosen-row > td) {
+      background: rgba(99, 102, 241, 0.16) !important;
+    }
+
+    :deep(tr.drop-target-row > td) {
+      background: rgba(16, 185, 129, 0.12) !important;
+      box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.45), inset 0 -1px 0 rgba(16, 185, 129, 0.45);
+    }
+
+    .sort-index {
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .drag-handle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      color: var(--text-secondary);
+      font-size: 14px;
+      letter-spacing: -1px;
+      user-select: none;
+
+      &:active {
+        cursor: grabbing;
+      }
+    }
+
     :deep(.el-table__row) {
       transition: background-color 0.2s ease;
       
@@ -902,7 +994,8 @@ onMounted(() => {
     
     :deep(.el-input__wrapper) {
       box-shadow: none !important;
-      padding: 4px 8px;
+      padding: 4px 10px;
+      min-height: 30px;
       
       &:hover {
         box-shadow: 0 0 0 1px var(--el-color-primary) inset !important;
@@ -914,11 +1007,28 @@ onMounted(() => {
     }
     
     :deep(.el-table__cell) {
-      padding: 6px 0;
+      padding: 7px 0;
+    }
+
+    :deep(.el-date-editor.el-input) {
+      width: 100%;
     }
     
     :deep(.el-switch) {
       --el-switch-on-color: var(--el-color-primary);
+    }
+
+    .row-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 2px;
+
+      .el-button {
+        padding: 4px;
+        min-width: 24px;
+        height: 24px;
+      }
     }
   }
 }

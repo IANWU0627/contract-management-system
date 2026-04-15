@@ -20,6 +20,7 @@ public class Contract {
     private String counterparty; // 传统的单个相对方字段，用于兼容旧数据
     private String counterparties; // 新字段，用于存储多个相对方的JSON数据
     private BigDecimal amount;
+    private String currency;
     private LocalDate startDate;
     private LocalDate endDate;
     private String status;
@@ -58,6 +59,8 @@ public class Contract {
     public void setCounterparties(String counterparties) { this.counterparties = counterparties; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
     public LocalDate getStartDate() { return startDate; }
     public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
     public LocalDate getEndDate() { return endDate; }

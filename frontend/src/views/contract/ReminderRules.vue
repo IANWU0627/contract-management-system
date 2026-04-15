@@ -24,7 +24,7 @@
         <el-table-column prop="minAmount" :label="$t('contract.amountRange')" width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.minAmount || row.maxAmount">
-              ¥{{ formatAmount(row.minAmount) }} - ¥{{ formatAmount(row.maxAmount) }}
+              {{ getCurrencySymbol(row.currency || DEFAULT_CURRENCY) }}{{ formatAmount(row.minAmount) }} - {{ getCurrencySymbol(row.currency || DEFAULT_CURRENCY) }}{{ formatAmount(row.maxAmount) }}
             </span>
             <span v-else>{{ $t('contract.noLimit') }}</span>
           </template>
@@ -91,7 +91,7 @@
         <el-table-column prop="minAmount" :label="$t('contract.amountRange')" width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.minAmount || row.maxAmount">
-              ¥{{ formatAmount(row.minAmount) }} - ¥{{ formatAmount(row.maxAmount) }}
+              {{ getCurrencySymbol(row.currency || DEFAULT_CURRENCY) }}{{ formatAmount(row.minAmount) }} - {{ getCurrencySymbol(row.currency || DEFAULT_CURRENCY) }}{{ formatAmount(row.maxAmount) }}
             </span>
             <span v-else>{{ $t('contract.noLimit') }}</span>
           </template>
@@ -193,6 +193,7 @@ import { getMyReminderRules, createReminderRule, updateReminderRule, deleteRemin
 import { getContractCategories } from '@/api/contractCategory'
 import { Plus, Edit, Delete, User, Connection, ArrowDown } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
 const { t, locale } = useI18n()
 const userStore = useUserStore()
@@ -249,8 +250,7 @@ const ruleForm = reactive({
 })
 
 const formatAmount = (amount: number) => {
-  if (!amount) return '0'
-  return new Intl.NumberFormat('zh-CN').format(amount)
+  return formatAmountByLocale(amount, locale.value)
 }
 
 const formatType = (type: string | string[]) => {

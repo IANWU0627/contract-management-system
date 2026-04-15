@@ -5,7 +5,7 @@
       <div class="header-actions">
         <el-button type="primary" @click="handleExport" class="gradient-btn">
           <el-icon><Download /></el-icon>
-          导出Excel
+          {{ t('log.exportExcel') }}
         </el-button>
       </div>
     </div>
@@ -16,7 +16,7 @@
         <div class="filter-item" style="flex: 1;">
           <el-input
             v-model="query.keyword"
-            placeholder="搜索操作描述、IP、操作者..."
+            :placeholder="t('log.searchPlaceholder')"
             clearable
             @keyup.enter="fetchData"
           >
@@ -24,46 +24,24 @@
           </el-input>
         </div>
         <div class="filter-item" style="width: 140px;">
-          <el-select v-model="query.module" clearable placeholder="模块" @change="fetchData">
-            <el-option label="全部模块" value="" />
-            <el-option label="合同管理" value="合同管理" />
-            <el-option label="用户管理" value="用户管理" />
-            <el-option label="模板管理" value="模板管理" />
-            <el-option label="提醒管理" value="提醒管理" />
-            <el-option label="续约管理" value="续约管理" />
-            <el-option label="认证授权" value="认证授权" />
-            <el-option label="其他" value="其他" />
+          <el-select v-model="query.module" clearable :placeholder="t('log.modulePlaceholder')" @change="fetchData">
+            <el-option :label="t('log.allModules')" value="" />
+            <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </div>
         <div class="filter-item" style="width: 140px;">
-          <el-select v-model="query.operation" clearable placeholder="操作类型" @change="fetchData">
-            <el-option label="全部操作" value="" />
-            <el-option label="创建" value="CREATE" />
-            <el-option label="更新" value="UPDATE" />
-            <el-option label="删除" value="DELETE" />
-            <el-option label="读取" value="READ" />
-            <el-option label="登录" value="LOGIN" />
-            <el-option label="上传" value="UPLOAD" />
-            <el-option label="下载" value="DOWNLOAD" />
-            <el-option label="审批通过" value="APPROVE" />
-            <el-option label="拒绝" value="REJECT" />
-            <el-option label="签署" value="SIGN" />
-            <el-option label="归档" value="ARCHIVE" />
-            <el-option label="提交审批" value="SUBMIT" />
-            <el-option label="收藏" value="FAVORITE" />
-            <el-option label="复制" value="COPY" />
-            <el-option label="批量操作" value="BATCH" />
-            <el-option label="终止" value="TERMINATE" />
-            <el-option label="分析" value="ANALYZE" />
+          <el-select v-model="query.operation" clearable :placeholder="t('log.operationPlaceholder')" @change="fetchData">
+            <el-option :label="t('log.allOperations')" value="" />
+            <el-option v-for="item in operationOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </div>
         <div class="filter-item" style="width: 160px;">
           <el-date-picker
             v-model="dateRange"
             type="datetimerange"
-            range-separator="至"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
+            :range-separator="t('common.to')"
+            :start-placeholder="t('log.startTime')"
+            :end-placeholder="t('log.endTime')"
             value-format="YYYY-MM-DD HH:mm:ss"
             @change="handleDateChange"
           />
@@ -71,11 +49,11 @@
         <div class="filter-actions">
           <el-button type="primary" @click="fetchData" class="gradient-btn">
             <el-icon><Search /></el-icon>
-            搜索
+            {{ t('common.search') }}
           </el-button>
           <el-button @click="handleReset">
             <el-icon><Refresh /></el-icon>
-            重置
+            {{ t('common.reset') }}
           </el-button>
         </div>
       </div>
@@ -84,41 +62,41 @@
     <!-- 日志列表 -->
     <el-card shadow="hover" class="table-card">
       <div class="table-info">
-        共 {{ total }} 条记录
+        {{ t('log.totalRecords', { count: total }) }}
       </div>
       
       <el-table :data="logs" v-loading="loading" style="width: 100%" @row-click="showDetail">
-        <el-table-column prop="module" label="模块" width="100">
+        <el-table-column prop="module" :label="t('log.module')" width="100">
           <template #default="{ row }">
-            <el-tag size="small">{{ row.module }}</el-tag>
+            <el-tag size="small">{{ formatModule(row.module) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="operation" label="操作类型" width="90">
+        <el-table-column prop="operation" :label="t('log.operation')" width="90">
           <template #default="{ row }">
             <el-tag :type="getOperationType(row.operation)" size="small">
               {{ formatOperation(row.operation) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="操作描述" min-width="280" show-overflow-tooltip />
-        <el-table-column prop="operatorName" label="操作者" width="100">
+        <el-table-column prop="description" :label="t('log.description')" min-width="280" show-overflow-tooltip />
+        <el-table-column prop="operatorName" :label="t('log.operator')" width="100">
           <template #default="{ row }">
             <span class="operator-name">{{ row.operatorName || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="ip" label="IP地址" width="130">
+        <el-table-column prop="ip" :label="t('log.ip')" width="130">
           <template #default="{ row }">
             <el-tag type="info" size="small" class="ip-tag">{{ row.ip || '-' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="操作时间" width="170">
+        <el-table-column prop="createdAt" :label="t('log.time')" width="170">
           <template #default="{ row }">
             {{ formatTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="详情" width="70">
+        <el-table-column :label="t('log.detail')" width="70">
           <template #default="{ row }">
-            <el-link type="primary" @click.stop="showDetail(row)">详情</el-link>
+            <el-link type="primary" @click.stop="showDetail(row)">{{ t('log.detail') }}</el-link>
           </template>
         </el-table-column>
       </el-table>
@@ -137,36 +115,36 @@
     </el-card>
     
     <!-- 详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="操作详情" width="700px">
+    <el-dialog v-model="showDetailDialog" :title="t('log.detailTitle')" width="700px">
       <el-descriptions v-if="currentLog" :column="1" border>
-        <el-descriptions-item label="模块">{{ currentLog.module }}</el-descriptions-item>
-        <el-descriptions-item label="操作类型">
+        <el-descriptions-item :label="t('log.module')">{{ formatModule(currentLog.module) }}</el-descriptions-item>
+        <el-descriptions-item :label="t('log.operation')">
           <el-tag :type="getOperationType(currentLog.operation)">{{ formatOperation(currentLog.operation) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="操作描述">{{ currentLog.description }}</el-descriptions-item>
-        <el-descriptions-item label="操作者">{{ currentLog.operatorName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="IP地址">{{ currentLog.ip || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="操作时间">{{ formatTime(currentLog.createdAt) }}</el-descriptions-item>
-        <el-descriptions-item label="详细信息">
+        <el-descriptions-item :label="t('log.description')">{{ currentLog.description }}</el-descriptions-item>
+        <el-descriptions-item :label="t('log.operator')">{{ currentLog.operatorName || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="t('log.ip')">{{ currentLog.ip || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="t('log.time')">{{ formatTime(currentLog.createdAt) }}</el-descriptions-item>
+        <el-descriptions-item :label="t('log.detail')">
           <pre class="detail-json">{{ formatDetail(currentLog.detail) }}</pre>
         </el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="showDetailDialog = false">关闭</el-button>
+        <el-button @click="showDetailDialog = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getOperationLogs } from '@/api/extra'
 import { Search, Download, Refresh } from '@element-plus/icons-vue'
 import * as XLSX from 'xlsx'
 import { ElMessage } from 'element-plus'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(false)
 const logs = ref<any[]>([])
@@ -184,6 +162,36 @@ const query = reactive({
   page: 1,
   pageSize: 20
 })
+
+const moduleOptions = computed(() => [
+  { value: '合同管理', label: t('settings.filterContract') },
+  { value: '用户管理', label: t('settings.filterUser') },
+  { value: '模板管理', label: t('settings.filterTemplate') },
+  { value: '提醒管理', label: t('settings.filterReminder') },
+  { value: '续约管理', label: t('settings.filterRenewal') },
+  { value: '认证授权', label: t('settings.filterAuth') },
+  { value: '其他', label: t('settings.filterSystem') }
+])
+
+const operationOptions = computed(() => [
+  { value: 'CREATE', label: t('settings.actionCreate') },
+  { value: 'UPDATE', label: t('settings.actionUpdate') },
+  { value: 'DELETE', label: t('settings.actionDelete') },
+  { value: 'READ', label: t('settings.actionRead') },
+  { value: 'LOGIN', label: t('settings.actionLogin') },
+  { value: 'UPLOAD', label: t('settings.actionUpload') },
+  { value: 'DOWNLOAD', label: t('settings.actionDownload') },
+  { value: 'APPROVE', label: t('settings.actionApprove') },
+  { value: 'REJECT', label: t('settings.actionReject') },
+  { value: 'SIGN', label: t('settings.actionSign') },
+  { value: 'ARCHIVE', label: t('settings.actionArchive') },
+  { value: 'SUBMIT', label: t('settings.actionSubmit') },
+  { value: 'FAVORITE', label: t('settings.actionFavorite') },
+  { value: 'COPY', label: t('settings.actionCopy') },
+  { value: 'BATCH', label: t('settings.actionBatch') },
+  { value: 'TERMINATE', label: t('settings.actionTerminate') },
+  { value: 'ANALYZE', label: t('settings.actionAnalyze') }
+])
 
 const getOperationType = (operation: string) => {
   const map: Record<string, any> = {
@@ -210,31 +218,44 @@ const getOperationType = (operation: string) => {
 
 const formatOperation = (operation: string) => {
   const map: Record<string, string> = {
-    CREATE: '创建',
-    UPDATE: '更新',
-    DELETE: '删除',
-    READ: '读取',
-    LOGIN: '登录',
-    UPLOAD: '上传',
-    DOWNLOAD: '下载',
-    APPROVE: '审批通过',
-    REJECT: '拒绝',
-    SIGN: '签署',
-    ARCHIVE: '归档',
-    SUBMIT: '提交审批',
-    FAVORITE: '收藏',
-    COPY: '复制',
-    BATCH: '批量操作',
-    TERMINATE: '终止',
-    ANALYZE: '分析',
-    OTHER: '其他'
+    CREATE: t('settings.actionCreate'),
+    UPDATE: t('settings.actionUpdate'),
+    DELETE: t('settings.actionDelete'),
+    READ: t('settings.actionRead'),
+    LOGIN: t('settings.actionLogin'),
+    UPLOAD: t('settings.actionUpload'),
+    DOWNLOAD: t('settings.actionDownload'),
+    APPROVE: t('settings.actionApprove'),
+    REJECT: t('settings.actionReject'),
+    SIGN: t('settings.actionSign'),
+    ARCHIVE: t('settings.actionArchive'),
+    SUBMIT: t('settings.actionSubmit'),
+    FAVORITE: t('settings.actionFavorite'),
+    COPY: t('settings.actionCopy'),
+    BATCH: t('settings.actionBatch'),
+    TERMINATE: t('settings.actionTerminate'),
+    ANALYZE: t('settings.actionAnalyze'),
+    OTHER: t('settings.filterSystem')
   }
   return map[operation] || operation
 }
 
+const formatModule = (module: string) => {
+  const map: Record<string, string> = {
+    '合同管理': t('settings.filterContract'),
+    '用户管理': t('settings.filterUser'),
+    '模板管理': t('settings.filterTemplate'),
+    '提醒管理': t('settings.filterReminder'),
+    '续约管理': t('settings.filterRenewal'),
+    '认证授权': t('settings.filterAuth'),
+    '其他': t('settings.filterSystem')
+  }
+  return map[module] || module || '-'
+}
+
 const formatTime = (time: string) => {
   if (!time) return ''
-  return new Date(time).toLocaleString('zh-CN', {
+  return new Date(time).toLocaleString(locale.value === 'en' ? 'en-US' : 'zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -296,30 +317,30 @@ const showDetail = (row: any) => {
 
 const handleExport = async () => {
   if (logs.value.length === 0) {
-    ElMessage.warning('没有数据可导出')
+    ElMessage.warning(t('log.noDataExport'))
     return
   }
   
   try {
     const exportData = logs.value.map(log => ({
-      '模块': log.module,
-      '操作类型': formatOperation(log.operation),
-      '操作描述': log.description,
-      '操作者': log.operatorName || '-',
-      'IP地址': log.ip || '-',
-      '操作时间': formatTime(log.createdAt)
+      [t('log.module')]: formatModule(log.module),
+      [t('log.operation')]: formatOperation(log.operation),
+      [t('log.description')]: log.description,
+      [t('log.operator')]: log.operatorName || '-',
+      [t('log.ip')]: log.ip || '-',
+      [t('log.time')]: formatTime(log.createdAt)
     }))
     
     const ws = XLSX.utils.json_to_sheet(exportData)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '操作日志')
+    XLSX.utils.book_append_sheet(wb, ws, t('log.sheetName'))
     
-    const fileName = `操作日志_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`
+    const fileName = `${t('log.filePrefix')}_${new Date().toLocaleDateString(locale.value === 'en' ? 'en-US' : 'zh-CN').replace(/\//g, '-')}.xlsx`
     XLSX.writeFile(wb, fileName)
     
-    ElMessage.success('导出成功！')
+    ElMessage.success(t('log.exportSuccess'))
   } catch (error) {
-    ElMessage.error('导出失败')
+    ElMessage.error(t('log.exportFailed'))
     console.error(error)
   }
 }
@@ -334,6 +355,9 @@ onMounted(() => { fetchData() })
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
     
     .page-title { 
       font-size: 24px; 
@@ -343,6 +367,11 @@ onMounted(() => { fetchData() })
       -webkit-text-fill-color: transparent;
       background-clip: text; 
       margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
   
@@ -365,12 +394,32 @@ onMounted(() => { fetchData() })
   .filter-item {
     display: flex;
     align-items: center;
+    min-width: 0;
+
+    &:nth-child(1) {
+      flex: 1 1 280px !important;
+    }
+
+    &:nth-child(2),
+    &:nth-child(3),
+    &:nth-child(4) {
+      flex: 0 1 180px !important;
+      width: auto !important;
+    }
+
+    :deep(.el-input),
+    :deep(.el-select),
+    :deep(.el-date-editor) {
+      width: 100% !important;
+      min-width: 0;
+    }
   }
   
   .filter-actions {
     display: flex;
     gap: 12px;
     margin-left: auto;
+    flex-wrap: wrap;
   }
   
   .gradient-btn {
@@ -389,6 +438,10 @@ onMounted(() => { fetchData() })
       color: var(--text-secondary);
       font-size: 14px;
       margin-bottom: 16px;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
   
@@ -396,6 +449,7 @@ onMounted(() => { fetchData() })
     margin-top: 20px; 
     display: flex; 
     justify-content: flex-end; 
+    min-width: 0;
   }
   
   .operator-name {
@@ -415,6 +469,12 @@ onMounted(() => { fetchData() })
     font-size: 12px;
     max-height: 300px;
     overflow: auto;
+  }
+
+  :deep(.el-table th .cell) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 </style>

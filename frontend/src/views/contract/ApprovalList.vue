@@ -55,7 +55,7 @@
         <el-table-column prop="counterparty" :label="$t('contract.party')" width="130" show-overflow-tooltip />
         <el-table-column prop="amount" :label="$t('contract.amount')" width="120" show-overflow-tooltip>
           <template #default="{ row }">
-            ¥{{ formatAmount(row.amount) }}
+            {{ getCurrencySymbol(row.currency) }}{{ formatAmount(row.amount) }}
           </template>
         </el-table-column>
         <el-table-column prop="status" :label="$t('contract.status')" width="100" show-overflow-tooltip>
@@ -103,8 +103,9 @@ import { get } from '@/api'
 import { getContractCategories } from '@/api/contractCategory'
 import { Checked, ArrowDown, Search, Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import { formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const handleAction = (command: string, row: any) => {
@@ -134,7 +135,9 @@ const handleReset = () => {
   fetchData()
 }
 
-const formatAmount = (amount: number) => amount ? new Intl.NumberFormat('zh-CN').format(amount) : '0'
+const formatAmount = (amount: number) => {
+  return formatAmountByLocale(amount, locale.value)
+}
 
 const formatType = (type: string) => {
   const cat = categories.value.find(c => c.code === type)
@@ -212,10 +215,12 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .filter-item-wide {
   flex: 1;
+  min-width: 240px;
   
   :deep(.el-input__wrapper) {
     border-radius: 8px;
@@ -226,6 +231,7 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .approval-list {
@@ -234,6 +240,9 @@ onMounted(async () => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
     
     .page-title {
       font-size: 24px;
@@ -243,9 +252,24 @@ onMounted(async () => {
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
   
-  .pagination-wrap { margin-top: 20px; display: flex; justify-content: flex-end; }
+  .pagination-wrap {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  :deep(.el-table th .cell) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 </style>

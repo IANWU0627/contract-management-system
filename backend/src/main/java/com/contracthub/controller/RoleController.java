@@ -57,12 +57,31 @@ public class RoleController {
             .collect(Collectors.groupingBy(p -> {
                 String code = p.getCode();
                 if (code == null) return "其他";
-                if (code.startsWith("contract")) return "合同管理";
-                if (code.startsWith("template")) return "模板管理";
-                if (code.startsWith("user")) return "用户管理";
-                if (code.startsWith("role")) return "角色管理";
-                if (code.startsWith("approval")) return "审批管理";
-                if (code.startsWith("statistics")) return "统计分析";
+                switch (code) {
+                    case "CONTRACT_MANAGE":
+                        return "合同管理";
+                    case "TEMPLATE_MANAGE":
+                    case "CONTRACT_APPROVE":
+                    case "RENEWAL_MANAGE":
+                    case "REMINDER_MANAGE":
+                        return "合同协同";
+                    case "FOLDER_MANAGE":
+                    case "TAG_MANAGE":
+                    case "CATEGORY_MANAGE":
+                    case "QUICK_CODE_MANAGE":
+                    case "VARIABLE_MANAGE":
+                        return "数据字典";
+                    case "REPORT_VIEW":
+                    case "FAVORITE_MANAGE":
+                        return "统计分析";
+                    case "USER_MANAGE":
+                    case "ROLE_MANAGE":
+                    case "SETTING_MANAGE":
+                    case "REMINDER_RULE_MANAGE":
+                        return "系统管理";
+                    default:
+                        break;
+                }
                 return "其他";
             }));
         

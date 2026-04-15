@@ -13,18 +13,25 @@ public class ContractAttachment {
     private Long id;
     private Long contractId;
     private String fileName;
+    @TableField("file_path")
     private String fileUrl;
     private Long fileSize;
     private String fileType;
     private String description;
     private String fileCategory; // 'contract' or 'support'
     
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(value = "created_at", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(exist = false)
     private LocalDateTime updateTime;
-
+    
+    @TableField(exist = false)
+    private Long uploaderId;
+    
+    @TableField(exist = false)
+    private String uploaderName;
+    
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getContractId() { return contractId; }
@@ -45,4 +52,8 @@ public class ContractAttachment {
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
     public LocalDateTime getUpdateTime() { return updateTime; }
     public void setUpdateTime(LocalDateTime updateTime) { this.updateTime = updateTime; }
+    public Long getUploaderId() { return uploaderId; }
+    public void setUploaderId(Long uploaderId) { this.uploaderId = uploaderId; }
+    public String getUploaderName() { return uploaderName; }
+    public void setUploaderName(String uploaderName) { this.uploaderName = uploaderName; }
 }

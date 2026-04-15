@@ -330,7 +330,7 @@
           </button>
 
           <button type="button" class="btn-social btn-dingtalk" @click="handleDingtalkLogin" aria-label="Sign in with DingTalk">
-            <svg viewBox="0 0 1024 1024" :width="18" :height="18" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M699.2 404.8c-44.6 0-80.6 36.2-80.6 80.6s36.2 80.6 80.6 80.6 80.6-36.2 80.6-80.6-36-80.6-80.6-80.6zm-291.4 0c-44.6 0-80.6 36.2-80.6 80.6s36.2 80.6 80.6 80.6 80.6-36.2 80.6-80.6-36-80.6-80.6-80.6zM512 0C229.2 0 0 229.2 0 512s229.2 512 512 512 512-229.2 512-512S794.8 0 512 0zm285.4 637.4c-19.6 58.6-68.6 107.6-127.2 127.2-88.6 29.4-183.4 5.8-249.2-57.8l-1.6-1.6c-3.2-3.4-3.2-8.6 0-12l34.6-36.2c3.2-3.4 8.4-3.4 11.6-.2 45.2 43.4 113.2 59.4 174.6 38.8 39.8-13.6 72-45.8 85.6-85.6 20.6-61.4 4.6-129.4-38.8-174.6-3.2-3.2-3.2-8.4.2-11.6l36.2-34.6c3.4-3.2 8.6-3.2 12 0l1.6 1.6c63.6 65.8 87.2 160.6 57.8 249.2z"/></svg>
+            <el-icon :size="18"><Promotion /></el-icon>
             <span class="social-text">{{ t('auth.dingtalkLogin') }}</span>
           </button>
 
@@ -360,7 +360,7 @@ import { useUserStore } from '@/stores/user'
 import { useI18n } from 'vue-i18n'
 import EyeBall from '@/components/EyeBall.vue'
 import Pupil from '@/components/Pupil.vue'
-import { Collection, View, Hide, Loading, ChromeFilled, OfficeBuilding, Connection } from '@element-plus/icons-vue'
+import { Collection, View, Hide, Loading, ChromeFilled, OfficeBuilding, Promotion, Connection } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
 
@@ -591,6 +591,9 @@ const handleContact = () => ElMessage.info(locale.value === 'zh' ? '联系我们
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     backdrop-filter: blur(10px);
     
     &:hover {
@@ -617,9 +620,9 @@ const handleContact = () => ElMessage.info(locale.value === 'zh' ? '联系我们
   .lang-btn {
     padding: 6px 14px;
     border-radius: 6px;
-    border: 2px solid #e4e4e7;
-    background: #fff;
-    color: #71717a;
+    border: 2px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-secondary);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -990,20 +993,18 @@ const handleContact = () => ElMessage.info(locale.value === 'zh' ? '联系我们
   }
 }
 
+.btn-social .el-icon {
+  font-size: 19px;
+}
+
 .btn-google {
   &:hover { border-color: #4285f4; }
 }
 
-.btn-wecom {
-  &:hover { border-color: #07c160; }
-}
-
-.btn-dingtalk {
-  &:hover { border-color: #1677ff; }
-}
-
+.btn-wecom,
+.btn-dingtalk,
 .btn-feishu {
-  &:hover { border-color: #34465d; }
+  &:hover { border-color: var(--primary); }
 }
 
 .signup-hint {

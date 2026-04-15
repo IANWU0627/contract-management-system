@@ -39,16 +39,42 @@
               </div>
             </div>
             <el-row :gutter="20">
-              <el-col :span="8" :xs="24" :sm="12" :md="8">
+              <el-col :span="24">
                 <el-form-item :label="$t('contract.name')" prop="title">
                   <el-input v-model="form.title" :placeholder="$t('contract.placeholder.name')" />
                 </el-form-item>
               </el-col>
+            </el-row>
+            <el-row :gutter="20">
               <el-col :span="8" :xs="24" :sm="12" :md="8">
                 <el-form-item :label="$t('contract.type')" prop="type">
                   <el-select v-model="form.type" :placeholder="$t('common.placeholder.select')" style="width: 100%" @change="handleTypeChange">
                     <el-option v-for="cat in categories" :key="cat.code" :label="locale === 'en' && cat.nameEn ? cat.nameEn : cat.name" :value="cat.code" />
                   </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8" :xs="24" :sm="12" :md="8">
+                <el-form-item :label="$t('contract.amount')" prop="amount">
+                  <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8" :xs="24" :sm="12" :md="8">
+                <el-form-item :label="$t('contract.currency')" prop="currency">
+                  <el-select v-model="form.currency" style="width: 100%">
+                    <el-option v-for="item in currencyOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="8" :xs="24" :sm="12" :md="8">
+                <el-form-item :label="$t('contract.startDate')" prop="startDate">
+                  <el-date-picker v-model="form.startDate" type="date" :placeholder="$t('contract.placeholder.startDate')" value-format="YYYY-MM-DD" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8" :xs="24" :sm="12" :md="8">
+                <el-form-item :label="$t('contract.endDate')" prop="endDate">
+                  <el-date-picker v-model="form.endDate" type="date" :placeholder="$t('contract.placeholder.endDate')" value-format="YYYY-MM-DD" style="width: 100%" />
                 </el-form-item>
               </el-col>
               <el-col :span="8" :xs="24" :sm="12" :md="8">
@@ -58,23 +84,6 @@
                       <span :style="{ color: folder.color }">●</span> {{ folder.name }}
                     </el-option>
                   </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="8" :xs="24" :sm="12" :md="8">
-                <el-form-item :label="$t('contract.amount')" prop="amount">
-                  <el-input-number v-model="form.amount" :min="0" :precision="2" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8" :xs="24" :sm="12" :md="8">
-                <el-form-item :label="$t('contract.startDate')" prop="startDate">
-                  <el-date-picker v-model="form.startDate" type="date" :placeholder="$t('contract.placeholder.startDate')" value-format="YYYY-MM-DD" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8" :xs="24" :sm="12" :md="8">
-                <el-form-item :label="$t('contract.endDate')" prop="endDate">
-                  <el-date-picker v-model="form.endDate" type="date" :placeholder="$t('contract.placeholder.endDate')" value-format="YYYY-MM-DD" style="width: 100%" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -319,16 +328,16 @@
               <div class="preview-actions">
                 <el-button type="primary" @click="showFullPreviewDialog = true">
                   <el-icon><View /></el-icon>
-                  {{ $t('contract.fullPreview') || '查看合同预览' }}
+                  {{ $t('contract.fullPreview') }}
                 </el-button>
                 <el-button type="success" @click="generatePdf" :loading="pdfGenerating">
                   <el-icon><Download /></el-icon>
-                  {{ $t('contract.generateFile') || '生成合同文件' }}
+                  {{ $t('contract.generateFile') }}
                 </el-button>
               </div>
             </div>
 
-    <el-dialog v-model="showFullPreviewDialog" :title="$t('contract.fullPreview') || '合同预览'" width="85%" destroy-on-close>
+    <el-dialog v-model="showFullPreviewDialog" :title="$t('contract.fullPreview')" width="85%" destroy-on-close>
       <div class="preview-dialog-content" v-html="form.content"></div>
     </el-dialog>
           </div>
@@ -385,15 +394,12 @@
           </div>
 
         <div class="form-actions">
-          <el-button v-if="isEdit" type="info" :loading="savingDraft" @click="handleSaveDraft">{{ $t('common.saveDraft') || '保存草稿' }}</el-button>
+          <el-button v-if="isEdit" type="info" :loading="savingDraft" @click="handleSaveDraft">{{ $t('common.saveDraft') }}</el-button>
           <el-button type="primary" :loading="loading" @click="handleSubmit">{{ $t('common.submit') }}</el-button>
         </div>
       </el-form>
     </el-card>
 
-    <el-dialog v-model="showFullPreviewDialog" :title="$t('contract.fullPreview') || '合同预览'" width="85%" destroy-on-close>
-      <div class="preview-dialog-content" v-html="form.content"></div>
-    </el-dialog>
   </div>
 </template>
 
@@ -469,6 +475,7 @@ const form = reactive({
   title: '',
   type: '',
   amount: 0,
+  currency: 'CNY',
   startDate: '',
   endDate: '',
   content: '',
@@ -483,10 +490,21 @@ const form = reactive({
   ] as Counterparty[]
 })
 
+const currencyOptions = [
+  { value: 'CNY', label: 'CNY - RMB' },
+  { value: 'USD', label: 'USD - US Dollar' },
+  { value: 'EUR', label: 'EUR - Euro' },
+  { value: 'HKD', label: 'HKD - Hong Kong Dollar' }
+]
+
 const currentStepRules = computed(() => {
   const rules: any = {}
   rules.title = [{ required: true, message: t('contract.error.title'), trigger: 'blur' }]
   rules.type = [{ required: true, message: t('contract.error.type'), trigger: 'change' }]
+  rules.amount = [{ required: true, message: t('contract.error.amount'), trigger: 'blur' }]
+  rules.currency = [{ required: true, message: t('contract.error.currency'), trigger: 'change' }]
+  rules.startDate = [{ required: true, message: t('contract.error.startDate'), trigger: 'change' }]
+  rules.endDate = [{ required: true, message: t('contract.error.endDate'), trigger: 'change' }]
   return rules
 })
 
@@ -663,11 +681,11 @@ watch(() => form.counterparties, () => {
   }
 }, { deep: true })
 
-// 监听locale变化，重新生成extractedVariables的label
+// 监听locale变化，仅更新变量显示标签，避免丢失 type 等元数据
 watch(locale, () => {
   if (extractedVariables.value.length > 0) {
     extractedVariables.value = extractedVariables.value.map(v => ({
-      key: v.key,
+      ...v,
       label: getVariableLabel(v.key)
     }))
   }
@@ -707,7 +725,7 @@ const handleFileUpload = async (file: any) => {
     try {
       const res = await uploadContractFile(file.raw)
       const fileUrl = res.data?.fileUrl || `/api/contracts/download/${res.data?.fileName}`
-      form.content = `<div class="uploaded-file-preview"><p>${file.name}</p><div class="file-placeholder"><p>文档已上传，请下载查看: <a href="${fileUrl}" target="_blank">${file.name}</a></p></div></div>`
+      form.content = `<div class="uploaded-file-preview"><p>${file.name}</p><div class="file-placeholder"><p>${t('contract.uploadedFileHint')} <a href="${fileUrl}" target="_blank">${file.name}</a></p></div></div>`
       uploadedFileUrl.value = fileUrl
     } catch (error) {
       ElMessage.error(t('common.error'))
@@ -767,12 +785,12 @@ const getPartyLabel = (type: string) => {
     partyB: t('contract.partyTypes.partyB'),
     partyC: t('contract.partyTypes.partyC'),
     partyD: t('contract.partyTypes.partyD'),
-    partyE: '戊方',
-    partyF: '己方',
-    partyG: '庚方',
-    partyH: '辛方',
-    partyI: '壬方',
-    partyJ: '癸方'
+    partyE: t('contract.partyTypes.partyE'),
+    partyF: t('contract.partyTypes.partyF'),
+    partyG: t('contract.partyTypes.partyG'),
+    partyH: t('contract.partyTypes.partyH'),
+    partyI: t('contract.partyTypes.partyI'),
+    partyJ: t('contract.partyTypes.partyJ')
   }
   return map[type] || type
 }
@@ -798,7 +816,7 @@ const addCounterparty = () => {
   const usedTypes = form.counterparties.map(cp => cp.type)
   const availableType = types.find(t => !usedTypes.includes(t))
   if (!availableType) {
-    ElMessage.warning('已达最大相对方数量（10个）')
+    ElMessage.warning(t('contract.maxCounterparties'))
     return
   }
   form.counterparties.push({ type: availableType, name: '', contact: '', phone: '', email: '' })
@@ -825,7 +843,7 @@ const handleAttachmentChange = async (file: any) => {
       uploadTime: new Date().toISOString()
     })
   } catch (error) {
-    ElMessage.error(t('contract.uploadFailed') || '文件上传失败')
+    ElMessage.error(t('contract.uploadFailed'))
   }
 }
 
@@ -915,7 +933,7 @@ const handleDownloadGeneratedPdf = () => {
     })
       .then(response => {
         if (!response.ok) {
-          throw new Error('下载失败')
+          throw new Error(t('common.error'))
         }
         return response.blob()
       })
@@ -964,6 +982,7 @@ const fetchContract = async () => {
     form.title = data.title
     form.type = data.type
     form.amount = data.amount
+    form.currency = data.currency || 'CNY'
     form.startDate = data.startDate
     form.endDate = data.endDate
     form.content = data.content || ''
@@ -1000,9 +1019,15 @@ const fetchContract = async () => {
       previewContent.value = form.content
     }
     
-    if (data.dynamicFieldValues) {
+    if (data.dynamicFields && typeof data.dynamicFields === 'object') {
+      for (const key in data.dynamicFields) {
+        dynamicFieldValues[key] = data.dynamicFields[key]
+      }
+    } else if (data.dynamicFieldValues) {
       try {
-        const dynVals = JSON.parse(data.dynamicFieldValues)
+        const dynVals = typeof data.dynamicFieldValues === 'string'
+          ? JSON.parse(data.dynamicFieldValues)
+          : data.dynamicFieldValues
         for (const key in dynVals) {
           dynamicFieldValues[key] = dynVals[key]
         }
@@ -1075,9 +1100,10 @@ const handleSaveDraft = async () => {
   savingDraft.value = true
   try {
     const draftData: any = {
-      title: form.title || '未命名合同',
+      title: form.title || t('contract.untitled'),
       type: form.type,
       amount: form.amount || 0,
+      currency: form.currency,
       startDate: form.startDate,
       endDate: form.endDate,
       content: form.content,
@@ -1088,6 +1114,7 @@ const handleSaveDraft = async () => {
       status: 'DRAFT',
       templateVariables: JSON.stringify(templateVariables.value),
       dynamicFieldValues: JSON.stringify(dynamicFieldValues),
+      dynamicFields: { ...dynamicFieldValues },
       templateId: selectedTemplateId.value,
       contentMode: contentMode.value
     }
@@ -1114,6 +1141,29 @@ const handleSaveDraft = async () => {
         sortOrder: index
       }))
       await saveCounterpartiesBatch(savedContractId, counterpartiesData)
+
+      const attachmentsData = attachments.value
+        .map((att: any) => ({
+          fileName: att.fileName || att.name,
+          fileUrl: att.fileUrl || att.url || '',
+          fileSize: att.fileSize || att.size,
+          fileType: att.type || 'application/octet-stream',
+          fileCategory: 'support' as 'contract' | 'support'
+        }))
+
+      if (generatedPdf.value?.serverUrl) {
+        attachmentsData.push({
+          fileName: generatedPdf.value.name,
+          fileUrl: generatedPdf.value.serverUrl,
+          fileSize: generatedPdf.value.blob?.size || 0,
+          fileType: 'application/pdf',
+          fileCategory: 'contract' as 'contract' | 'support'
+        })
+      }
+
+      if (attachmentsData.length > 0) {
+        await saveAttachmentsBatch(savedContractId, attachmentsData)
+      }
     }
     
     ElMessage.success(t('common.success'))
@@ -1144,6 +1194,7 @@ const handleSubmit = async () => {
       title: form.title,
       type: form.type,
       amount: form.amount,
+      currency: form.currency,
       startDate: form.startDate,
       endDate: form.endDate,
       content: form.content,
@@ -1153,6 +1204,7 @@ const handleSubmit = async () => {
       counterparty: form.counterparties.map(cp => cp.name).filter(Boolean).join(' / '),
       templateVariables: JSON.stringify(templateVariables.value),
       dynamicFieldValues: JSON.stringify(dynamicFieldValues),
+      dynamicFields: { ...dynamicFieldValues },
       templateId: selectedTemplateId.value,
       contentMode: contentMode.value
     }

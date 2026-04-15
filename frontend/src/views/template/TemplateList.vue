@@ -634,6 +634,9 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
     
     .page-title {
       font-size: 24px;
@@ -643,6 +646,10 @@ onMounted(() => {
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 }
@@ -660,10 +667,12 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .filter-item-wide {
   flex: 1;
+  min-width: 240px;
   
   :deep(.el-input__wrapper) {
     border-radius: 8px;
@@ -674,6 +683,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .category-dot {
@@ -793,17 +803,24 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
+    min-width: 0;
     padding-top: 14px;
     border-top: 1px solid var(--border-color);
     
     .update-time {
       font-size: 12px;
       color: var(--text-secondary);
+      max-width: 55%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .template-actions {
       display: flex;
       gap: 4px;
+      flex-shrink: 0;
       
       .el-button {
         padding: 6px;

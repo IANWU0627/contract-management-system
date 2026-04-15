@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login as loginApi, getUserInfo, register as registerApi } from '@/api/auth'
 import type { User } from '@/api/user'
+import { useAppStore } from '@/stores/app'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -45,6 +46,8 @@ export const useUserStore = defineStore('user', () => {
 
   // 登出
   const logout = () => {
+    const appStore = useAppStore()
+    appStore.clearSystemThemeListener()
     token.value = ''
     userInfo.value = null
     roles.value = []

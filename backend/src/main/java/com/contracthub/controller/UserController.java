@@ -111,20 +111,12 @@ public class UserController {
     public ApiResponse<Map<String, Object>> me() {
         try {
             Long currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId == null) {
+                return ApiResponse.error("未登录或登录已失效");
+            }
             User user = userMapper.selectById(currentUserId);
             if (user == null) {
-                Map<String, Object> result = new HashMap<>();
-                result.put("id", currentUserId);
-                result.put("username", "unknown");
-                result.put("nickname", "未知用户");
-                result.put("email", "");
-                result.put("phone", "");
-                result.put("avatar", "");
-                result.put("role", "USER");
-                result.put("status", "active");
-                result.put("roles", Arrays.asList("USER"));
-                result.put("permissions", Arrays.asList("contract:read", "template:read"));
-                return ApiResponse.success(result);
+                return ApiResponse.error("用户不存在");
             }
             Map<String, Object> result = new HashMap<>();
             result.put("id", user.getId());
@@ -140,23 +132,7 @@ public class UserController {
             return ApiResponse.success(result);
         } catch (Exception e) {
             log.error("获取用户信息失败", e);
-            Map<String, Object> result = new HashMap<>();
-            result.put("id", 1L);
-            result.put("username", "admin");
-            result.put("nickname", "管理员");
-            result.put("email", "admin@toycontract.com");
-            result.put("phone", "");
-            result.put("avatar", "");
-            result.put("role", "ADMIN");
-            result.put("status", "active");
-            result.put("roles", Arrays.asList("ADMIN", "LEGAL", "USER"));
-            result.put("permissions", Arrays.asList(
-                "contract:create", "contract:read", "contract:update", "contract:delete",
-                "template:create", "template:read", "template:update", "template:delete",
-                "user:create", "user:read", "user:update", "user:delete",
-                "system:settings", "system:logs", "system:statistics"
-            ));
-            return ApiResponse.success(result);
+            return ApiResponse.error("获取用户信息失败");
         }
     }
     
@@ -432,8 +408,8 @@ public class UserController {
             if (oldPassword == null || oldPassword.isEmpty()) {
                 return ApiResponse.error("原密码不能为空");
             }
-            if (newPassword == null || newPassword.length() < 6) {
-                return ApiResponse.error("新密码至少6位");
+            if (newPassword == null || newPassword.length() < 8) {
+                return ApiResponse.error("新密码至少8位");
             }
             
             Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -441,6 +417,13 @@ public class UserController {
             if (user != null) {
                 if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
                     return ApiResponse.error("原密码错误");
+                }
+                if (oldPassword.equals(newPassword)) {
+                    return ApiResponse.error("新密码不能与原密码相同");
+                }
+                // At least one uppercase, one lowercase, one digit, one special character.
+                if (!newPassword.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).{8,}$")) {
+                    return ApiResponse.error("密码需包含大小写字母、数字和特殊字符");
                 }
                 user.setPassword(passwordEncoder.encode(newPassword));
                 userMapper.updateById(user);

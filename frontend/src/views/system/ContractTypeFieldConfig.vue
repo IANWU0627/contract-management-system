@@ -214,13 +214,13 @@
               </el-form-item>
               <el-form-item :label="$t('typeFieldConfig.fieldType')" required>
                 <el-select v-model="fieldForm.fieldType" style="width: 100%">
-                  <el-option value="text" :label="locale === 'en' ? 'Text' : '文本'" />
-                  <el-option value="number" :label="locale === 'en' ? 'Number' : '数字'" />
-                  <el-option value="date" :label="locale === 'en' ? 'Date' : '日期'" />
-                  <el-option value="select" :label="locale === 'en' ? 'Select' : '下拉'" />
-                  <el-option value="multiselect" :label="locale === 'en' ? 'Multi-Select' : '多选'" />
-                  <el-option value="textarea" :label="locale === 'en' ? 'Textarea' : '多行文本'" />
-                  <el-option value="currency" :label="locale === 'en' ? 'Currency' : '金额'" />
+                  <el-option value="text" :label="t('typeFieldConfig.fieldTypes.text')" />
+                  <el-option value="number" :label="t('typeFieldConfig.fieldTypes.number')" />
+                  <el-option value="date" :label="t('typeFieldConfig.fieldTypes.date')" />
+                  <el-option value="select" :label="t('typeFieldConfig.fieldTypes.select')" />
+                  <el-option value="multiselect" :label="t('typeFieldConfig.fieldTypes.multiselect')" />
+                  <el-option value="textarea" :label="t('typeFieldConfig.fieldTypes.textarea')" />
+                  <el-option value="currency" :label="t('typeFieldConfig.fieldTypes.currency')" />
                 </el-select>
               </el-form-item>
               <el-form-item v-if="fieldForm.fieldType === 'select' || fieldForm.fieldType === 'multiselect'" :label="$t('typeFieldConfig.quickCode')">
@@ -264,7 +264,7 @@
               <el-input 
                 v-model="presetSearch" 
                 size="small" 
-                :placeholder="'搜索...'" 
+                :placeholder="$t('common.search') + '...'" 
                 style="width: 120px"
                 clearable
               >
@@ -283,7 +283,7 @@
                 {{ locale === 'en' ? preset.fieldLabelEn : preset.fieldLabel }} ({{ preset.fieldKey }})
                 <el-icon v-if="addedFieldKeysSet.has(preset.fieldKey)"><Check /></el-icon>
               </el-tag>
-              <el-empty v-if="filteredPresetFields.length === 0" description="无匹配字段" :image-size="60" />
+              <el-empty v-if="filteredPresetFields.length === 0" :description="$t('common.none')" :image-size="60" />
             </div>
           </div>
           
@@ -400,13 +400,13 @@ watch(filteredFieldsForSearch, (val) => {
 
 const getTypeLabel = (type: string) => {
   const map: Record<string, string> = {
-    text: locale.value === 'en' ? 'Text' : '文本',
-    number: locale.value === 'en' ? 'Number' : '数字',
-    date: locale.value === 'en' ? 'Date' : '日期',
-    select: locale.value === 'en' ? 'Select' : '下拉',
-    multiselect: locale.value === 'en' ? 'Multi-Select' : '多选',
-    textarea: locale.value === 'en' ? 'Textarea' : '多行文本',
-    currency: locale.value === 'en' ? 'Currency' : '金额'
+    text: t('typeFieldConfig.fieldTypes.text'),
+    number: t('typeFieldConfig.fieldTypes.number'),
+    date: t('typeFieldConfig.fieldTypes.date'),
+    select: t('typeFieldConfig.fieldTypes.select'),
+    multiselect: t('typeFieldConfig.fieldTypes.multiselect'),
+    textarea: t('typeFieldConfig.fieldTypes.textarea'),
+    currency: t('typeFieldConfig.fieldTypes.currency')
   }
   return map[type] || type
 }
@@ -619,21 +619,24 @@ const getFieldCount = (type: string) => {
 }
 
 const presetCategories = computed(() => {
-  const base = [{ value: 'all', label: '全部' }]
+  const base = [{ value: 'all', label: t('common.all') }]
   if (categories.value.length > 0) {
     return [
       ...base,
-      ...categories.value.map(cat => ({ value: cat.code, label: cat.name }))
+      ...categories.value.map(cat => ({
+        value: cat.code,
+        label: locale.value === 'en' && cat.nameEn ? cat.nameEn : cat.name
+      }))
     ]
   }
   return [
     ...base,
-    { value: 'PURCHASE', label: '采购' },
-    { value: 'SALES', label: '销售' },
-    { value: 'LEASE', label: '租赁' },
-    { value: 'EMPLOYMENT', label: '劳动' },
-    { value: 'SERVICE', label: '服务' },
-    { value: 'OTHER', label: '其他' }
+    { value: 'PURCHASE', label: t('contract.types.purchase') },
+    { value: 'SALES', label: t('contract.types.sales') },
+    { value: 'LEASE', label: t('contract.types.lease') },
+    { value: 'EMPLOYMENT', label: t('contract.types.employment') },
+    { value: 'SERVICE', label: t('contract.types.service') },
+    { value: 'OTHER', label: t('contract.types.other') }
   ]
 })
 
@@ -1016,12 +1019,17 @@ onUnmounted(() => {
       -webkit-text-fill-color: transparent;
       background-clip: text;
       margin: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .header-actions {
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
+      min-width: 0;
     }
   }
   
@@ -1041,6 +1049,11 @@ onUnmounted(() => {
     &:hover {
       transform: translateY(-1px);
     }
+
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .export-btn {
@@ -1154,6 +1167,11 @@ onUnmounted(() => {
     .config-title {
       font-size: 18px;
       margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       
       .type-badge {
         padding: 4px 12px;
@@ -1190,10 +1208,12 @@ onUnmounted(() => {
     display: flex;
     gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
   }
   
   .filter-item-wide {
     flex: 1;
+    min-width: 240px;
     
     :deep(.el-input__wrapper) {
       border-radius: 8px;
@@ -1204,6 +1224,7 @@ onUnmounted(() => {
     display: flex;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
   }
   
   .table-section {
@@ -1225,6 +1246,7 @@ onUnmounted(() => {
       .add-buttons {
         display: flex;
         gap: 8px;
+        flex-wrap: wrap;
       }
     }
     
@@ -1255,6 +1277,7 @@ onUnmounted(() => {
         align-items: center;
         gap: 12px;
         margin-bottom: 12px;
+        flex-wrap: wrap;
         
         .preset-title {
           font-weight: 600;
@@ -1284,6 +1307,12 @@ onUnmounted(() => {
 }
 
 :deep(.el-table) {
+  th .cell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .el-input, .el-select {
     width: 100%;
   }

@@ -6,6 +6,7 @@ import com.contracthub.mapper.ContractTemplateMapper;
 import com.contracthub.service.TemplateVariableService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -154,8 +155,8 @@ public class TemplateController {
         if (keyword != null && !keyword.isEmpty()) {
             String kw = keyword.toLowerCase();
             filtered.removeIf(t -> {
-                String name = ((String)t.get("name")).toLowerCase();
-                String desc = ((String)t.getOrDefault("description", "")).toLowerCase();
+                String name = String.valueOf(t.getOrDefault("name", "")).toLowerCase();
+                String desc = String.valueOf(t.getOrDefault("description", "")).toLowerCase();
                 return !name.contains(kw) && !desc.contains(kw);
             });
         }
@@ -185,6 +186,7 @@ public class TemplateController {
     }
     
     @PostMapping
+    @PreAuthorize("hasAuthority('TEMPLATE_MANAGE')")
     public ApiResponse<Map<String, Object>> create(@RequestBody Map<String, Object> templateData) {
         ContractTemplate template = new ContractTemplate();
         template.setName((String) templateData.get("name"));
@@ -208,6 +210,7 @@ public class TemplateController {
     }
     
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEMPLATE_MANAGE')")
     public ApiResponse<Map<String, Object>> update(@PathVariable Long id, @RequestBody Map<String, Object> templateData) {
         ContractTemplate template = templateMapper.selectById(id);
         if (template == null) {
@@ -269,6 +272,7 @@ public class TemplateController {
     }
     
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEMPLATE_MANAGE')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         int result = templateMapper.deleteById(id);
         if (result == 0) {
@@ -329,6 +333,7 @@ public class TemplateController {
     }
     
     @PostMapping("/{id}/clone")
+    @PreAuthorize("hasAuthority('TEMPLATE_MANAGE')")
     public ApiResponse<Map<String, Object>> clone(@PathVariable Long id) {
         ContractTemplate template = templateMapper.selectById(id);
         if (template == null) {

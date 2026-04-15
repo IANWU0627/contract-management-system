@@ -2,6 +2,7 @@ package com.contracthub.util;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import com.contracthub.service.SessionConfigService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +20,12 @@ public class JwtUtils {
 
     @Value("${jwt.expiration}")
     private Long expiration;
+    
+    private final SessionConfigService sessionConfigService;
+
+    public JwtUtils(SessionConfigService sessionConfigService) {
+        this.sessionConfigService = sessionConfigService;
+    }
 
     private SecretKey getSigningKey() {
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
@@ -37,7 +44,7 @@ public class JwtUtils {
         claims.put("role", role);
         
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + expiration);
+        Date expiryDate = new Date(now.getTime() + getEffectiveExpirationMillis(userId));
         
         return Jwts.builder()
                 .claims(claims)
@@ -70,24 +77,26 @@ public class JwtUtils {
     }
 
     public boolean validateToken(String token) {
-        try {
-            parseToken(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
+        Claims claims = parseToken(token);
+        return claims != null;
     }
 
     public boolean isTokenExpired(String token) {
         try {
             Claims claims = parseToken(token);
+            if (claims == null) {
+                return true;
+            }
             return claims.getExpiration().before(new Date());
-        } catch (JwtException | IllegalArgumentException e) {
+        } catch (Exception e) {
             return true;
         }
     }
 
     private Claims parseToken(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
         try {
             return Jwts.parser()
                     .verifyWith(getSigningKey())
@@ -96,7 +105,7 @@ public class JwtUtils {
                     .getPayload();
         } catch (ExpiredJwtException e) {
             return e.getClaims();
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
             return null;
         }
     }
@@ -106,11 +115,54 @@ public class JwtUtils {
         if (claims == null) {
             return null;
         }
+        if (!canRefreshToken(token)) {
+            return null;
+        }
         
         Long userId = getUserIdFromToken(token);
         String username = getUsernameFromToken(token);
         String role = getRoleFromToken(token);
         
         return generateToken(userId, username, role);
+    }
+
+    public boolean canRefreshToken(String token) {
+        Claims claims = parseToken(token);
+        if (claims == null) {
+            return false;
+        }
+        Date issuedAt = claims.getIssuedAt();
+        if (issuedAt == null) {
+            return false;
+        }
+        Long userId = getUserIdFromToken(token);
+        long refreshWindowMillis = getEffectiveRefreshExpirationMillis(userId);
+        if (refreshWindowMillis <= 0) {
+            return false;
+        }
+        long age = System.currentTimeMillis() - issuedAt.getTime();
+        return age <= refreshWindowMillis;
+    }
+
+    private long getEffectiveExpirationMillis(Long userId) {
+        try {
+            int tokenExpiryHours = sessionConfigService.getTokenExpiry(userId);
+            if (tokenExpiryHours > 0) {
+                return tokenExpiryHours * 60L * 60L * 1000L;
+            }
+        } catch (Exception ignored) {
+        }
+        return expiration != null ? expiration : 24L * 60L * 60L * 1000L;
+    }
+
+    private long getEffectiveRefreshExpirationMillis(Long userId) {
+        try {
+            int refreshExpiryHours = sessionConfigService.getRefreshTokenExpiry(userId);
+            if (refreshExpiryHours > 0) {
+                return refreshExpiryHours * 60L * 60L * 1000L;
+            }
+        } catch (Exception ignored) {
+        }
+        return 168L * 60L * 60L * 1000L;
     }
 }

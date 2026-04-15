@@ -4,11 +4,13 @@ import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.ContractCounterparty;
 import com.contracthub.mapper.ContractCounterpartyMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/contract-counterparties")
+@PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
 public class ContractCounterpartyController {
     
     @Autowired
@@ -41,7 +43,10 @@ public class ContractCounterpartyController {
     
     @DeleteMapping("/contract/{contractId}")
     public ApiResponse<String> deleteByContractId(@PathVariable Long contractId) {
-        counterpartyMapper.delete(null);
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<ContractCounterparty> wrapper =
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+        wrapper.eq("contract_id", contractId);
+        counterpartyMapper.delete(wrapper);
         return ApiResponse.success("删除成功");
     }
     

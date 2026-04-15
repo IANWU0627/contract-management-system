@@ -32,7 +32,7 @@
             <el-icon :size="16"><Money /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">¥{{ formatAmount(stats.totalAmount) }}</div>
+            <div class="stat-value">{{ getCurrencySymbol(DEFAULT_CURRENCY) }}{{ formatAmount(stats.totalAmount) }}</div>
             <div class="stat-label">{{ t('statistics.totalAmount') }}</div>
           </div>
           <div class="stat-trend up">+8.5%</div>
@@ -110,14 +110,14 @@
               </template>
             </el-table-column>
             <el-table-column prop="amount" :label="t('contract.amount')" width="85" show-overflow-tooltip>
-              <template #default="{ row }">¥{{ formatAmount(row.amount) }}</template>
+              <template #default="{ row }">{{ getCurrencySymbol(row.currency) }}{{ formatAmount(row.amount) }}</template>
             </el-table-column>
             <el-table-column prop="status" :label="t('contract.status')" width="75" show-overflow-tooltip>
               <template #default="{ row }">
                 <el-tag :type="getStatusTagType(row.status)" size="small">{{ formatStatus(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('contract.favorite')" width="50" align="center" show-overflow-tooltip>
+            <el-table-column :label="t('contract.favorite')" width="86" align="center" show-overflow-tooltip>
               <template #default="{ row }">
                 <el-icon 
                   :class="['favorite-icon', { active: row.starred }]"
@@ -218,6 +218,7 @@ import { addFavorite, removeFavorite, getFavorites } from '@/api/favorite'
 import { Pie, Bar } from '@antv/g2plot'
 import { Lightning, DataAnalysis, Search, Star, StarFilled, Document, Money, Timer, Bell, Plus, FolderOpened, RefreshRight } from '@element-plus/icons-vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
 const { t, locale } = useI18n()
 
@@ -262,8 +263,7 @@ let statusChart: Pie | null = null
 let typeChart: Bar | null = null
 
 const formatAmount = (amount: number) => {
-  if (!amount) return '0'
-  return new Intl.NumberFormat('zh-CN').format(amount)
+  return formatAmountByLocale(amount, locale.value)
 }
 
 const formatType = (type: string) => {
@@ -362,10 +362,11 @@ const initCharts = async (allContracts: any[]) => {
     { value: typeCounts.OTHER, itemStyle: { color: '#a78bfa' } }
   ]
   
+  const css = getComputedStyle(document.documentElement)
+  const textPrimary = (css.getPropertyValue('--text-primary') || '#1a1a1a').trim()
+  const textSecondary = (css.getPropertyValue('--text-secondary') || '#666666').trim()
   const isDark = document.documentElement.classList.contains('dark')
-  const chartBg = isDark ? '#1e293b' : '#ffffff'
-  const textColor = isDark ? '#f1f5f9' : '#1a1a1a'
-  const axisColor = isDark ? '#64748b' : '#718096'
+  const pieStroke = isDark ? 'rgba(148,163,184,0.4)' : 'rgba(255,255,255,0.6)'
   
   const statusDataFormatted = statusData.map(item => ({
     type: item.name,
@@ -399,17 +400,17 @@ const initCharts = async (allContracts: any[]) => {
           style: { fontSize: 10 }
         },
         itemValue: {
-          style: { fontSize: 10, fill: '#666' }
+          style: { fontSize: 10, fill: textSecondary }
         },
       },
       color: ['#f87171', '#fbbf24', '#60a5fa', '#34d399', '#818cf8', '#94a3b8'],
       pieStyle: {
-        stroke: 'rgba(255,255,255,0.6)',
+        stroke: pieStroke,
         lineWidth: 3,
       },
       statistic: {
-        title: { content: t('statistics.total'), style: { fontSize: '10px', color: '#666' } },
-        content: { content: String(statusTotal), style: { fontSize: '18px', fontWeight: 'bold', color: '#333' } },
+        title: { content: t('statistics.total'), style: { fontSize: '10px', color: textSecondary } },
+        content: { content: String(statusTotal), style: { fontSize: '18px', fontWeight: 'bold', color: textPrimary } },
       },
       animation: {
         appear: { animation: 'wave-in', duration: 1000 },
@@ -445,16 +446,16 @@ const initCharts = async (allContracts: any[]) => {
         position: 'right' as const,
         itemWidth: 80,
         itemName: { style: { fontSize: 10 } },
-        itemValue: { style: { fontSize: 10, fill: '#666' } },
+        itemValue: { style: { fontSize: 10, fill: textSecondary } },
       },
       color: ['#667eea', '#34d399', '#f87171', '#fbbf24', '#38bdf8', '#a78bfa'],
       pieStyle: {
-        stroke: 'rgba(255,255,255,0.6)',
+        stroke: pieStroke,
         lineWidth: 3,
       },
       statistic: {
-        title: { content: t('statistics.total'), style: { fontSize: '12px', color: '#666' } },
-        content: { content: String(typeTotal), style: { fontSize: '24px', fontWeight: 'bold', color: '#333' } },
+        title: { content: t('statistics.total'), style: { fontSize: '12px', color: textSecondary } },
+        content: { content: String(typeTotal), style: { fontSize: '24px', fontWeight: 'bold', color: textPrimary } },
       },
       animation: {
         appear: { animation: 'wave-in', duration: 1000 },
@@ -882,18 +883,26 @@ onUnmounted(() => {
       justify-content: space-between;
       align-items: center;
       width: 100%;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-width: 0;
       
       .header-left {
         display: flex;
         align-items: center;
         gap: 8px;
         flex-wrap: wrap;
+        min-width: 0;
         
         .title {
           font-size: 15px;
           font-weight: 600;
           color: var(--text-primary);
           margin-right: 4px;
+          max-width: 180px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
       }
     }
@@ -968,20 +977,20 @@ onUnmounted(() => {
       
       /* 丰富多彩配色 - 每个图标独立个性 */
       &.blue {
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+        background: linear-gradient(135deg, #1d4fff 0%, #00a3ff 100%);
+        box-shadow: 0 6px 16px rgba(29, 79, 255, 0.45);
       }
       &.green {
-        background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
-        box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);
+        background: linear-gradient(135deg, #00d26a 0%, #00a86b 100%);
+        box-shadow: 0 6px 16px rgba(0, 210, 106, 0.42);
       }
       &.orange {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+        background: linear-gradient(135deg, #ff9f0a 0%, #ff6a00 100%);
+        box-shadow: 0 6px 16px rgba(255, 122, 0, 0.45);
       }
       &.red {
-        background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
-        box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+        background: linear-gradient(135deg, #ff3b30 0%, #d70015 100%);
+        box-shadow: 0 6px 16px rgba(255, 59, 48, 0.42);
       }
 
       .badge {
@@ -1004,20 +1013,20 @@ onUnmounted(() => {
     }
     
     &:nth-child(1) {
-      &::before { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
-      &:hover { box-shadow: 0 12px 28px rgba(59, 130, 246, 0.15); }
+      &::before { background: linear-gradient(90deg, #1d4fff, #00a3ff); }
+      &:hover { box-shadow: 0 12px 28px rgba(29, 79, 255, 0.2); }
     }
     &:nth-child(2) {
-      &::before { background: linear-gradient(90deg, #22c55e, #15803d); }
-      &:hover { box-shadow: 0 12px 28px rgba(34, 197, 94, 0.15); }
+      &::before { background: linear-gradient(90deg, #00d26a, #00a86b); }
+      &:hover { box-shadow: 0 12px 28px rgba(0, 210, 106, 0.2); }
     }
     &:nth-child(3) {
-      &::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
-      &:hover { box-shadow: 0 12px 28px rgba(245, 158, 11, 0.18); }
+      &::before { background: linear-gradient(90deg, #ff9f0a, #ff6a00); }
+      &:hover { box-shadow: 0 12px 28px rgba(255, 122, 0, 0.22); }
     }
     &:nth-child(4) {
-      &::before { background: linear-gradient(90deg, #ef4444, #b91c1c); }
-      &:hover { box-shadow: 0 12px 28px rgba(239, 68, 68, 0.18); }
+      &::before { background: linear-gradient(90deg, #ff3b30, #d70015); }
+      &:hover { box-shadow: 0 12px 28px rgba(255, 59, 48, 0.22); }
     }
 
     span:not(.badge) {
@@ -1039,6 +1048,12 @@ onUnmounted(() => {
     &:hover span:not(.badge) {
       color: var(--text-primary);
     }
+  }
+}
+
+@media (max-width: 1280px) {
+  .quick-actions {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -1366,7 +1381,7 @@ onUnmounted(() => {
 .favorite-icon {
   cursor: pointer;
   font-size: 16px;
-  color: #c0c4cc;
+  color: var(--text-placeholder);
   transition: color 0.2s;
   
   &:hover {
@@ -1396,9 +1411,11 @@ onUnmounted(() => {
 .dashboard-table {
   :deep(.el-table__header-wrapper) {
     th .cell {
-      word-break: break-word;
-      white-space: normal;
-      line-height: 1.4;
+      word-break: normal;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
       font-weight: 600;
     }
   }

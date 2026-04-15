@@ -108,6 +108,9 @@
                   <el-option :label="t('role.presetUser')" value="user" />
                   <el-option :label="t('role.presetReadonly')" value="readonly" />
                 </el-select>
+                <span v-if="selectedPreset && presetHintText" class="preset-hint">
+                  {{ presetHintText }}
+                </span>
               </div>
               <div class="toolbar-right">
                 <el-button size="small" @click="selectAllPermissions">
@@ -266,33 +269,49 @@ const selectedPermissions = computed(() => {
   return permissions.value.filter(p => roleForm.permissionIds.includes(p.id))
 })
 
+const presetGroupHints: Record<string, string[]> = {
+  admin: [t('menu.contracts'), t('menu.contractCollaboration'), t('menu.dataDictionary'), t('menu.analytics'), t('menu.systemManagement')],
+  user: [t('menu.contracts'), t('menu.contractCollaboration'), t('menu.analytics')],
+  readonly: [t('menu.analytics')]
+}
+
+const presetHintText = computed(() => {
+  if (!selectedPreset.value) return ''
+  const groups = presetGroupHints[selectedPreset.value] || []
+  if (groups.length === 0) return ''
+  return `${t('role.selected')}: ${groups.join(' / ')}`
+})
+
 const permissionTree = computed<PermissionGroup[]>(() => {
   const groups: Record<string, Permission[]> = {
-    [t('role.groupSystem')]: [],
-    [t('role.groupContract')]: []
+    [t('menu.contracts')]: [],
+    [t('menu.contractCollaboration')]: [],
+    [t('menu.dataDictionary')]: [],
+    [t('menu.analytics')]: [],
+    [t('menu.systemManagement')]: []
   }
   
   const groupMap: Record<string, string> = {
-    'USER_MANAGE': t('role.groupSystem'),
-    'ROLE_MANAGE': t('role.groupSystem'),
-    'SETTING_MANAGE': t('role.groupSystem'),
-    'CONTRACT_TYPE_MANAGE': t('role.groupSystem'),
-    'VARIABLE_MANAGE': t('role.groupSystem'),
-    'QUICK_CODE_MANAGE': t('role.groupSystem'),
-    'REPORT_VIEW': t('role.groupSystem'),
-    'CONTRACT_MANAGE': t('role.groupContract'),
-    'TEMPLATE_MANAGE': t('role.groupContract'),
-    'FOLDER_MANAGE': t('role.groupContract'),
-    'TAG_MANAGE': t('role.groupContract'),
-    'FAVORITE_MANAGE': t('role.groupContract'),
-    'CONTRACT_APPROVE': t('role.groupContract'),
-    'RENEWAL_MANAGE': t('role.groupContract'),
-    'REMINDER_MANAGE': t('role.groupContract'),
-    'REMINDER_RULE_MANAGE': t('role.groupContract')
+    'CONTRACT_MANAGE': t('menu.contracts'),
+    'TEMPLATE_MANAGE': t('menu.contractCollaboration'),
+    'CONTRACT_APPROVE': t('menu.contractCollaboration'),
+    'RENEWAL_MANAGE': t('menu.contractCollaboration'),
+    'REMINDER_MANAGE': t('menu.contractCollaboration'),
+    'VARIABLE_MANAGE': t('menu.dataDictionary'),
+    'QUICK_CODE_MANAGE': t('menu.dataDictionary'),
+    'CATEGORY_MANAGE': t('menu.dataDictionary'),
+    'FOLDER_MANAGE': t('menu.dataDictionary'),
+    'TAG_MANAGE': t('menu.dataDictionary'),
+    'REPORT_VIEW': t('menu.analytics'),
+    'FAVORITE_MANAGE': t('menu.analytics'),
+    'USER_MANAGE': t('menu.systemManagement'),
+    'ROLE_MANAGE': t('menu.systemManagement'),
+    'SETTING_MANAGE': t('menu.systemManagement'),
+    'REMINDER_RULE_MANAGE': t('menu.systemManagement')
   }
   
   permissions.value.forEach(p => {
-    const group = groupMap[p.code] || t('role.groupSystem')
+    const group = groupMap[p.code] || t('menu.systemManagement')
     p.groupName = group
     const targetGroup = groups[group]
     if (!targetGroup) {
@@ -461,7 +480,8 @@ const applyPreset = (preset: string) => {
     updateTreeCheck()
   })
   
-  ElMessage.success(t('role.presetApplied', { preset: preset === 'admin' ? t('role.presetAdmin') : preset === 'user' ? t('role.presetUser') : t('role.presetReadonly') }))
+  const presetName = preset === 'admin' ? t('role.presetAdmin') : preset === 'user' ? t('role.presetUser') : t('role.presetReadonly')
+  ElMessage.success(`${t('role.presetApplied', { preset: presetName })} (${roleForm.permissionIds.length})`)
 }
 
 const fetchRoles = async () => {
@@ -574,6 +594,9 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 12px;
+    min-width: 0;
+    flex-wrap: wrap;
     
     .page-title {
       font-size: 24px;
@@ -583,6 +606,11 @@ onMounted(() => {
       -webkit-text-fill-color: transparent;
       background-clip: text;
       margin: 0;
+      min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
   
@@ -603,10 +631,12 @@ onMounted(() => {
     display: flex;
     gap: 12px;
     align-items: center;
+    flex-wrap: wrap;
   }
   
   .filter-item-wide {
     flex: 1;
+    min-width: 220px;
     
     :deep(.el-input__wrapper) {
       border-radius: 8px;
@@ -617,6 +647,11 @@ onMounted(() => {
     display: flex;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+
+    :deep(.el-button) {
+      max-width: 100%;
+    }
   }
   
   .table-section {
@@ -635,6 +670,11 @@ onMounted(() => {
       th {
         font-weight: 600;
         font-size: 13px;
+        .cell {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
       }
       
       td {
@@ -683,6 +723,21 @@ onMounted(() => {
       display: flex;
       gap: 8px;
       align-items: center;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .preset-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 4px 8px;
+      max-width: 360px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
   

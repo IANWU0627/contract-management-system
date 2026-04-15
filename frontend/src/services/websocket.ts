@@ -4,21 +4,39 @@ import { ElNotification } from 'element-plus'
 class WebSocketService {
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 3000
+  private maxReconnectAttempts = 20
+  private reconnectDelay = 1500
+  private maxReconnectDelay = 30000
+  private reconnectTimer: number | null = null
+  private reconnectUserId?: number
   private pingInterval: number | null = null
-  private soundEnabled = ref(true)
+  private storageKey = 'ws-notifications'
+  private soundEnabled = ref(localStorage.getItem('notificationSound') !== 'false')
   private onNotificationCallback: ((notification: any) => void) | null = null
   
   public connected = ref(false)
   public notifications = ref<any[]>([])
+
+  constructor() {
+    this.restoreNotifications()
+    window.addEventListener('online', this.handleOnline)
+  }
   
   connect(userId?: number) {
+    this.reconnectUserId = userId
+    // Avoid duplicate websocket connections.
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const url = userId 
-      ? `${protocol}//${host}/ws?userId=${userId}`
-      : `${protocol}//${host}/ws`
+    const token = localStorage.getItem('token')
+    if (!token) {
+      this.connected.value = false
+      return
+    }
+    const url = `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`
     
     try {
       this.ws = new WebSocket(url)
@@ -27,6 +45,10 @@ class WebSocketService {
         console.log('WebSocket connected')
         this.connected.value = true
         this.reconnectAttempts = 0
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer)
+          this.reconnectTimer = null
+        }
         this.startPing()
       }
       
@@ -44,6 +66,7 @@ class WebSocketService {
         this.connected.value = false
         this.stopPing()
         this.scheduleReconnect(userId)
+        this.ws = null
       }
       
       this.ws.onerror = () => {
@@ -60,7 +83,7 @@ class WebSocketService {
     
     const notification = {
       ...data,
-      id: Date.now(),
+      id: this.buildNotificationId(data),
       read: false,
       type: this.getNotificationCategory(data.type),
       priority: this.getPriority(data.type),
@@ -72,6 +95,7 @@ class WebSocketService {
     if (this.notifications.value.length > 100) {
       this.notifications.value = this.notifications.value.slice(0, 100)
     }
+    this.persistNotifications()
     
     // Play sound
     if (this.soundEnabled.value) {
@@ -99,7 +123,7 @@ class WebSocketService {
     if (['approval_request', 'approval_result'].includes(type)) return 'approval'
     if (['renewal_request', 'renewal_result'].includes(type)) return 'renewal'
     if (['reminder'].includes(type)) return 'reminder'
-    if (['contract_comment'].includes(type)) return 'system'
+    if (['contract_comment', 'security_alert'].includes(type)) return 'system'
     return 'system'
   }
   
@@ -129,7 +153,8 @@ class WebSocketService {
       renewal_request: 'warning',
       reminder: 'info',
       contract_comment: 'info',
-      contract_update: 'info'
+      contract_update: 'info',
+      security_alert: 'warning'
     }
     return typeMap[type] || 'info'
   }
@@ -150,10 +175,12 @@ class WebSocketService {
   private scheduleReconnect(userId?: number) {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
-      setTimeout(() => {
+      const jitter = Math.floor(Math.random() * 500)
+      const delay = Math.min(this.reconnectDelay * Math.pow(1.6, this.reconnectAttempts - 1), this.maxReconnectDelay) + jitter
+      this.reconnectTimer = window.setTimeout(() => {
         console.log(`WebSocket reconnect attempt ${this.reconnectAttempts}`)
         this.connect(userId)
-      }, this.reconnectDelay * this.reconnectAttempts)
+      }, delay)
     }
   }
 
@@ -166,6 +193,10 @@ class WebSocketService {
   disconnect() {
     this.stopPing()
     this.reconnectAttempts = this.maxReconnectAttempts // Prevent reconnect
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     if (this.ws) {
       this.ws.close()
       this.ws = null
@@ -177,15 +208,18 @@ class WebSocketService {
     const notification = this.notifications.value.find(n => n.id === id)
     if (notification) {
       notification.read = true
+      this.persistNotifications()
     }
   }
   
   markAllAsRead() {
     this.notifications.value.forEach(n => n.read = true)
+    this.persistNotifications()
   }
   
   clearNotifications() {
     this.notifications.value = []
+    this.persistNotifications()
   }
   
   getUnreadCount() {
@@ -224,6 +258,38 @@ class WebSocketService {
       oscillator.stop(audioContext.currentTime + 0.3)
     } catch (e) {
       // Sound not supported
+    }
+  }
+
+  private buildNotificationId(data: any): string {
+    const base = `${data.type || 'system'}|${data.title || ''}|${data.content || ''}|${data.timestamp || Date.now()}`
+    return `${base}|${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  private persistNotifications() {
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(this.notifications.value.slice(0, 100)))
+    } catch (e) {
+      // Ignore localStorage quota errors silently.
+    }
+  }
+
+  private restoreNotifications() {
+    try {
+      const raw = localStorage.getItem(this.storageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        this.notifications.value = parsed.slice(0, 100)
+      }
+    } catch (e) {
+      this.notifications.value = []
+    }
+  }
+
+  private handleOnline = () => {
+    if (!this.connected.value && this.reconnectUserId) {
+      this.connect(this.reconnectUserId)
     }
   }
 }

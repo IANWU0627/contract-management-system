@@ -4,7 +4,7 @@
     <aside class="sidebar" :class="{ collapsed: isCollapsed }">
       <div class="logo">
         <div class="logo-icon">C</div>
-        <span v-if="!isCollapsed" class="logo-text">Toy Contract</span>
+        <span v-if="!isCollapsed" class="logo-text">{{ appStore.systemName }}</span>
       </div>
       
       <div class="menu-wrapper">
@@ -25,28 +25,24 @@
             </template>
           </el-menu-item>
           
-          <!-- ==================== 合同管理（一级菜单） ==================== -->
+          <!-- ==================== 合同管理（一级常用） ==================== -->
           <el-menu-item index="/contracts">
             <el-icon><Document /></el-icon>
             <template #title>
               <span class="menu-title">{{ $t('menu.contracts') }}</span>
             </template>
           </el-menu-item>
-          
-          <!-- ==================== 模板管理（一级菜单） ==================== -->
-          <el-menu-item index="/templates">
-            <el-icon><FolderOpened /></el-icon>
-            <template #title>
-              <span class="menu-title">{{ $t('menu.templates') }}</span>
-            </template>
-          </el-menu-item>
-          
-          <!-- ==================== 工作流（子菜单） ==================== -->
-          <el-sub-menu index="/workflow" v-if="hasPermission('CONTRACT_APPROVE') || hasPermission('RENEWAL_MANAGE')">
+
+          <!-- ==================== 合同协同（子菜单） ==================== -->
+          <el-sub-menu index="/contract-workbench">
             <template #title>
               <el-icon><Guide /></el-icon>
-              <span>{{ $t('menu.workflow') }}</span>
+              <span>{{ $t('menu.contractCollaboration') }}</span>
             </template>
+            <el-menu-item index="/templates">
+              <el-icon><FolderOpened /></el-icon>
+              <span>{{ $t('menu.templates') }}</span>
+            </el-menu-item>
             <el-menu-item index="/approvals" v-if="hasPermission('CONTRACT_APPROVE')">
               <el-icon><Checked /></el-icon>
               <span>{{ $t('menu.approvals') }}</span>
@@ -55,33 +51,41 @@
               <el-icon><RefreshRight /></el-icon>
               <span>{{ $t('menu.renewals') }}</span>
             </el-menu-item>
+            <el-menu-item index="/reminders" v-if="hasPermission('REMINDER_MANAGE')">
+              <el-icon><Bell /></el-icon>
+              <span>{{ $t('menu.reminders') }}</span>
+            </el-menu-item>
           </el-sub-menu>
 
-          <!-- ==================== 数据管理（子菜单） ==================== -->
-          <el-sub-menu index="/data">
+          <!-- ==================== 数据字典（子菜单） ==================== -->
+          <el-sub-menu index="/data-dictionary">
             <template #title>
               <el-icon><Box /></el-icon>
-              <span>{{ $t('menu.dataManagement') }}</span>
+              <span>{{ $t('menu.dataDictionary') }}</span>
             </template>
-            <el-menu-item index="/folders">
+            <el-menu-item index="/folders" v-if="hasPermission('FOLDER_MANAGE')">
               <el-icon><FolderOpened /></el-icon>
               <span>{{ $t('menu.folderManagement') }}</span>
             </el-menu-item>
-            <el-menu-item index="/tags">
+            <el-menu-item index="/tags" v-if="hasPermission('TAG_MANAGE')">
               <el-icon><Collection /></el-icon>
               <span>{{ $t('menu.tagManagement') }}</span>
             </el-menu-item>
-            <el-menu-item index="/categories" v-if="hasRole(['ADMIN'])">
+            <el-menu-item index="/categories" v-if="hasPermission('CATEGORY_MANAGE')">
               <el-icon><Tickets /></el-icon>
               <span>{{ $t('contract.categoryManagement') }}</span>
             </el-menu-item>
-            <el-menu-item index="/quick-codes" v-if="hasRole(['ADMIN'])">
+            <el-menu-item index="/quick-codes" v-if="hasPermission('QUICK_CODE_MANAGE')">
               <el-icon><Grid /></el-icon>
               <span>{{ $t('quickCode.management') }}</span>
             </el-menu-item>
-            <el-menu-item index="/reminders">
-              <el-icon><Bell /></el-icon>
-              <span>{{ $t('menu.reminders') }}</span>
+            <el-menu-item index="/type-field-config" v-if="hasPermission('CATEGORY_MANAGE')">
+              <el-icon><Tickets /></el-icon>
+              <span>{{ $t('menu.typeFieldConfig') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/variable-management" v-if="hasPermission('VARIABLE_MANAGE')">
+              <el-icon><DocumentCopy /></el-icon>
+              <span>{{ $t('menu.variableManagement') }}</span>
             </el-menu-item>
           </el-sub-menu>
 
@@ -98,10 +102,6 @@
             <el-menu-item index="/favorites" v-if="hasPermission('FAVORITE_MANAGE')">
               <el-icon><Star /></el-icon>
               <span>{{ $t('menu.favorites') }}</span>
-            </el-menu-item>
-            <el-menu-item index="/change-logs">
-              <el-icon><Memo /></el-icon>
-              <span>{{ $t('contract.changeLog') }}</span>
             </el-menu-item>
           </el-sub-menu>
 
@@ -123,17 +123,17 @@
               <el-icon><Timer /></el-icon>
               <span>{{ $t('menu.reminderRules') }}</span>
             </el-menu-item>
-            <el-menu-item index="/type-field-config">
-              <el-icon><Tickets /></el-icon>
-              <span>{{ $t('menu.typeFieldConfig') }}</span>
-            </el-menu-item>
-            <el-menu-item index="/variable-management">
-              <el-icon><DocumentCopy /></el-icon>
-              <span>{{ $t('menu.variableManagement') }}</span>
-            </el-menu-item>
             <el-menu-item index="/settings">
               <el-icon><Tools /></el-icon>
               <span>{{ $t('menu.settings') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/change-logs">
+              <el-icon><Memo /></el-icon>
+              <span>{{ $t('contract.changeLog') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/logs">
+              <el-icon><Operation /></el-icon>
+              <span>{{ $t('menu.operationLogs') }}</span>
             </el-menu-item>
           </el-sub-menu>
         </el-menu>
@@ -195,15 +195,16 @@
             </div>
             
             <!-- 语言 -->
-            <div class="tool-btn" @click="toggleLocale" :title="t('settings.language')">
+            <div class="tool-btn locale-btn" @click="toggleLocale" :title="t('settings.language')">
               <el-icon :size="18"><MapLocation /></el-icon>
+              <span class="locale-indicator">{{ localeLabel }}</span>
             </div>
             
             <!-- 主题 - 支持亮色/暗色/跟随系统 -->
             <div class="tool-btn" @click="toggleTheme" :title="themeTitle">
-              <el-icon v-if="appStore.effectiveTheme === 'dark'" :size="18"><Moon /></el-icon>
+              <el-icon v-if="appStore.theme === 'system'" :size="18"><Monitor /></el-icon>
+              <el-icon v-else-if="appStore.effectiveTheme === 'dark'" :size="18"><Moon /></el-icon>
               <el-icon v-else :size="18"><Sunny /></el-icon>
-              <span v-if="appStore.theme === 'system'" class="system-indicator">A</span>
             </div>
             
             <!-- 通知 -->
@@ -361,15 +362,15 @@
         <div class="search-tips" v-else-if="!searchKeyword && searchHistory.length === 0">
           <div class="tips-title">{{ t('dashboard.quickActions') }}</div>
           <div class="tips-list">
-            <span @click="quickSearch('待审批')" class="quick-tip">
+            <span @click="quickSearch(t('contract.statuses.pending'))" class="quick-tip">
               <el-icon><Clock /></el-icon>
               {{ t('contract.statuses.pending') }}
             </span>
-            <span @click="quickSearch('即将到期')" class="quick-tip">
+            <span @click="quickSearch(t('dashboard.expiringSoon'))" class="quick-tip">
               <el-icon><Bell /></el-icon>
               {{ t('statistics.expiringSoon') }}
             </span>
-            <span @click="quickSearch('草稿')" class="quick-tip">
+            <span @click="quickSearch(t('contract.statuses.draft'))" class="quick-tip">
               <el-icon><Document /></el-icon>
               {{ t('contract.statuses.draft') }}
             </span>
@@ -480,7 +481,7 @@
         
         <div class="notification-footer">
           <span v-if="unreadCount > 0" @click="markAllRead">{{ t('reminder.markRead') }}</span>
-          <span @click="$router.push('/notifications')">{{ t('common.viewAll') }}</span>
+          <span @click="$router.push('/reminders')">{{ t('common.viewAll') }}</span>
         </div>
       </div>
     </el-dialog>
@@ -528,7 +529,7 @@ import {
   Search, FullScreen, Close, ArrowUp,
   Star, Collection, Timer, RefreshRight, Tools, Operation, Grid, Memo,
   Guide, Tickets, Box, Management, DocumentCopy,
-  Connection, Loading, MapLocation, Document, FolderOpened, Clock, Bell
+  Connection, Loading, Document, FolderOpened, Clock, Bell, Monitor, MapLocation
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -539,9 +540,10 @@ const appStore = useAppStore()
 
 const isCollapsed = computed(() => appStore.sidebarCollapsed)
 const isDark = computed(() => appStore.isDark)
+const localeLabel = computed(() => (locale.value || 'zh').toUpperCase())
 const themeTitle = computed(() => {
-  if (appStore.theme === 'system') return t('settings.themeSystem') || '跟随系统'
-  return appStore.isDark ? (t('settings.themeLight') || '切换到亮色') : (t('settings.themeDark') || '切换到暗色')
+  if (appStore.theme === 'system') return t('settings.themeSystem')
+  return appStore.isDark ? t('settings.themeLight') : t('settings.themeDark')
 })
 const userInfo = computed(() => userStore.userInfo)
 const isAdmin = computed(() => userStore.isAdmin)
@@ -707,7 +709,7 @@ const goToResult = (item: any) => {
 
 // 通知列表 - 增强版
 interface Notification {
-  id: number
+  id: string | number
   type: 'approval' | 'reminder' | 'system' | 'renewal'
   priority: 'important' | 'normal' | 'system'
   title: string
@@ -777,7 +779,7 @@ const markAllRead = () => {
   notifications.value.forEach(n => n.unread = false)
 }
 
-const deleteNotification = (id?: number) => {
+const deleteNotification = (id?: string | number) => {
   if (id) {
     notifications.value = notifications.value.filter(n => n.id !== id)
   }
@@ -791,11 +793,28 @@ const formatTime = (date: Date) => {
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
+
+  const formatEnglishRelative = (value: number, unit: 'minute' | 'hour' | 'day') => {
+    const suffix = value === 1 ? unit : `${unit}s`
+    return `${value} ${suffix} ago`
+  }
   
-  if (minutes < 1) return locale.value === 'zh' ? '刚刚' : 'Just now'
-  if (minutes < 60) return locale.value === 'zh' ? `${minutes}分钟前` : `${minutes}m ago`
-  if (hours < 24) return locale.value === 'zh' ? `${hours}小时前` : `${hours}h ago`
-  if (days < 7) return locale.value === 'zh' ? `${days}天前` : `${days}d ago`
+  if (minutes < 1) return t('common.justNow')
+  if (minutes < 60) {
+    return locale.value === 'en'
+      ? formatEnglishRelative(minutes, 'minute')
+      : t('common.minutesAgo', { count: minutes })
+  }
+  if (hours < 24) {
+    return locale.value === 'en'
+      ? formatEnglishRelative(hours, 'hour')
+      : t('common.hoursAgo', { count: hours })
+  }
+  if (days < 7) {
+    return locale.value === 'en'
+      ? formatEnglishRelative(days, 'day')
+      : t('common.daysAgo', { count: days })
+  }
   return date.toLocaleDateString()
 }
 
@@ -849,16 +868,23 @@ const handleContextMenu = () => {}
 // 滑动删除
 const touchStartX = ref(0)
 const touchStartY = ref(0)
-const swipingNotifId = ref<number | null>(null)
+const touchEndX = ref(0)
+const touchEndY = ref(0)
+const swipingNotifId = ref<string | number | null>(null)
 
 const handleTouchStart = (event: TouchEvent, notif: Notification) => {
   touchStartX.value = event.touches[0].clientX
   touchStartY.value = event.touches[0].clientY
+  touchEndX.value = touchStartX.value
+  touchEndY.value = touchStartY.value
+  swipingNotifId.value = notif.id
 }
 
 const handleTouchMove = (event: TouchEvent) => {
   const diffX = touchStartX.value - event.touches[0].clientX
   const diffY = Math.abs(touchStartY.value - event.touches[0].clientY)
+  touchEndX.value = event.touches[0].clientX
+  touchEndY.value = event.touches[0].clientY
   
   // 只处理水平滑动
   if (diffY < 10 && diffX > 50 && swipingNotifId.value) {
@@ -867,10 +893,12 @@ const handleTouchMove = (event: TouchEvent) => {
 }
 
 const handleTouchEnd = (notif: Notification) => {
-  const diffX = touchStartX.value - 0 // reset
-  if (diffX > 100) {
+  const diffX = touchStartX.value - touchEndX.value
+  const diffY = Math.abs(touchStartY.value - touchEndY.value)
+  if (swipingNotifId.value === notif.id && diffY < 16 && diffX > 100) {
     deleteNotification(notif.id)
   }
+  swipingNotifId.value = null
 }
 
 // 通知设置
@@ -957,7 +985,7 @@ watch(() => route.path, (newPath) => {
   if (!exists) {
     visitedViews.value.push({
       path: newPath,
-      title: route.meta.title as string || '未命名'
+      title: route.meta.title as string || 'common.untitled'
     })
   }
 }, { immediate: true })
@@ -1135,6 +1163,7 @@ watch(() => route.path, (newPath) => {
         overflow: hidden;
         text-overflow: ellipsis;
         flex: 1;
+        min-width: 0;
         cursor: pointer;
       }
       
@@ -1193,6 +1222,22 @@ watch(() => route.path, (newPath) => {
           border-radius: 0 4px 4px 0;
           box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
         }
+      }
+    }
+
+    :deep(.el-sub-menu__title) {
+      min-height: 48px;
+      height: auto;
+      line-height: 20px;
+      padding-top: 10px !important;
+      padding-bottom: 10px !important;
+
+      span {
+        min-width: 0;
+        max-width: calc(100% - 36px);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     }
     
@@ -1290,7 +1335,7 @@ watch(() => route.path, (newPath) => {
       height: 34px;
       border-radius: 8px;
       border: none;
-      background: #f4f4f5;
+      background: var(--bg-hover);
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -1298,7 +1343,7 @@ watch(() => route.path, (newPath) => {
       transition: all 0.2s;
       
       &:hover {
-        background: #667eea;
+        background: var(--primary);
         color: white;
       }
     }
@@ -1337,7 +1382,7 @@ watch(() => route.path, (newPath) => {
       svg {
         width: 18px;
         height: 18px;
-        color: #52525b;
+        color: var(--text-secondary);
         transition: all 0.3s ease;
       }
       
@@ -1345,7 +1390,7 @@ watch(() => route.path, (newPath) => {
         background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
         
         svg {
-          color: #667eea;
+          color: var(--primary);
           transform: scale(1.1);
         }
         
@@ -1357,7 +1402,7 @@ watch(() => route.path, (newPath) => {
           transform: translateX(-50%);
           width: 4px;
           height: 4px;
-          background: #667eea;
+          background: var(--primary);
           border-radius: 50%;
         }
       }
@@ -1372,6 +1417,24 @@ watch(() => route.path, (newPath) => {
         &::after {
           display: none;
         }
+      }
+    }
+
+    .locale-btn {
+      gap: 4px;
+      width: auto;
+      min-width: 44px;
+      padding: 0 8px;
+
+      .locale-indicator {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        letter-spacing: 0.3px;
+      }
+
+      &:hover .locale-indicator {
+        color: var(--primary);
       }
     }
     
@@ -1395,8 +1458,8 @@ watch(() => route.path, (newPath) => {
   
   .breadcrumb-bar {
     padding: 16px 32px;
-    background: #fff;
-    border-bottom: 1px solid #e4e4e7;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
   }
   
@@ -1414,11 +1477,11 @@ watch(() => route.path, (newPath) => {
     }
     
     &::-webkit-scrollbar-thumb {
-      background: #d4d4d8;
+      background: var(--border-color);
       border-radius: 4px;
       
       &:hover {
-        background: #a1a1aa;
+        background: var(--text-placeholder);
       }
     }
   }
@@ -1427,8 +1490,8 @@ watch(() => route.path, (newPath) => {
 /* ── Tags Bar ──────────────────────────────────────── */
 .tags-bar {
   height: 44px;
-  background: #fff;
-  border-bottom: 1px solid #e4e4e7;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
   padding: 0 32px;
   display: flex;
   align-items: center;
@@ -1441,7 +1504,7 @@ watch(() => route.path, (newPath) => {
   }
   
   &::-webkit-scrollbar-thumb {
-    background: #d4d4d8;
+    background: var(--border-color);
     border-radius: 2px;
   }
   
@@ -1555,6 +1618,10 @@ watch(() => route.path, (newPath) => {
         }
       }
     }
+
+    .locale-btn .locale-indicator {
+      color: var(--text-secondary);
+    }
   }
   
   .content-wrapper {
@@ -1619,6 +1686,9 @@ watch(() => route.path, (newPath) => {
       color: var(--text-regular);
       cursor: pointer;
       white-space: nowrap;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
       transition: all 0.2s;
       border: 1px solid transparent;
       

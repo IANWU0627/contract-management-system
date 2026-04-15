@@ -65,30 +65,35 @@ CREATE INDEX IF NOT EXISTS idx_cfv_contract ON contract_field_value(contract_id)
 CREATE INDEX IF NOT EXISTS idx_cfv_field ON contract_field_value(contract_id, field_key);
 
 -- 初始化合同类型字段配置
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('PURCHASE', 'unit_price', '单价', 'Unit Price', 'currency', true, false, true, 0);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('PURCHASE', 'quantity', '数量', 'Quantity', 'number', true, false, true, 1);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('PURCHASE', 'delivery_date', '交货日期', 'Delivery Date', 'date', false, false, true, 2);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('PURCHASE', 'payment_days', '付款天数', 'Payment Days', 'number', false, false, true, 3);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('PURCHASE', 'supplier_name', '供应商名称', 'Supplier Name', 'text', true, true, true, 4);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('PURCHASE', 'contract_no', '采购合同号', 'PO Number', 'text', false, true, true, 5);
-
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('SALES', 'unit_price', '单价', 'Unit Price', 'currency', true, false, true, 0);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('SALES', 'quantity', '数量', 'Quantity', 'number', true, false, true, 1);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('SALES', 'sales_person', '销售人员', 'Sales Person', 'text', true, true, true, 2);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('SALES', 'customer_name', '客户名称', 'Customer Name', 'text', true, true, true, 3);
-
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('SERVICE', 'service_provider', '服务提供商', 'Service Provider', 'text', true, true, true, 0);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('SERVICE', 'service_level', '服务等级', 'Service Level', 'select', false, false, true, 1);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('SERVICE', 'response_time', '响应时间(小时)', 'Response Time (hours)', 'number', false, false, true, 2);
-
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('LEASE', 'property_address', '物业地址', 'Property Address', 'text', true, true, true, 0);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('LEASE', 'monthly_rent', '月租金', 'Monthly Rent', 'currency', true, true, true, 1);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('LEASE', 'deposit', '押金', 'Deposit', 'currency', false, false, true, 2);
-
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('EMPLOYMENT', 'employee_name', '员工姓名', 'Employee Name', 'text', true, true, true, 0);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('EMPLOYMENT', 'department', '部门', 'Department', 'text', false, true, true, 1);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('EMPLOYMENT', 'position', '职位', 'Position', 'text', true, true, true, 2);
-MERGE INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) KEY(contract_type, field_key) VALUES ('EMPLOYMENT', 'salary', '月薪', 'Monthly Salary', 'currency', true, true, true, 3);
+INSERT INTO contract_type_field (contract_type, field_key, field_label, field_label_en, field_type, required, show_in_list, show_in_form, field_order) VALUES
+('PURCHASE', 'unit_price', '单价', 'Unit Price', 'currency', true, false, true, 0),
+('PURCHASE', 'quantity', '数量', 'Quantity', 'number', true, false, true, 1),
+('PURCHASE', 'delivery_date', '交货日期', 'Delivery Date', 'date', false, false, true, 2),
+('PURCHASE', 'payment_days', '付款天数', 'Payment Days', 'number', false, false, true, 3),
+('PURCHASE', 'supplier_name', '供应商名称', 'Supplier Name', 'text', true, true, true, 4),
+('PURCHASE', 'contract_no', '采购合同号', 'PO Number', 'text', false, true, true, 5),
+('SALES', 'unit_price', '单价', 'Unit Price', 'currency', true, false, true, 0),
+('SALES', 'quantity', '数量', 'Quantity', 'number', true, false, true, 1),
+('SALES', 'sales_person', '销售人员', 'Sales Person', 'text', true, true, true, 2),
+('SALES', 'customer_name', '客户名称', 'Customer Name', 'text', true, true, true, 3),
+('SERVICE', 'service_provider', '服务提供商', 'Service Provider', 'text', true, true, true, 0),
+('SERVICE', 'service_level', '服务等级', 'Service Level', 'select', false, false, true, 1),
+('SERVICE', 'response_time', '响应时间(小时)', 'Response Time (hours)', 'number', false, false, true, 2),
+('LEASE', 'property_address', '物业地址', 'Property Address', 'text', true, true, true, 0),
+('LEASE', 'monthly_rent', '月租金', 'Monthly Rent', 'currency', true, true, true, 1),
+('LEASE', 'deposit', '押金', 'Deposit', 'currency', false, false, true, 2),
+('EMPLOYMENT', 'employee_name', '员工姓名', 'Employee Name', 'text', true, true, true, 0),
+('EMPLOYMENT', 'department', '部门', 'Department', 'text', false, true, true, 1),
+('EMPLOYMENT', 'position', '职位', 'Position', 'text', true, true, true, 2),
+('EMPLOYMENT', 'salary', '月薪', 'Monthly Salary', 'currency', true, true, true, 3)
+ON DUPLICATE KEY UPDATE
+field_label = VALUES(field_label),
+field_label_en = VALUES(field_label_en),
+field_type = VALUES(field_type),
+required = VALUES(required),
+show_in_list = VALUES(show_in_list),
+show_in_form = VALUES(show_in_form),
+field_order = VALUES(field_order);
 
 -- 检查 contract_tag_relation 表是否存在，不存在则创建
 CREATE TABLE IF NOT EXISTS contract_tag_relation (
@@ -114,5 +119,105 @@ CREATE TABLE IF NOT EXISTS approval_record (
 CREATE INDEX IF NOT EXISTS idx_approval_contract ON approval_record(contract_id);
 CREATE INDEX IF NOT EXISTS idx_approval_approver ON approval_record(approver_id);
 CREATE INDEX IF NOT EXISTS idx_approval_create ON approval_record(create_time);
+
+-- 用户会话表索引（会话校验/超时判断的关键路径）
+CREATE INDEX IF NOT EXISTS idx_user_session_user_id ON user_session(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_session_last_active ON user_session(last_active_time);
+CREATE INDEX IF NOT EXISTS idx_user_session_token ON user_session(token(191));
+
+-- reminder_rule 字段兼容（历史字段 enabled/remind_type 与当前业务字段并存）
+ALTER TABLE reminder_rule ADD COLUMN IF NOT EXISTS contract_type VARCHAR(255);
+ALTER TABLE reminder_rule ADD COLUMN IF NOT EXISTS min_amount DECIMAL(18,2);
+ALTER TABLE reminder_rule ADD COLUMN IF NOT EXISTS max_amount DECIMAL(18,2);
+ALTER TABLE reminder_rule ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT TRUE;
+ALTER TABLE reminder_rule ADD COLUMN IF NOT EXISTS creator_id BIGINT;
+ALTER TABLE reminder_rule ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE;
+
+UPDATE reminder_rule SET is_enabled = enabled WHERE is_enabled IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_reminder_rule_enabled ON reminder_rule(is_enabled);
+CREATE INDEX IF NOT EXISTS idx_reminder_rule_creator ON reminder_rule(creator_id);
+CREATE INDEX IF NOT EXISTS idx_reminder_rule_contract_type ON reminder_rule(contract_type(50));
+
+-- contract 字段兼容（实体已使用这些字段，旧库缺失会触发 500）
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS template_variables TEXT;
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS dynamic_field_values TEXT;
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS template_id BIGINT;
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS content_mode VARCHAR(32);
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS starred BOOLEAN DEFAULT FALSE;
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS timezone VARCHAR(64);
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'CNY';
+
+-- contract_category 字段兼容（前台分类接口依赖）
+ALTER TABLE contract_category ADD COLUMN IF NOT EXISTS name_en VARCHAR(100);
+ALTER TABLE contract_category ADD COLUMN IF NOT EXISTS icon VARCHAR(100);
+ALTER TABLE contract_category ADD COLUMN IF NOT EXISTS color VARCHAR(50);
+ALTER TABLE contract_category ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
+ALTER TABLE contract_category ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- contract_folder 字段兼容（文件夹管理接口依赖）
+ALTER TABLE contract_folder ADD COLUMN IF NOT EXISTS description VARCHAR(255);
+ALTER TABLE contract_folder ADD COLUMN IF NOT EXISTS color VARCHAR(50);
+ALTER TABLE contract_folder ADD COLUMN IF NOT EXISTS created_by BIGINT;
+ALTER TABLE contract_folder ADD COLUMN IF NOT EXISTS created_by_name VARCHAR(100);
+
+-- contract_renewal 字段兼容（续约管理接口依赖）
+ALTER TABLE contract_renewal ADD COLUMN IF NOT EXISTS old_end_date DATE;
+ALTER TABLE contract_renewal ADD COLUMN IF NOT EXISTS renewal_type VARCHAR(50);
+ALTER TABLE contract_renewal ADD COLUMN IF NOT EXISTS status VARCHAR(20);
+ALTER TABLE contract_renewal ADD COLUMN IF NOT EXISTS remark TEXT;
+
+-- contract_template 字段兼容（模板管理接口依赖）
+ALTER TABLE contract_template ADD COLUMN IF NOT EXISTS description VARCHAR(255);
+
+-- contract_version 字段兼容（合同创建后版本记录依赖）
+ALTER TABLE contract_version ADD COLUMN IF NOT EXISTS attachments TEXT;
+
+-- contract_change_log 字段兼容（合同变更日志实体依赖）
+ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS field_name VARCHAR(100);
+ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS old_value TEXT;
+ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS new_value TEXT;
+ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS remark TEXT;
+
+-- contract_tag 字段兼容（标签管理接口依赖）
+ALTER TABLE contract_tag ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
+
+-- contract_attachment 字段兼容（合同提交时批量附件保存依赖）
+ALTER TABLE contract_attachment ADD COLUMN IF NOT EXISTS description VARCHAR(255);
+ALTER TABLE contract_attachment ADD COLUMN IF NOT EXISTS file_category VARCHAR(20) DEFAULT 'support';
+ALTER TABLE contract_attachment MODIFY COLUMN file_type VARCHAR(255);
+
+-- contract_counterparty 字段兼容（创建/更新合同时同步落独立表依赖）
+ALTER TABLE contract_counterparty ADD COLUMN IF NOT EXISTS contract_id BIGINT;
+ALTER TABLE contract_counterparty ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'partyA';
+ALTER TABLE contract_counterparty ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(20);
+ALTER TABLE contract_counterparty ADD COLUMN IF NOT EXISTS contact_email VARCHAR(100);
+ALTER TABLE contract_counterparty ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+ALTER TABLE contract_counterparty ADD COLUMN IF NOT EXISTS create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE contract_counterparty ADD COLUMN IF NOT EXISTS update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- user 字段兼容（头像支持 data URL/base64，避免长度不足）
+ALTER TABLE user MODIFY COLUMN avatar LONGTEXT;
+
+-- quick_code_header 字段兼容（合同类型字段配置/模板变量管理依赖）
+ALTER TABLE quick_code_header ADD COLUMN IF NOT EXISTS name_en VARCHAR(100);
+ALTER TABLE quick_code_header ADD COLUMN IF NOT EXISTS description_en VARCHAR(255);
+ALTER TABLE quick_code_header ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- quick_code_item 字段兼容（快速代码明细读写依赖）
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS meaning VARCHAR(100);
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS meaning_en VARCHAR(100);
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS description VARCHAR(255);
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS description_en VARCHAR(255);
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS tag VARCHAR(100);
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS valid_from DATE;
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS valid_to DATE;
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE;
+ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- 初始化数据去重约束（保证 INSERT IGNORE 幂等）
+ALTER TABLE contract_type_field ADD UNIQUE INDEX uk_contract_type_field_type_key (contract_type, field_key);
+ALTER TABLE role_permission ADD UNIQUE INDEX uk_role_permission_pair (role_id, permission_id);
+ALTER TABLE quick_code_item ADD UNIQUE INDEX uk_quick_code_item_header_code (header_id, code);
 
 SELECT 'Database migration completed successfully!' AS status;

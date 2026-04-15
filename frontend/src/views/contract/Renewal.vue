@@ -23,7 +23,7 @@
         </div>
         <div class="filter-item" style="width: 160px;">
           <el-select v-model="query.status" clearable :placeholder="$t('contract.status')" @change="fetchRenewals">
-            <el-option label="全部" value="" />
+            <el-option :label="$t('common.all')" value="" />
             <el-option :label="$t('contract.statuses.pending')" value="PENDING" />
             <el-option :label="$t('contract.statuses.approved')" value="APPROVED" />
             <el-option :label="$t('contract.statuses.rejected')" value="REJECTED" />
@@ -387,6 +387,9 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
     
     .page-title {
       font-size: 24px;
@@ -396,6 +399,10 @@ onMounted(() => {
       -webkit-text-fill-color: transparent;
       background-clip: text;
       margin: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 }
@@ -428,10 +435,12 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .filter-item-wide {
   flex: 1;
+  min-width: 240px;
   
   :deep(.el-input__wrapper) {
     border-radius: 8px;
@@ -442,6 +451,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .renewal-card {
@@ -453,6 +463,13 @@ onMounted(() => {
     display: flex;
     justify-content: flex-end;
     padding: 16px 0;
+    min-width: 0;
+  }
+
+  :deep(.el-table th .cell) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 </style>

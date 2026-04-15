@@ -321,6 +321,7 @@ public class ContractController {
     }
     
     @PostMapping
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     @SuppressWarnings("unchecked")
     public ApiResponse<Map<String, Object>> create(@RequestBody Map<String, Object> contractMap) {
         // 调用Service层创建合同
@@ -577,7 +578,9 @@ public class ContractController {
                         Map<?, ?> message = (Map<?, ?>) choice.get("message");
                         String aiContent = (String) message.get("content");
                         
-                        return ApiResponse.success(parseAiResponse(aiContent));
+                        Map<String, Object> parsedResult = parseAiResponse(aiContent);
+                        enrichAiResult(contract, parsedResult);
+                        return ApiResponse.success(parsedResult);
                     }
                 }
             } catch (Exception e) {
@@ -611,15 +614,27 @@ public class ContractController {
         sb.append("结束日期：").append(contract.getEndDate()).append("\n\n");
         
         if (contract.getContent() != null && !contract.getContent().isEmpty()) {
-            sb.append("合同内容：\n").append(contract.getContent().substring(0, Math.min(2000, contract.getContent().length())));
+            String plainContent = contract.getContent()
+                    .replaceAll("<[^>]+>", " ")
+                    .replaceAll("&nbsp;", " ")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            sb.append("合同内容：\n").append(plainContent.substring(0, Math.min(6000, plainContent.length())));
         }
         
         sb.append("\n\n请按照以下JSON格式返回分析结果（只返回JSON，不要其他内容）：\n");
         sb.append("{\n");
-        sb.append("  \"summary\": \"合同概述（50字以内）\",\n");
+        sb.append("  \"summary\": \"合同概述（100字以内）\",\n");
         sb.append("  \"score\": 风险评分（0-100的整数）,\n");
-        sb.append("  \"risks\": [\"风险点1\", \"风险点2\", \"风险点3\"],\n");
-        sb.append("  \"suggestions\": [\"建议1\", \"建议2\"]\n");
+        sb.append("  \"risks\": [\"风险点1\", \"风险点2\", \"风险点3\", \"风险点4\"],\n");
+        sb.append("  \"suggestions\": [\"建议1\", \"建议2\", \"建议3\"],\n");
+        sb.append("  \"keyInfo\": {\n");
+        sb.append("    \"partyA\": \"甲方\",\n");
+        sb.append("    \"partyB\": \"乙方\",\n");
+        sb.append("    \"amount\": \"金额\",\n");
+        sb.append("    \"duration\": \"有效期\",\n");
+        sb.append("    \"keyClauses\": [\"关键条款1\", \"关键条款2\", \"关键条款3\"]\n");
+        sb.append("  }\n");
         sb.append("}");
         
         return sb.toString();
@@ -637,6 +652,8 @@ public class ContractController {
                 result.put("score", parsed.getOrDefault("score", 75));
                 result.put("risks", parsed.getOrDefault("risks", Arrays.asList("未发现明显风险")));
                 result.put("suggestions", parsed.getOrDefault("suggestions", Arrays.asList("建议仔细阅读合同条款")));
+                Object keyInfo = parsed.get("keyInfo");
+                result.put("keyInfo", keyInfo instanceof Map ? keyInfo : new HashMap<String, Object>());
                 return result;
             }
         } catch (Exception e) {
@@ -647,7 +664,39 @@ public class ContractController {
         result.put("score", 75);
         result.put("risks", Arrays.asList("请人工审核合同条款"));
         result.put("suggestions", Arrays.asList("建议与法务团队确认关键条款"));
+        result.put("keyInfo", new HashMap<String, Object>());
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void enrichAiResult(Contract contract, Map<String, Object> result) {
+        Map<String, Object> keyInfo;
+        Object keyInfoObj = result.get("keyInfo");
+        if (keyInfoObj instanceof Map<?, ?>) {
+            keyInfo = (Map<String, Object>) keyInfoObj;
+        } else {
+            keyInfo = new HashMap<>();
+        }
+
+        String counterparty = contract.getCounterparty() != null ? contract.getCounterparty() : "";
+        String[] parties = counterparty.split("\\s*/\\s*");
+        keyInfo.putIfAbsent("partyA", parties.length > 0 ? parties[0] : "");
+        keyInfo.putIfAbsent("partyB", parties.length > 1 ? parties[1] : "");
+        keyInfo.putIfAbsent("amount", contract.getAmount() != null ? contract.getAmount().toString() : "");
+        keyInfo.putIfAbsent("duration", String.format("%s ~ %s",
+                contract.getStartDate() != null ? contract.getStartDate() : "",
+                contract.getEndDate() != null ? contract.getEndDate() : ""));
+
+        Object clausesObj = keyInfo.get("keyClauses");
+        if (!(clausesObj instanceof List<?>)) {
+            Object topLevelClauses = result.get("keyClauses");
+            if (topLevelClauses instanceof List<?>) {
+                keyInfo.put("keyClauses", topLevelClauses);
+            } else {
+                keyInfo.put("keyClauses", new ArrayList<>());
+            }
+        }
+        result.put("keyInfo", keyInfo);
     }
     
     private String extractJson(String content) {
@@ -1205,6 +1254,7 @@ public class ContractController {
     }
     
     @PostMapping("/generate-pdf")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public void generatePdf(@RequestBody Map<String, Object> data, HttpServletResponse response) throws Exception {
         String content = (String) data.get("content");
         String contractNo = (String) data.getOrDefault("contractNo", "contract");

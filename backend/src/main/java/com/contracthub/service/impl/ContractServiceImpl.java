@@ -1,10 +1,12 @@
 package com.contracthub.service.impl;
 
 import com.contracthub.entity.Contract;
+import com.contracthub.entity.ContractCounterparty;
 import com.contracthub.entity.ContractFieldValue;
 import com.contracthub.entity.ContractTypeField;
 import com.contracthub.entity.User;
 import com.contracthub.entity.ApprovalRecord;
+import com.contracthub.mapper.ContractCounterpartyMapper;
 import com.contracthub.mapper.ContractMapper;
 import com.contracthub.mapper.ContractFieldValueMapper;
 import com.contracthub.mapper.ContractTagMapper;
@@ -21,6 +23,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,8 +33,10 @@ import java.util.*;
 
 @Service
 public class ContractServiceImpl implements ContractService {
+    private static final int CONTRACT_NO_RETRY_TIMES = 5;
 
     private final ContractMapper contractMapper;
+    private final ContractCounterpartyMapper counterpartyMapper;
     private final ContractFieldValueMapper fieldValueMapper;
     private final ContractTagMapper tagMapper;
     private final ContractTypeFieldMapper typeFieldMapper;
@@ -44,6 +49,7 @@ public class ContractServiceImpl implements ContractService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ContractServiceImpl(ContractMapper contractMapper,
+                                ContractCounterpartyMapper counterpartyMapper,
                                 ContractFieldValueMapper fieldValueMapper,
                                 ContractTagMapper tagMapper,
                                 ContractTypeFieldMapper typeFieldMapper,
@@ -54,6 +60,7 @@ public class ContractServiceImpl implements ContractService {
                                 ContractVersionService contractVersionService,
                                 ContractChangeLogService contractChangeLogService) {
         this.contractMapper = contractMapper;
+        this.counterpartyMapper = counterpartyMapper;
         this.fieldValueMapper = fieldValueMapper;
         this.tagMapper = tagMapper;
         this.typeFieldMapper = typeFieldMapper;
@@ -163,7 +170,7 @@ public class ContractServiceImpl implements ContractService {
     @Transactional
     public Contract createContract(Map<String, Object> contractMap) {
         Contract contract = new Contract();
-        contract.setContractNo(contractNumberService.generateNextContractNo());
+        assignNextContractNo(contract);
         contract.setTitle((String) contractMap.get("title"));
         contract.setType((String) contractMap.get("type"));
         contract.setRemark((String) contractMap.get("remark"));
@@ -192,6 +199,10 @@ public class ContractServiceImpl implements ContractService {
         if (contract.getCounterparty() == null && contractMap.containsKey("counterparty")) {
             contract.setCounterparty((String) contractMap.get("counterparty"));
         }
+        // 数据库中 counterparty 为 NOT NULL，前端传空列表时兜底为空串避免 500。
+        if (contract.getCounterparty() == null) {
+            contract.setCounterparty("");
+        }
         
         // 处理金额
         Object amountObj = contractMap.get("amount");
@@ -202,6 +213,7 @@ public class ContractServiceImpl implements ContractService {
                 contract.setAmount(new java.math.BigDecimal((String) amountObj));
             }
         }
+        contract.setCurrency((String) contractMap.getOrDefault("currency", "CNY"));
         
         // 处理日期
         Object startDateObj = contractMap.get("startDate");
@@ -292,20 +304,25 @@ public class ContractServiceImpl implements ContractService {
         contract.setCreateTime(LocalDateTime.now());
         contract.setUpdateTime(LocalDateTime.now());
         
-        contractMapper.insert(contract);
+        insertContractWithRetry(contract);
+
+        // 同步保存相对方到独立表（contract_counterparty）
+        saveCounterpartiesToTable(contract.getId(), resolveCounterparties(counterpartiesList, contract.getCounterparty()));
         
-        // 保存动态字段值
-        if (contractMap.containsKey("dynamicFields")) {
-            Object dynamicFieldsObj = contractMap.get("dynamicFields");
-            if (dynamicFieldsObj instanceof Map) {
-                Map<String, Object> dynamicFields = (Map<String, Object>) dynamicFieldsObj;
-                for (Map.Entry<String, Object> entry : dynamicFields.entrySet()) {
-                    ContractFieldValue fv = new ContractFieldValue();
-                    fv.setContractId(contract.getId());
-                    fv.setFieldKey(entry.getKey());
-                    fv.setFieldValue(entry.getValue() != null ? entry.getValue().toString() : null);
-                    fieldValueMapper.insert(fv);
-                }
+        Map<String, Object> dynamicFields = resolveDynamicFields(contractMap);
+        if (!dynamicFields.isEmpty()) {
+            try {
+                contract.setDynamicFieldValues(objectMapper.writeValueAsString(dynamicFields));
+                contractMapper.updateById(contract);
+            } catch (Exception ignored) {
+                // Keep create flow resilient even if JSON serialization fails.
+            }
+            for (Map.Entry<String, Object> entry : dynamicFields.entrySet()) {
+                ContractFieldValue fv = new ContractFieldValue();
+                fv.setContractId(contract.getId());
+                fv.setFieldKey(entry.getKey());
+                fv.setFieldValue(entry.getValue() != null ? entry.getValue().toString() : null);
+                fieldValueMapper.insert(fv);
             }
         }
         
@@ -357,6 +374,7 @@ public class ContractServiceImpl implements ContractService {
         oldContract.setCounterparty(contract.getCounterparty());
         oldContract.setCounterparties(contract.getCounterparties());
         oldContract.setAmount(contract.getAmount());
+        oldContract.setCurrency(contract.getCurrency());
         oldContract.setStartDate(contract.getStartDate());
         oldContract.setEndDate(contract.getEndDate());
         oldContract.setStatus(contract.getStatus());
@@ -413,6 +431,9 @@ public class ContractServiceImpl implements ContractService {
                     contract.setAmount(new java.math.BigDecimal((String) amountObj));
                 }
             }
+        }
+        if (contractMap.containsKey("currency")) {
+            contract.setCurrency((String) contractMap.get("currency"));
         }
         
         // 处理日期
@@ -505,24 +526,33 @@ public class ContractServiceImpl implements ContractService {
         
         contract.setUpdateTime(LocalDateTime.now());
         
-        // 保存到数据库
-        contractMapper.updateById(contract);
+        // 相对方字段有变化时，同步更新独立表（contract_counterparty）
+        if (contractMap.containsKey("counterparties") || contractMap.containsKey("counterparty")) {
+            saveCounterpartiesToTable(id, resolveCounterparties(counterpartiesList, contract.getCounterparty()));
+        }
         
-        // 更新动态字段值
-        if (contractMap.containsKey("dynamicFields")) {
-            Object dynamicFieldsObj = contractMap.get("dynamicFields");
-            if (dynamicFieldsObj instanceof Map) {
-                Map<String, Object> dynamicFields = (Map<String, Object>) dynamicFieldsObj;
-                // 先删除旧的动态字段
-                fieldValueMapper.deleteByContractId(id);
-                // 插入新的动态字段
-                for (Map.Entry<String, Object> entry : dynamicFields.entrySet()) {
-                    ContractFieldValue fv = new ContractFieldValue();
-                    fv.setContractId(id);
-                    fv.setFieldKey(entry.getKey());
-                    fv.setFieldValue(entry.getValue() != null ? entry.getValue().toString() : null);
-                    fieldValueMapper.insert(fv);
-                }
+        Map<String, Object> dynamicFields = resolveDynamicFields(contractMap);
+        if (!dynamicFields.isEmpty()) {
+            try {
+                contract.setDynamicFieldValues(objectMapper.writeValueAsString(dynamicFields));
+            } catch (Exception ignored) {
+                // Keep update flow resilient even if JSON serialization fails.
+            }
+        } else if (contractMap.containsKey("dynamicFields") || contractMap.containsKey("dynamicFieldValues")) {
+            contract.setDynamicFieldValues("{}");
+        }
+        contractMapper.updateById(contract);
+
+        if (contractMap.containsKey("dynamicFields") || contractMap.containsKey("dynamicFieldValues")) {
+            // 先删除旧的动态字段
+            fieldValueMapper.deleteByContractId(id);
+            // 插入新的动态字段
+            for (Map.Entry<String, Object> entry : dynamicFields.entrySet()) {
+                ContractFieldValue fv = new ContractFieldValue();
+                fv.setContractId(id);
+                fv.setFieldKey(entry.getKey());
+                fv.setFieldValue(entry.getValue() != null ? entry.getValue().toString() : null);
+                fieldValueMapper.insert(fv);
             }
         }
         
@@ -884,12 +914,13 @@ public class ContractServiceImpl implements ContractService {
         
         // 创建新合同
         Contract newContract = new Contract();
-        newContract.setContractNo(contractNumberService.generateNextContractNo());
+        assignNextContractNo(newContract);
         newContract.setTitle(originalContract.getTitle() + " (副本)");
         newContract.setType(originalContract.getType());
         newContract.setCounterparty(originalContract.getCounterparty());
         newContract.setCounterparties(originalContract.getCounterparties());
         newContract.setAmount(originalContract.getAmount());
+        newContract.setCurrency(originalContract.getCurrency());
         newContract.setStartDate(originalContract.getStartDate());
         newContract.setEndDate(originalContract.getEndDate());
         newContract.setStatus("DRAFT");
@@ -904,7 +935,7 @@ public class ContractServiceImpl implements ContractService {
         newContract.setCreateTime(LocalDateTime.now());
         newContract.setUpdateTime(LocalDateTime.now());
         
-        contractMapper.insert(newContract);
+        insertContractWithRetry(newContract);
         
         // 复制动态字段值
         List<ContractFieldValue> fieldValues = fieldValueMapper.selectByContractId(id);
@@ -946,6 +977,24 @@ public class ContractServiceImpl implements ContractService {
         
         return newContract;
     }
+
+    private void assignNextContractNo(Contract contract) {
+        contract.setContractNo(contractNumberService.generateNextContractNo());
+    }
+
+    private void insertContractWithRetry(Contract contract) {
+        for (int i = 0; i < CONTRACT_NO_RETRY_TIMES; i++) {
+            try {
+                contractMapper.insert(contract);
+                return;
+            } catch (DuplicateKeyException e) {
+                if (i == CONTRACT_NO_RETRY_TIMES - 1) {
+                    throw new RuntimeException("合同编号生成冲突，请稍后重试", e);
+                }
+                assignNextContractNo(contract);
+            }
+        }
+    }
     
     // 辅助方法：通知审批者
     private void notifyApprovers(Contract contract) {
@@ -981,6 +1030,7 @@ public class ContractServiceImpl implements ContractService {
         result.put("type", contract.getType());
         result.put("counterparty", contract.getCounterparty());
         result.put("amount", contract.getAmount());
+        result.put("currency", contract.getCurrency());
         result.put("startDate", contract.getStartDate());
         result.put("endDate", contract.getEndDate());
         result.put("status", contract.getStatus());
@@ -990,40 +1040,15 @@ public class ContractServiceImpl implements ContractService {
         result.put("createdBy", "admin");
         result.put("createdAt", contract.getCreateTime());
         result.put("updatedAt", contract.getUpdateTime());
+        result.put("timezone", contract.getTimezone());
         result.put("creatorId", contract.getCreatorId());
         result.put("folderId", contract.getFolderId());
         result.put("templateId", contract.getTemplateId());
         result.put("contentMode", contract.getContentMode());
         result.put("templateVariables", contract.getTemplateVariables());
         
-        // 添加相对方列表
-        List<Map<String, Object>> counterparties = new ArrayList<>();
-        if (contract.getCounterparties() != null && !contract.getCounterparties().isEmpty()) {
-            try {
-                counterparties = objectMapper.readValue(contract.getCounterparties(), new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
-            } catch (Exception e) {
-                // 如果解析失败，使用旧的counterparty字段
-                if (contract.getCounterparty() != null && !contract.getCounterparty().isEmpty()) {
-                    Map<String, Object> cp = new HashMap<>();
-                    cp.put("type", "partyA");
-                    cp.put("name", contract.getCounterparty());
-                    cp.put("contact", "");
-                    cp.put("phone", "");
-                    cp.put("email", "");
-                    counterparties.add(cp);
-                }
-            }
-        } else if (contract.getCounterparty() != null && !contract.getCounterparty().isEmpty()) {
-            // 兼容旧数据
-            Map<String, Object> cp = new HashMap<>();
-            cp.put("type", "partyA");
-            cp.put("name", contract.getCounterparty());
-            cp.put("contact", "");
-            cp.put("phone", "");
-            cp.put("email", "");
-            counterparties.add(cp);
-        }
-        result.put("counterparties", counterparties);
+        // 添加相对方列表：优先读取独立表，兼容历史 JSON/单字段
+        result.put("counterparties", loadCounterpartiesAsMaps(contract));
         
         // 添加附件列表
         result.put("attachments", processAttachments(contract));
@@ -1130,5 +1155,116 @@ public class ContractServiceImpl implements ContractService {
             }
         }
         return result.toString();
+    }
+
+    private Map<String, Object> resolveDynamicFields(Map<String, Object> contractMap) {
+        Object dynamicFieldsObj = contractMap.get("dynamicFields");
+        if (dynamicFieldsObj instanceof Map<?, ?> mapObj) {
+            Map<String, Object> result = new HashMap<>();
+            for (Map.Entry<?, ?> entry : mapObj.entrySet()) {
+                if (entry.getKey() != null) {
+                    result.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+            return result;
+        }
+
+        Object dynamicFieldValuesObj = contractMap.get("dynamicFieldValues");
+        if (dynamicFieldValuesObj instanceof Map<?, ?> mapObj) {
+            Map<String, Object> result = new HashMap<>();
+            for (Map.Entry<?, ?> entry : mapObj.entrySet()) {
+                if (entry.getKey() != null) {
+                    result.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+            return result;
+        }
+        if (dynamicFieldValuesObj instanceof String valuesStr && !valuesStr.isBlank()) {
+            try {
+                return objectMapper.readValue(valuesStr, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception ignored) {
+                return new HashMap<>();
+            }
+        }
+        return new HashMap<>();
+    }
+
+    private List<Map<String, Object>> resolveCounterparties(List<Map<String, Object>> counterpartiesList, String legacyCounterparty) {
+        if (counterpartiesList != null) {
+            return counterpartiesList;
+        }
+        List<Map<String, Object>> resolved = new ArrayList<>();
+        if (legacyCounterparty != null && !legacyCounterparty.isBlank()) {
+            Map<String, Object> cp = new HashMap<>();
+            cp.put("type", "partyA");
+            cp.put("name", legacyCounterparty);
+            cp.put("contact", "");
+            cp.put("phone", "");
+            cp.put("email", "");
+            cp.put("address", "");
+            resolved.add(cp);
+        }
+        return resolved;
+    }
+
+    private void saveCounterpartiesToTable(Long contractId, List<Map<String, Object>> counterparties) {
+        QueryWrapper<ContractCounterparty> wrapper = new QueryWrapper<>();
+        wrapper.eq("contract_id", contractId);
+        counterpartyMapper.delete(wrapper);
+
+        if (counterparties == null || counterparties.isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < counterparties.size(); i++) {
+            Map<String, Object> cpMap = counterparties.get(i);
+            ContractCounterparty cp = new ContractCounterparty();
+            cp.setContractId(contractId);
+            cp.setSortOrder(i);
+            cp.setType((String) cpMap.getOrDefault("type", "partyA"));
+            cp.setName((String) cpMap.getOrDefault("name", ""));
+            cp.setContactPerson((String) cpMap.getOrDefault("contact", cpMap.getOrDefault("contactPerson", "")));
+            cp.setContactPhone((String) cpMap.getOrDefault("phone", cpMap.getOrDefault("contactPhone", "")));
+            cp.setContactEmail((String) cpMap.getOrDefault("email", cpMap.getOrDefault("contactEmail", "")));
+            cp.setAddress((String) cpMap.getOrDefault("address", ""));
+            counterpartyMapper.insert(cp);
+        }
+    }
+
+    private List<Map<String, Object>> loadCounterpartiesAsMaps(Contract contract) {
+        List<ContractCounterparty> cpRows = counterpartyMapper.selectByContractId(contract.getId());
+        if (cpRows != null && !cpRows.isEmpty()) {
+            List<Map<String, Object>> counterparties = new ArrayList<>();
+            for (ContractCounterparty row : cpRows) {
+                Map<String, Object> cp = new HashMap<>();
+                cp.put("type", row.getType());
+                cp.put("name", row.getName());
+                cp.put("contact", row.getContactPerson());
+                cp.put("phone", row.getContactPhone());
+                cp.put("email", row.getContactEmail());
+                cp.put("address", row.getAddress());
+                counterparties.add(cp);
+            }
+            return counterparties;
+        }
+
+        List<Map<String, Object>> counterparties = new ArrayList<>();
+        if (contract.getCounterparties() != null && !contract.getCounterparties().isEmpty()) {
+            try {
+                return objectMapper.readValue(contract.getCounterparties(), new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+            } catch (Exception ignored) {
+                // ignore and fallback to legacy field
+            }
+        }
+        if (contract.getCounterparty() != null && !contract.getCounterparty().isEmpty()) {
+            Map<String, Object> cp = new HashMap<>();
+            cp.put("type", "partyA");
+            cp.put("name", contract.getCounterparty());
+            cp.put("contact", "");
+            cp.put("phone", "");
+            cp.put("email", "");
+            counterparties.add(cp);
+        }
+        return counterparties;
     }
 }

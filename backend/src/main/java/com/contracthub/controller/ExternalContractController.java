@@ -3,7 +3,9 @@ package com.contracthub.controller;
 import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.Contract;
 import com.contracthub.service.ContractService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -23,10 +25,13 @@ import java.util.*;
 public class ExternalContractController {
 
     private final ContractService contractService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final String externalApiKey;
 
-    public ExternalContractController(ContractService contractService) {
+    public ExternalContractController(
+            ContractService contractService,
+            @Value("${external.api-key:${EXTERNAL_API_KEY:}}") String externalApiKey) {
         this.contractService = contractService;
+        this.externalApiKey = externalApiKey;
     }
 
     /**
@@ -85,7 +90,12 @@ public class ExternalContractController {
      * * - counterparties: 相对方列表（可选）
      */
     @PostMapping
-    public ApiResponse<Map<String, Object>> createContract(@RequestBody Map<String, Object> contractMap) {
+    public ApiResponse<Map<String, Object>> createContract(
+            @RequestBody Map<String, Object> contractMap,
+            HttpServletRequest request) {
+        if (!isExternalRequestAuthorized(request)) {
+            return ApiResponse.error("未授权访问外部合同接口");
+        }
         try {
             // 如果没有提供合同编号，自动生成
             if (!contractMap.containsKey("contractNo") || contractMap.get("contractNo") == null) {
@@ -131,7 +141,12 @@ public class ExternalContractController {
      * }
      */
     @PostMapping("/batch")
-    public ApiResponse<Map<String, Object>> batchCreateContracts(@RequestBody Map<String, Object> request) {
+    public ApiResponse<Map<String, Object>> batchCreateContracts(
+            @RequestBody Map<String, Object> request,
+            HttpServletRequest httpServletRequest) {
+        if (!isExternalRequestAuthorized(httpServletRequest)) {
+            return ApiResponse.error("未授权访问外部合同接口");
+        }
         try {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> contractsData = 
@@ -194,7 +209,11 @@ public class ExternalContractController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int pageSize) {
+            @RequestParam(defaultValue = "10") int pageSize,
+            HttpServletRequest request) {
+        if (!isExternalRequestAuthorized(request)) {
+            return ApiResponse.error("未授权访问外部合同接口");
+        }
         try {
             Map<String, Object> params = new HashMap<>();
             params.put("title", title);
@@ -226,7 +245,12 @@ public class ExternalContractController {
      * 查询单个合同详情
      */
     @GetMapping("/{id}")
-    public ApiResponse<Map<String, Object>> getContractDetail(@PathVariable Long id) {
+    public ApiResponse<Map<String, Object>> getContractDetail(
+            @PathVariable Long id,
+            HttpServletRequest request) {
+        if (!isExternalRequestAuthorized(request)) {
+            return ApiResponse.error("未授权访问外部合同接口");
+        }
         try {
             Contract contract = contractService.getContractById(id);
             if (contract == null) {
@@ -246,7 +270,11 @@ public class ExternalContractController {
     @PutMapping("/{id}")
     public ApiResponse<Map<String, Object>> updateContract(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> contractMap) {
+            @RequestBody Map<String, Object> contractMap,
+            HttpServletRequest request) {
+        if (!isExternalRequestAuthorized(request)) {
+            return ApiResponse.error("未授权访问外部合同接口");
+        }
         try {
             Contract contract = contractService.updateContract(id, contractMap);
             Map<String, Object> result = contractService.buildContractResponse(contract);
@@ -260,7 +288,12 @@ public class ExternalContractController {
      * 删除合同接口
      */
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteContract(@PathVariable Long id) {
+    public ApiResponse<Void> deleteContract(
+            @PathVariable Long id,
+            HttpServletRequest request) {
+        if (!isExternalRequestAuthorized(request)) {
+            return ApiResponse.error("未授权访问外部合同接口");
+        }
         try {
             contractService.deleteContract(id);
             return ApiResponse.success(null);
@@ -273,7 +306,10 @@ public class ExternalContractController {
      * 获取下一个合同编号
      */
     @GetMapping("/next-number")
-    public ApiResponse<Map<String, Object>> getNextContractNumber() {
+    public ApiResponse<Map<String, Object>> getNextContractNumber(HttpServletRequest request) {
+        if (!isExternalRequestAuthorized(request)) {
+            return ApiResponse.error("未授权访问外部合同接口");
+        }
         try {
             // 这里可以调用合同编号生成服务
             // String contractNo = contractNumberService.generateNextContractNo();
@@ -298,5 +334,19 @@ public class ExternalContractController {
         result.put("service", "External Contract API");
         result.put("version", "1.0.0");
         return ApiResponse.success(result);
+    }
+
+    private boolean isExternalRequestAuthorized(HttpServletRequest request) {
+        if (!StringUtils.hasText(externalApiKey)) {
+            return false;
+        }
+        String requestApiKey = request.getHeader("X-API-Key");
+        if (!StringUtils.hasText(requestApiKey)) {
+            String authHeader = request.getHeader("Authorization");
+            if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+                requestApiKey = authHeader.substring(7);
+            }
+        }
+        return StringUtils.hasText(requestApiKey) && externalApiKey.equals(requestApiKey);
     }
 }

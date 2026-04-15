@@ -10,4 +10,7 @@ public interface UserMapper extends BaseMapper<User> {
     
     @Select("SELECT COUNT(*) FROM `user` WHERE role = (SELECT code FROM role WHERE id = #{roleId})")
     int countByRoleId(Long roleId);
+
+    @Select("SELECT * FROM `user` WHERE username = #{username} LIMIT 1")
+    User selectByUsername(String username);
 }

@@ -29,6 +29,24 @@
             <el-form-item :label="t('settings.systemName')">
               <el-input v-model="systemName" style="width: 300px" />
             </el-form-item>
+
+            <el-divider content-position="left">{{ t('settings.dataBackup') }}</el-divider>
+
+            <el-alert
+              :title="t('settings.dataBackupStatusTitle')"
+              :description="t('settings.dataBackupStatusDesc')"
+              type="warning"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 16px"
+            />
+
+            <el-form-item :label="t('settings.exportData')">
+              <el-tag type="info">{{ t('settings.comingSoon') }}</el-tag>
+            </el-form-item>
+            <el-form-item :label="t('settings.importData')">
+              <el-tag type="info">{{ t('settings.comingSoon') }}</el-tag>
+            </el-form-item>
             
             <el-form-item>
               <el-button type="primary" @click="handleSaveBasic">{{ t('settings.saveSettings') }}</el-button>
@@ -41,6 +59,31 @@
       <el-tab-pane :label="t('settings.notificationSettings')" name="notification">
         <el-card shadow="hover">
           <template #header><span>{{ t('settings.notificationSettings') }}</span></template>
+
+          <div class="notification-section">
+            <h3 class="section-title">{{ t('settings.notificationPolicy') }}</h3>
+
+            <el-form label-width="180px">
+              <el-form-item :label="t('settings.expirationReminder')">
+                <el-switch v-model="notificationSettings.expirationReminder" />
+              </el-form-item>
+              <el-form-item :label="t('settings.approvalNotification')">
+                <el-switch v-model="notificationSettings.approvalNotification" />
+              </el-form-item>
+              <el-form-item :label="t('settings.commentNotification')">
+                <el-switch v-model="notificationSettings.commentNotification" />
+              </el-form-item>
+              <el-form-item :label="t('settings.emailChannel')">
+                <el-switch v-model="notificationSettings.emailNotification" />
+              </el-form-item>
+              <el-form-item :label="t('settings.systemChannel')">
+                <el-switch v-model="notificationSettings.systemNotification" />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="handleSaveNotificationSettings">{{ t('settings.saveNotificationPolicy') }}</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
           
           <!-- 邮件通知 -->
           <div class="notification-section">
@@ -139,6 +182,18 @@
           </template>
           
           <div class="monitor-grid">
+            <el-alert
+              v-if="monitorLoadFailed"
+              type="error"
+              :title="t('settings.systemStatus') + t('common.error')"
+              :closable="false"
+              show-icon
+              style="grid-column: 1 / -1"
+            >
+              <template #default>
+                <el-button link type="primary" @click="loadSystemStatus">{{ t('common.retry') }}</el-button>
+              </template>
+            </el-alert>
             <div class="monitor-card">
               <div class="monitor-title">{{ t('settings.cpuUsage') }}</div>
               <div class="monitor-value">{{ systemStatus.cpu }}%</div>
@@ -169,15 +224,24 @@
           <!-- 操作日志 -->
           <div class="operation-logs-section">
             <h3 class="section-title">{{ t('settings.operationLogs') }}</h3>
+            <el-alert
+              v-if="logsLoadFailed"
+              type="error"
+              :title="t('settings.operationLogs') + t('common.error')"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 12px"
+            >
+              <template #default>
+                <el-button link type="primary" @click="loadOperationLogs">{{ t('common.retry') }}</el-button>
+              </template>
+            </el-alert>
             
             <div class="logs-filter">
               <el-input v-model="logsFilter.keyword" :placeholder="t('settings.searchKeyword')" style="width: 200px" clearable />
               <el-select v-model="logsFilter.module" :placeholder="t('settings.selectModule')" style="width: 150px" clearable>
                 <el-option :label="t('settings.filterAll')" value="" />
-                <el-option :label="t('settings.filterUser')" value="user" />
-                <el-option :label="t('settings.filterContract')" value="contract" />
-                <el-option :label="t('settings.filterSupplier')" value="supplier" />
-                <el-option :label="t('settings.filterSystem')" value="system" />
+                <el-option v-for="item in logModuleOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
               <el-select v-model="logsFilter.level" :placeholder="t('settings.selectLevel')" style="width: 120px" clearable>
                 <el-option :label="t('settings.filterAll')" value="" />
@@ -195,10 +259,22 @@
                   <el-tag :type="getLevelTagType(row.level)" size="small">{{ getLevelLabel(row.level) }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column :prop="'module'" :label="t('settings.module')" width="100" />
-              <el-table-column :prop="'action'" :label="t('settings.operation')" width="100" />
+              <el-table-column :prop="'module'" :label="t('settings.module')" width="110" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ getModuleLabel(row.module) }}
+                </template>
+              </el-table-column>
+              <el-table-column :prop="'action'" :label="t('settings.operation')" width="110" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <el-tag size="small" type="info">{{ getActionLabel(row.action) }}</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column :prop="'user'" :label="t('settings.operator')" width="100" />
-              <el-table-column :prop="'content'" :label="t('settings.content')" min-width="200" show-overflow-tooltip />
+              <el-table-column :prop="'content'" :label="t('settings.content')" min-width="220" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ getLocalizedLogContent(row.content) }}
+                </template>
+              </el-table-column>
               <el-table-column :prop="'ip'" :label="t('settings.ipAddress')" width="130" />
             </el-table>
             
@@ -266,6 +342,18 @@
           <!-- 在线会话 -->
           <div class="online-sessions-section">
             <h3 class="section-title">{{ t('settings.activeSessions') }}</h3>
+            <el-alert
+              v-if="sessionsLoadFailed"
+              type="error"
+              :title="t('settings.activeSessions') + t('common.error')"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 12px"
+            >
+              <template #default>
+                <el-button link type="primary" @click="loadActiveSessions">{{ t('common.retry') }}</el-button>
+              </template>
+            </el-alert>
             
             <el-table :data="activeSessions" stripe style="width: 100%" size="default" v-loading="sessionsLoading">
               <el-table-column :prop="'user'" :label="t('settings.sessionUser')" width="120" />
@@ -281,7 +369,7 @@
                   {{ formatTime(row.lastActive || row.loginTime) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="t('common.operation')" width="120" align="center">
+              <el-table-column :label="t('common.action')" width="120" align="center">
                 <template #default="{ row }">
                   <el-button type="danger" size="small" link @click="handleTerminateSession(row.id)">{{ t('settings.terminate') }}</el-button>
                 </template>
@@ -346,6 +434,8 @@ const smsSettings = ref({
 })
 
 const monitorLoading = ref(false)
+const monitorLoadFailed = ref(false)
+const monitorErrorNotified = ref(false)
 const systemStatus = ref({
   cpu: 0,
   memory: 0,
@@ -354,6 +444,8 @@ const systemStatus = ref({
 })
 
 const sessionsLoading = ref(false)
+const sessionsLoadFailed = ref(false)
+const sessionsErrorNotified = ref(false)
 const activeSessions = ref<any[]>([])
 
 const sessionConfig = ref({
@@ -364,6 +456,8 @@ const sessionConfig = ref({
 })
 
 const logsLoading = ref(false)
+const logsLoadFailed = ref(false)
+const logsErrorNotified = ref(false)
 const operationLogs = ref<any[]>([])
 const logsFilter = ref({
   keyword: '',
@@ -373,6 +467,18 @@ const logsFilter = ref({
 const logsPage = ref(1)
 const logsPageSize = ref(10)
 const logsTotal = ref(0)
+const logModuleOptions = computed(() => [
+  { value: '用户管理', label: t('settings.filterUser') },
+  { value: '合同管理', label: t('settings.filterContract') },
+  { value: '模板管理', label: t('settings.filterTemplate') },
+  { value: '提醒管理', label: t('settings.filterReminder') },
+  { value: '统计报表', label: t('settings.filterStatistics') },
+  { value: '认证授权', label: t('settings.filterAuth') },
+  { value: '收藏管理', label: t('settings.filterFavorite') },
+  { value: '标签管理', label: t('settings.filterTag') },
+  { value: '续约管理', label: t('settings.filterRenewal') },
+  { value: '其他', label: t('settings.filterSystem') }
+])
 
 let monitorTimer: number | null = null
 
@@ -382,6 +488,12 @@ const handleLocaleChange = (val: string) => { appStore.setLocale(val); locale.va
 const handleSaveBasic = () => {
   appStore.setSystemName(systemName.value)
   ElMessage.success(t('common.success'))
+}
+
+const notifyErrorOnce = (notifiedRef: { value: boolean }) => {
+  if (notifiedRef.value) return
+  notifiedRef.value = true
+  ElMessage.error(t('common.error'))
 }
 
 const loadNotificationSettings = async () => {
@@ -416,6 +528,7 @@ const loadNotificationSettings = async () => {
     }
   } catch (error) {
     console.error('加载通知设置失败:', error)
+    ElMessage.error(t('common.error'))
   }
 }
 
@@ -503,12 +616,16 @@ const handleTestSms = async () => {
 const loadSystemStatus = async () => {
   try {
     monitorLoading.value = true
+    monitorLoadFailed.value = false
+    monitorErrorNotified.value = false
     const status = await getSystemStatus()
-    if (status) {
-      systemStatus.value = status
+    if (status && (status as any).data) {
+      systemStatus.value = (status as any).data
     }
   } catch (error) {
+    monitorLoadFailed.value = true
     console.error('加载系统状态失败:', error)
+    notifyErrorOnce(monitorErrorNotified)
   } finally {
     monitorLoading.value = false
   }
@@ -523,12 +640,16 @@ const getProgressColor = (percentage: number) => {
 const loadActiveSessions = async () => {
   try {
     sessionsLoading.value = true
+    sessionsLoadFailed.value = false
+    sessionsErrorNotified.value = false
     const sessions = await getActiveSessions()
-    if (sessions) {
-      activeSessions.value = sessions
+    if (sessions && (sessions as any).data) {
+      activeSessions.value = (sessions as any).data
     }
   } catch (error) {
+    sessionsLoadFailed.value = true
     console.error('加载活跃会话失败:', error)
+    notifyErrorOnce(sessionsErrorNotified)
   } finally {
     sessionsLoading.value = false
   }
@@ -575,14 +696,14 @@ const handleSaveSessionConfig = async () => {
 }
 
 const formatDevice = (device: string) => {
-  if (!device) return '未知设备'
-  if (device.includes('Chrome')) return 'Chrome 浏览器'
-  if (device.includes('Firefox')) return 'Firefox 浏览器'
-  if (device.includes('Safari')) return 'Safari 浏览器'
-  if (device.includes('Edge')) return 'Edge 浏览器'
-  if (device.includes('Windows')) return 'Windows'
-  if (device.includes('Mac')) return 'MacOS'
-  if (device.includes('Linux')) return 'Linux'
+  if (!device) return t('profile.deviceUnknown')
+  if (device.includes('Chrome')) return t('profile.deviceChrome')
+  if (device.includes('Firefox')) return t('profile.deviceFirefox')
+  if (device.includes('Safari')) return t('profile.deviceSafari')
+  if (device.includes('Edge')) return t('profile.deviceEdge')
+  if (device.includes('Windows')) return t('profile.deviceWindows')
+  if (device.includes('Mac')) return t('profile.deviceMacOS')
+  if (device.includes('Linux')) return t('profile.deviceLinux')
   if (device.length > 50) {
     return device.substring(0, 50) + '...'
   }
@@ -592,7 +713,8 @@ const formatDevice = (device: string) => {
 const formatTime = (time: string) => {
   if (!time) return '-'
   const date = new Date(time)
-  return date.toLocaleString('zh-CN', {
+  const localeCode = locale.value === 'en' ? 'en-US' : 'zh-CN'
+  return date.toLocaleString(localeCode, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -604,6 +726,8 @@ const formatTime = (time: string) => {
 const loadOperationLogs = async () => {
   try {
     logsLoading.value = true
+    logsLoadFailed.value = false
+    logsErrorNotified.value = false
     const response = await getOperationLogs({
       page: logsPage.value,
       pageSize: logsPageSize.value,
@@ -616,7 +740,9 @@ const loadOperationLogs = async () => {
       logsTotal.value = response.data.total
     }
   } catch (error) {
+    logsLoadFailed.value = true
     console.error('加载操作日志失败:', error)
+    notifyErrorOnce(logsErrorNotified)
   } finally {
     logsLoading.value = false
   }
@@ -638,6 +764,108 @@ const getLevelLabel = (level: string) => {
     case 'error': return t('settings.levelError')
     default: return level || '-'
   }
+}
+
+const getModuleLabel = (module: string) => {
+  const map: Record<string, string> = {
+    '用户管理': t('settings.filterUser'),
+    '合同管理': t('settings.filterContract'),
+    '模板管理': t('settings.filterTemplate'),
+    '提醒管理': t('settings.filterReminder'),
+    '统计报表': t('settings.filterStatistics'),
+    '认证授权': t('settings.filterAuth'),
+    '收藏管理': t('settings.filterFavorite'),
+    '标签管理': t('settings.filterTag'),
+    '续约管理': t('settings.filterRenewal'),
+    '其他': t('settings.filterSystem')
+  }
+  return map[module] || module || '-'
+}
+
+const getActionLabel = (action: string) => {
+  const normalized = String(action || '').toUpperCase()
+  const map: Record<string, string> = {
+    CREATE: t('settings.actionCreate'),
+    UPDATE: t('settings.actionUpdate'),
+    DELETE: t('settings.actionDelete'),
+    READ: t('settings.actionRead'),
+    LOGIN: t('settings.actionLogin'),
+    UPLOAD: t('settings.actionUpload'),
+    DOWNLOAD: t('settings.actionDownload'),
+    APPROVE: t('settings.actionApprove'),
+    REJECT: t('settings.actionReject'),
+    SIGN: t('settings.actionSign'),
+    ARCHIVE: t('settings.actionArchive'),
+    SUBMIT: t('settings.actionSubmit'),
+    FAVORITE: t('settings.actionFavorite'),
+    RENEWAL: t('settings.actionRenewal'),
+    COPY: t('settings.actionCopy'),
+    BATCH: t('settings.actionBatch'),
+    TERMINATE: t('settings.actionTerminate'),
+    ANALYZE: t('settings.actionAnalyze'),
+    OTHER: t('settings.filterSystem')
+  }
+  return map[normalized] || normalized || '-'
+}
+
+const getLocalizedLogContent = (content: string) => {
+  if (!content) return '-'
+  let text = String(content)
+
+  const classMap: Array<[RegExp, string]> = [
+    [/ContractController/g, t('settings.logClassContract')],
+    [/TemplateController/g, t('settings.logClassTemplate')],
+    [/UserController/g, t('settings.logClassUser')],
+    [/AuthController/g, t('settings.logClassAuth')],
+    [/SystemController/g, t('settings.logClassSystem')],
+    [/RoleController/g, t('settings.logClassRole')],
+    [/ReminderController/g, t('settings.logClassReminder')],
+    [/FavoriteController/g, t('settings.logClassFavorite')],
+    [/TagController/g, t('settings.logClassTag')],
+    [/RenewalController/g, t('settings.logClassRenewal')]
+  ]
+  classMap.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement)
+  })
+
+  const methodVerbMap: Array<[RegExp, string]> = [
+    [/\.create([A-Z]\w*)?\(/g, `.${t('settings.logVerbCreate')}(`],
+    [/\.add([A-Z]\w*)?\(/g, `.${t('settings.logVerbCreate')}(`],
+    [/\.update([A-Z]\w*)?\(/g, `.${t('settings.logVerbUpdate')}(`],
+    [/\.edit([A-Z]\w*)?\(/g, `.${t('settings.logVerbUpdate')}(`],
+    [/\.delete([A-Z]\w*)?\(/g, `.${t('settings.logVerbDelete')}(`],
+    [/\.remove([A-Z]\w*)?\(/g, `.${t('settings.logVerbDelete')}(`],
+    [/\.get([A-Z]\w*)?\(/g, `.${t('settings.logVerbRead')}(`],
+    [/\.list([A-Z]\w*)?\(/g, `.${t('settings.logVerbRead')}(`],
+    [/\.find([A-Z]\w*)?\(/g, `.${t('settings.logVerbRead')}(`],
+    [/\.select([A-Z]\w*)?\(/g, `.${t('settings.logVerbRead')}(`],
+    [/\.login([A-Z]\w*)?\(/g, `.${t('settings.logVerbLogin')}(`],
+    [/\.logout([A-Z]\w*)?\(/g, `.${t('settings.logVerbLogout')}(`],
+    [/\.upload([A-Z]\w*)?\(/g, `.${t('settings.logVerbUpload')}(`],
+    [/\.download([A-Z]\w*)?\(/g, `.${t('settings.logVerbDownload')}(`],
+    [/\.export([A-Z]\w*)?\(/g, `.${t('settings.logVerbDownload')}(`],
+    [/\.approve([A-Z]\w*)?\(/g, `.${t('settings.logVerbApprove')}(`],
+    [/\.reject([A-Z]\w*)?\(/g, `.${t('settings.logVerbReject')}(`],
+    [/\.sign([A-Z]\w*)?\(/g, `.${t('settings.logVerbSign')}(`],
+    [/\.archive([A-Z]\w*)?\(/g, `.${t('settings.logVerbArchive')}(`],
+    [/\.submit([A-Z]\w*)?\(/g, `.${t('settings.logVerbSubmit')}(`],
+    [/\.favorite([A-Z]\w*)?\(/g, `.${t('settings.logVerbFavorite')}(`],
+    [/\.star([A-Z]\w*)?\(/g, `.${t('settings.logVerbFavorite')}(`],
+    [/\.renewal([A-Z]\w*)?\(/g, `.${t('settings.logVerbRenewal')}(`],
+    [/\.copy([A-Z]\w*)?\(/g, `.${t('settings.logVerbCopy')}(`],
+    [/\.batch([A-Z]\w*)?\(/g, `.${t('settings.logVerbBatch')}(`],
+    [/\.terminate([A-Z]\w*)?\(/g, `.${t('settings.logVerbTerminate')}(`],
+    [/\.analyze([A-Z]\w*)?\(/g, `.${t('settings.logVerbAnalyze')}(`]
+  ]
+  methodVerbMap.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement)
+  })
+
+  text = text
+    .replace(/ - 操作成功/g, ` - ${t('settings.logOperationSuccess')}`)
+    .replace(/ - 操作失败/g, ` - ${t('settings.logOperationFailed')}`)
+
+  return text
 }
 
 onMounted(() => {
@@ -662,17 +890,45 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .settings {
-  .page-title { font-size: 24px; font-weight: 700; margin-bottom: 24px; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .page-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   
   .settings-tabs {
     :deep(.el-tabs__header) { margin-bottom: 24px; }
-    :deep(.el-tabs__item) { font-size: 16px; }
+    :deep(.el-tabs__item) {
+      font-size: 16px;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
   
   .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
+    min-width: 0;
+
+    > span {
+      min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
   
   .notification-section {
@@ -688,7 +944,12 @@ onUnmounted(() => {
     font-weight: 600;
     margin-bottom: 20px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid var(--border-color);
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .monitor-grid {
@@ -698,7 +959,7 @@ onUnmounted(() => {
     margin-bottom: 32px;
     
     .monitor-card {
-      background: #f5f7fa;
+      background: var(--bg-hover);
       border-radius: 8px;
       padding: 24px;
       text-align: center;
@@ -741,13 +1002,24 @@ onUnmounted(() => {
       margin-bottom: 20px;
       flex-wrap: wrap;
       align-items: center;
+
+      :deep(.el-input),
+      :deep(.el-select) {
+        min-width: 0;
+      }
+
+      :deep(.el-input__wrapper),
+      :deep(.el-select__wrapper),
+      :deep(.el-button) {
+        max-width: 100%;
+      }
     }
   }
   
   .session-config-section {
     margin-bottom: 32px;
     padding-bottom: 24px;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid var(--border-color);
   }
   
   .form-item-row {
@@ -760,6 +1032,9 @@ onUnmounted(() => {
   .form-item-hint {
     color: var(--text-secondary);
     white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .online-sessions-section {
@@ -782,6 +1057,12 @@ onUnmounted(() => {
     .device-text {
       font-weight: 500;
     }
+  }
+
+  :deep(.el-table th .cell) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 </style>

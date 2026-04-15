@@ -751,9 +751,9 @@ body {
 }
 
 .el-input-number .el-input__inner {
-  color: #333333 !important;
+  color: var(--text-primary) !important;
   text-align: left;
-  -webkit-text-fill-color: #333333 !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
 }
 
 .el-input-number .el-input__prefix {

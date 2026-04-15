@@ -344,10 +344,12 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .filter-item-wide {
   flex: 1;
+  min-width: 240px;
   
   :deep(.el-input__wrapper) {
     border-radius: 8px;
@@ -358,12 +360,44 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .user-list {
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
-    .page-title { font-size: 24px; font-weight: 700; margin: 0; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+      background: var(--primary-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
-  .pagination-wrap { margin-top: 20px; display: flex; justify-content: flex-end; }
+  .pagination-wrap {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  :deep(.el-table th .cell) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 </style>

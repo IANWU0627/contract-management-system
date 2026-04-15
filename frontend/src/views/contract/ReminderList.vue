@@ -23,7 +23,7 @@
         </div>
         <div class="filter-item" style="width: 160px;">
           <el-select v-model="query.status" clearable :placeholder="$t('common.status')" @change="fetchData">
-            <el-option label="全部" value="" />
+            <el-option :label="$t('common.all')" value="" />
             <el-option :label="$t('reminder.unread')" :value="0" />
             <el-option :label="$t('reminder.read')" :value="1" />
           </el-select>
@@ -205,10 +205,12 @@ onMounted(() => { fetchData() })
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .filter-item-wide {
   flex: 1;
+  min-width: 240px;
   
   :deep(.el-input__wrapper) {
     border-radius: 8px;
@@ -219,6 +221,7 @@ onMounted(() => { fetchData() })
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .reminders {
@@ -227,6 +230,9 @@ onMounted(() => { fetchData() })
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+    min-width: 0;
     
     .page-title {
       font-size: 24px;
@@ -236,6 +242,10 @@ onMounted(() => { fetchData() })
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
   
@@ -246,6 +256,12 @@ onMounted(() => { fetchData() })
   
   .expire-soon {
     color: #E6A23C;
+  }
+
+  :deep(.el-table th .cell) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 </style>

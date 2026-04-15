@@ -23,7 +23,7 @@
         <el-card shadow="hover" class="stat-card">
           <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"><el-icon><Money /></el-icon></div>
           <div class="stat-content">
-            <div class="stat-value">¥{{ formatAmount(stats.totalAmount) }}</div>
+            <div class="stat-value">{{ getCurrencySymbol(DEFAULT_CURRENCY) }}{{ formatAmount(stats.totalAmount) }}</div>
             <div class="stat-label">{{ $t('statistics.totalAmount') }}</div>
           </div>
         </el-card>
@@ -74,6 +74,7 @@ import { getContractCategories } from '@/api/contractCategory'
 import { ElMessage } from 'element-plus'
 import { Document, Money, Clock, Warning, Download } from '@element-plus/icons-vue'
 import { Pie, Bar } from '@antv/g2plot'
+import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
 const { t, locale } = useI18n()
 
@@ -86,7 +87,9 @@ let cachedTypeData: any[] = []
 let cachedStatusData: any[] = []
 let contractCategories: any[] = []
 
-const formatAmount = (amount: number) => amount ? new Intl.NumberFormat('zh-CN').format(amount) : '0'
+const formatAmount = (amount: number) => {
+  return formatAmountByLocale(amount, locale.value)
+}
 
 const getTypeNameMap = () => {
   const map: Record<string, string> = {}
@@ -94,6 +97,18 @@ const getTypeNameMap = () => {
     map[cat.code] = locale.value === 'en' && cat.nameEn ? cat.nameEn : (cat.name || '')
   }
   return map
+}
+
+const getChartThemeTokens = () => {
+  const css = getComputedStyle(document.documentElement)
+  const textPrimary = (css.getPropertyValue('--text-primary') || '#1a1a1a').trim()
+  const textSecondary = (css.getPropertyValue('--text-secondary') || '#666666').trim()
+  const isDark = document.documentElement.classList.contains('dark')
+  return {
+    textPrimary,
+    textSecondary,
+    stroke: isDark ? 'rgba(148,163,184,0.4)' : 'rgba(255,255,255,0.6)',
+  }
 }
 
 watch(locale, () => {
@@ -105,6 +120,7 @@ watch(locale, () => {
 })
 
 const renderChartsWithCache = () => {
+  const theme = getChartThemeTokens()
   const typeNameMap = getTypeNameMap()
   const statusNames: Record<string, string> = {
     'DRAFT': t('contract.statuses.draft'),
@@ -165,13 +181,13 @@ const renderChartsWithCache = () => {
         position: 'right' as const,
         itemWidth: 80,
         itemName: { style: { fontSize: 11 } },
-        itemValue: { style: { fontSize: 11, fill: '#666' } },
+        itemValue: { style: { fontSize: 11, fill: theme.textSecondary } },
       },
       color: ['#f87171', '#fbbf24', '#60a5fa', '#34d399', '#818cf8', '#94a3b8'],
-      pieStyle: { stroke: 'rgba(255,255,255,0.6)', lineWidth: 3 },
+      pieStyle: { stroke: theme.stroke, lineWidth: 3 },
       statistic: {
-        title: { content: t('statistics.total'), style: { fontSize: '12px', color: '#666' } },
-        content: { content: String(statusTotal), style: { fontSize: '24px', fontWeight: 'bold', color: '#333' } },
+        title: { content: t('statistics.total'), style: { fontSize: '12px', color: theme.textSecondary } },
+        content: { content: String(statusTotal), style: { fontSize: '24px', fontWeight: 'bold', color: theme.textPrimary } },
       },
       interactions: [{ type: 'element-active' }],
     })
@@ -180,6 +196,7 @@ const renderChartsWithCache = () => {
 }
 
 const initCharts = async () => {
+  const theme = getChartThemeTokens()
   await new Promise(resolve => setTimeout(resolve, 100))
 
   try {
@@ -259,22 +276,22 @@ const initCharts = async () => {
               style: { fontSize: 11 }
             },
             itemValue: {
-              style: { fontSize: 11, fill: '#666' }
+              style: { fontSize: 11, fill: theme.textSecondary }
             },
           },
           color: ['#f87171', '#fbbf24', '#60a5fa', '#34d399', '#818cf8', '#94a3b8'],
           pieStyle: {
-            stroke: 'rgba(255,255,255,0.6)',
+            stroke: theme.stroke,
             lineWidth: 3,
           },
           statistic: {
             title: { 
               content: t('statistics.total'),
-              style: { fontSize: '12px', color: '#666' }
+              style: { fontSize: '12px', color: theme.textSecondary }
             },
             content: { 
               content: String(statusTotal),
-              style: { fontSize: '24px', fontWeight: 'bold', color: '#333' }
+              style: { fontSize: '24px', fontWeight: 'bold', color: theme.textPrimary }
             },
           },
           interactions: [{ type: 'element-active' }],
@@ -295,9 +312,9 @@ const fetchData = async () => {
 const handleExport = async () => {
   try {
     download('/contracts/export', `contracts_${new Date().toISOString().split('T')[0]}.xlsx`)
-    ElMessage.success('导出成功')
+    ElMessage.success(t('common.exportSuccess'))
   } catch (error: any) {
-    ElMessage.error(error.message || '导出失败')
+    ElMessage.error(error.message || t('common.error'))
   }
 }
 
@@ -374,13 +391,13 @@ onUnmounted(() => {
 .stat-value {
   font-size: 22px;
   font-weight: 700;
-  color: #303133;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .stat-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -394,7 +411,7 @@ onUnmounted(() => {
   font-size: 13px;
   padding: 10px 14px;
   background: linear-gradient(135deg, #667eea10, #764ba210);
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .chart-container {

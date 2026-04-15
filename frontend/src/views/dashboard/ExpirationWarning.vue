@@ -71,7 +71,7 @@
       <template #header>
         <div class="card-header">
           <span>{{ $t('dashboard.expiringContracts') }}</span>
-          <span class="contract-count">{{ $t('common.totalCount', { count: contracts.length }) }}</span>
+          <span class="contract-count">{{ $t('common.totalOnly', { count: contracts.length }) }}</span>
         </div>
       </template>
       
@@ -91,7 +91,7 @@
         </el-table-column>
         <el-table-column :label="$t('contract.amount')" prop="amount" width="120">
           <template #default="{ row }">
-            ¥{{ formatAmount(row.amount) }}
+            {{ getCurrencySymbol(row.currency) }}{{ formatAmount(row.amount) }}
           </template>
         </el-table-column>
         <el-table-column :label="$t('contract.endDate')" prop="endDate" width="120" />
@@ -122,8 +122,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { getExpiringContracts } from '@/api/contract'
 import { Warning, Clock, Timer, Calendar, View } from '@element-plus/icons-vue'
+import { formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const loading = ref(false)
@@ -167,8 +168,7 @@ const formatType = (type: string) => {
 }
 
 const formatAmount = (amount: number) => {
-  if (!amount) return '0'
-  return new Intl.NumberFormat('zh-CN').format(amount)
+  return formatAmountByLocale(amount, locale.value)
 }
 
 const getExpireTagType = (status: string) => {

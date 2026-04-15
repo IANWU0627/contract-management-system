@@ -20,6 +20,8 @@ export const useAppStore = defineStore('app', () => {
 
   // 侧边栏折叠
   const sidebarCollapsed = ref(false)
+  let themeMediaQuery: MediaQueryList | null = null
+  let themeMediaHandler: ((e: MediaQueryListEvent) => void) | null = null
 
   // 计算实际是否为暗色模式（考虑 system 模式）
   const isDark = computed((): boolean => {
@@ -50,6 +52,7 @@ export const useAppStore = defineStore('app', () => {
   const setTheme = (newTheme: string) => {
     theme.value = newTheme as ThemeMode
     localStorage.setItem('theme', newTheme)
+    syncSystemThemeListener()
     applyTheme(isDark.value)
   }
 
@@ -88,22 +91,34 @@ export const useAppStore = defineStore('app', () => {
 
   // 初始化主题
   const initTheme = () => {
+    syncSystemThemeListener()
     applyTheme(isDark.value)
-    
-    // 如果是 system 模式，监听系统偏好变化
-    if (theme.value === 'system' || !localStorage.getItem('theme')) {
-      const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)')
-      if (mediaQuery) {
-        const handler = (e: MediaQueryListEvent) => {
-          if (theme.value === 'system') {
-            applyTheme(e.matches)
-          }
-        }
-        mediaQuery.addEventListener?.('change', handler)
-        // 存储引用以便清理（可选）
-        ;(window as any).__themeMediaHandler = handler
+  }
+
+  const clearSystemThemeListener = () => {
+    if (themeMediaQuery && themeMediaHandler) {
+      themeMediaQuery.removeEventListener?.('change', themeMediaHandler)
+    }
+    themeMediaQuery = null
+    themeMediaHandler = null
+  }
+
+  const syncSystemThemeListener = () => {
+    clearSystemThemeListener()
+    if (theme.value !== 'system' && localStorage.getItem('theme')) {
+      return
+    }
+    const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!mediaQuery) {
+      return
+    }
+    themeMediaQuery = mediaQuery
+    themeMediaHandler = (e: MediaQueryListEvent) => {
+      if (theme.value === 'system') {
+        applyTheme(e.matches)
       }
     }
+    themeMediaQuery.addEventListener?.('change', themeMediaHandler)
   }
 
   return {
@@ -119,6 +134,7 @@ export const useAppStore = defineStore('app', () => {
     setSystemName,
     toggleSidebar,
     initTheme,
-    applyTheme
+    applyTheme,
+    clearSystemThemeListener
   }
 })

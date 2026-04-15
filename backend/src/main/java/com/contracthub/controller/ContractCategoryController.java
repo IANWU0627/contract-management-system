@@ -21,7 +21,7 @@ import java.util.*;
  * 合同分类管理 Controller
  */
 @RestController
-@RequestMapping("/api/contract-categories")
+@RequestMapping({"/api/contract-categories", "/api/categories"})
 public class ContractCategoryController {
     
     private final ContractCategoryMapper categoryMapper;

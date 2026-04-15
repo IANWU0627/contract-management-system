@@ -20,7 +20,7 @@ public class ContractNumberService {
     }
 
     @Transactional
-    public String generateNextContractNo() {
+    public synchronized String generateNextContractNo() {
         String date = LocalDate.now().format(formatter);
         String prefix = "TC" + date + "-";
 

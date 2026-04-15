@@ -59,37 +59,33 @@
             </div>
           </template>
           
-          <el-descriptions :column="2" border>
-            <el-descriptions-item :label="$t('contract.name')">{{ contract.title }}</el-descriptions-item>
+          <el-descriptions :column="2" border class="basic-info-descriptions">
+            <el-descriptions-item :label="$t('contract.name')" :span="2">{{ contract.title || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.no')">{{ contract.contractNo || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="$t('contract.type')">
               <el-tag>{{ formatType(contract.type) }}</el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item :label="$t('folder.title')" v-if="contractFolder">
-              <span :style="{ color: contractFolder.color }">●</span> {{ contractFolder.name }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="$t('folder.title')" v-else>-</el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.amount')">
-              <span v-if="contract.currency === 'USD'">$</span>
-              <span v-else-if="contract.currency === 'EUR'">€</span>
-              <span v-else-if="contract.currency === 'HKD'">HK$</span>
-              <span v-else>¥</span>
-              {{ formatAmount(contract.amount) }}
-              <el-tag size="small" v-if="contract.currency !== 'CNY'">
-                {{ contract.currency }}
-              </el-tag>
             </el-descriptions-item>
             <el-descriptions-item :label="$t('contract.status')">
               <el-tag :type="getStatusTagType(contract.status)">{{ formatStatus(contract.status) }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.startDate')">{{ contract.startDate }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.endDate')">{{ contract.endDate }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.no')">{{ contract.contractNo }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.amount')">
+              {{ getCurrencySymbol(contract.currency || DEFAULT_CURRENCY) }}{{ formatAmount(contract.amount) }}
+              <el-tag size="small" class="currency-tag">{{ contract.currency || DEFAULT_CURRENCY }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.startDate')">{{ contract.startDate || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.endDate')">{{ contract.endDate || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('folder.title')">
+              <template v-if="contractFolder">
+                <span :style="{ color: contractFolder.color }">●</span> {{ contractFolder.name }}
+              </template>
+              <template v-else>-</template>
+            </el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.createdBy')">{{ contract.createdBy || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.createdAt')">{{ contract.createdAt || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="$t('contract.timezone')">{{ contract.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.createdBy')">{{ contract.createdBy }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.createdAt')">{{ contract.createdAt }}</el-descriptions-item>
             <el-descriptions-item :label="$t('contract.version')">{{ contract.version || '1.0' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.remark')">{{ contract.remark || '-' }}</el-descriptions-item>
-            <el-descriptions-item :label="$t('contract.tag')">
+            <el-descriptions-item :label="$t('contract.remark')" :span="2">{{ contract.remark || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.tag')" :span="2">
               <div class="tag-list" v-if="contractTags.length > 0">
                 <el-tag 
                   v-for="tag in contractTags" 
@@ -417,6 +413,7 @@ import { getContractCategories } from '@/api/contractCategory'
 import { getQuickCodeByCode } from '@/api/quickCode'
 import { getCounterpartiesByContractId } from '@/api/counterparty'
 import { getAttachmentsByContractId } from '@/api/attachment'
+import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 import { ArrowLeft, Download, User, Money, Document, Paperclip, View, Picture, DocumentCopy, Star, StarFilled, Collection, ArrowDown, Edit, Tickets, Files } from '@element-plus/icons-vue'
 import VersionHistory from './VersionHistory.vue'
 import ContractComments from './ContractComments.vue'
@@ -467,8 +464,7 @@ const canTerminate = computed(() => {
 })
 
 const formatAmount = (amount: number) => {
-  if (!amount) return '0'
-  return new Intl.NumberFormat(locale.value === 'en' ? 'en-US' : 'zh-CN').format(amount)
+  return formatAmountByLocale(amount, locale.value)
 }
 
 const formatType = (type: string) => {
@@ -511,7 +507,13 @@ const getPartyLabel = (type: string) => {
     partyA: t('contract.partyTypes.partyA'),
     partyB: t('contract.partyTypes.partyB'),
     partyC: t('contract.partyTypes.partyC'),
-    partyD: t('contract.partyTypes.partyD')
+    partyD: t('contract.partyTypes.partyD'),
+    partyE: t('contract.partyTypes.partyE'),
+    partyF: t('contract.partyTypes.partyF'),
+    partyG: t('contract.partyTypes.partyG'),
+    partyH: t('contract.partyTypes.partyH'),
+    partyI: t('contract.partyTypes.partyI'),
+    partyJ: t('contract.partyTypes.partyJ')
   }
   return map[type] || type
 }
@@ -537,7 +539,7 @@ const getPaymentMethodLabel = (method: string) => {
 const formatDateTime = (dateStr: string | undefined) => {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN')
+  return date.toLocaleString(locale.value === 'en' ? 'en-US' : 'zh-CN')
 }
 
 const getApprovalActionLabel = (action: string) => {
@@ -639,7 +641,7 @@ const handlePreviewAttachment = (attachment: any) => {
       previewDialogVisible.value = true
     })
     .catch(error => {
-      console.error('预览失败:', error)
+      console.error('Attachment preview failed:', error)
       ElMessage.error(t('common.error'))
     })
 }
@@ -701,7 +703,7 @@ const handleDownloadAttachment = (attachment: any) => {
       window.URL.revokeObjectURL(downloadUrl)
     })
     .catch(error => {
-      console.error('下载失败:', error)
+      console.error('Attachment download failed:', error)
       // 如果fetch失败，回退到直接链接下载
       const link = document.createElement('a')
       link.href = url
@@ -733,7 +735,13 @@ const fetchContract = async () => {
 const loadCounterparties = async () => {
   try {
     const res = await getCounterpartiesByContractId(contractId.value)
-    counterparties.value = res || []
+    const rows = Array.isArray(res) ? res : (res as any)?.data || []
+    counterparties.value = rows.map((item: any) => ({
+      ...item,
+      contactPerson: item.contactPerson || item.contact || '',
+      contactPhone: item.contactPhone || item.phone || '',
+      contactEmail: item.contactEmail || item.email || ''
+    }))
   } catch (error) {
     counterparties.value = []
   }
@@ -742,7 +750,7 @@ const loadCounterparties = async () => {
 const loadAttachments = async () => {
   try {
     const res = await getAttachmentsByContractId(contractId.value)
-    attachments.value = res || []
+    attachments.value = Array.isArray(res) ? res : (res as any)?.data || []
   } catch (error) {
     attachments.value = []
   }
@@ -827,10 +835,10 @@ const getSelectDisplayValue = (field: any, value: string) => {
 const formatDynamicValue = (value: any, fieldType: string) => {
   if (value === null || value === undefined || value === '') return '-'
   if (fieldType === 'currency') {
-    return '¥' + new Intl.NumberFormat(locale.value === 'en' ? 'en-US' : 'zh-CN').format(Number(value))
+    return `${getCurrencySymbol(DEFAULT_CURRENCY)}${formatAmountByLocale(Number(value), locale.value)}`
   }
   if (fieldType === 'number') {
-    return new Intl.NumberFormat(locale.value === 'en' ? 'en-US' : 'zh-CN').format(Number(value))
+    return formatAmountByLocale(Number(value), locale.value)
   }
   return String(value)
 }
@@ -1106,6 +1114,39 @@ onMounted(async () => {
     .el-icon {
       font-size: 18px;
       color: #667eea;
+    }
+  }
+
+  .basic-info-descriptions {
+    :deep(.el-descriptions__table) {
+      table-layout: fixed;
+    }
+
+    :deep(.el-descriptions__label) {
+      width: 136px;
+      min-width: 136px;
+      max-width: 136px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: top;
+      font-weight: 600;
+    }
+
+    :deep(.el-descriptions__content) {
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      line-height: 1.6;
+    }
+
+    :deep(.el-tag) {
+      max-width: 100%;
+      vertical-align: middle;
+    }
+
+    .currency-tag {
+      margin-left: 8px;
     }
   }
   
@@ -1414,7 +1455,7 @@ onMounted(async () => {
     align-items: center;
     justify-content: center;
     gap: 16px;
-    color: #909399;
+    color: var(--text-secondary);
     
     p {
       font-size: 16px;
