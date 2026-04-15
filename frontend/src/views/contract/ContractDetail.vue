@@ -205,7 +205,7 @@
                   </el-button>
                 </div>
                 <div v-if="contractFiles.length === 0" class="empty-tip">
-                  <span>{{ $t('contract.noContractFile') || '暂无合同文件' }}</span>
+                  <span>{{ $t('contract.noContractFile') }}</span>
                 </div>
               </div>
               
@@ -213,7 +213,7 @@
               <div class="support-files-section">
                 <div class="sub-section-header">
                   <el-icon><Paperclip /></el-icon>
-                  <span>{{ $t('contract.supportFiles') || '支持文件' }}</span>
+                  <span>{{ $t('contract.supportFiles') }}</span>
                 </div>
                 <div class="attachments-list" v-if="supportingFiles.length > 0">
                   <div v-for="(attachment, index) in supportingFiles" :key="index" class="attachment-item">
@@ -249,7 +249,7 @@
                     </div>
                   </div>
                 </div>
-                <el-empty v-else :description="$t('contract.placeholder.noAttachments') || '暂无支持文件'" />
+                <el-empty v-else :description="$t('contract.placeholder.noAttachments')" />
               </div>
             </div>
           </div>
@@ -468,7 +468,7 @@ const canTerminate = computed(() => {
 
 const formatAmount = (amount: number) => {
   if (!amount) return '0'
-  return new Intl.NumberFormat('zh-CN').format(amount)
+  return new Intl.NumberFormat(locale.value === 'en' ? 'en-US' : 'zh-CN').format(amount)
 }
 
 const formatType = (type: string) => {
@@ -626,7 +626,7 @@ const handlePreviewAttachment = (attachment: any) => {
   })
     .then(response => {
       if (!response.ok) {
-        throw new Error('获取文件失败')
+        throw new Error(t('common.error'))
       }
       return response.blob()
     })
@@ -640,7 +640,7 @@ const handlePreviewAttachment = (attachment: any) => {
     })
     .catch(error => {
       console.error('预览失败:', error)
-      ElMessage.error('预览文件失败，请尝试下载')
+      ElMessage.error(t('common.error'))
     })
 }
 
@@ -667,7 +667,7 @@ const handleDownloadAttachment = (attachment: any) => {
   })
     .then(response => {
       if (!response.ok) {
-        throw new Error('下载失败')
+        throw new Error(t('common.error'))
       }
       return response.blob()
     })
@@ -726,14 +726,14 @@ const fetchContract = async () => {
       loadAttachments()
     ])
   } catch (error) {
-    ElMessage.error('获取合同信息失败')
+    ElMessage.error(t('contract.error.fetch'))
   }
 }
 
 const loadCounterparties = async () => {
   try {
     const res = await getCounterpartiesByContractId(contractId.value)
-    counterparties.value = res.data || []
+    counterparties.value = res || []
   } catch (error) {
     counterparties.value = []
   }
@@ -742,7 +742,7 @@ const loadCounterparties = async () => {
 const loadAttachments = async () => {
   try {
     const res = await getAttachmentsByContractId(contractId.value)
-    attachments.value = res.data || []
+    attachments.value = res || []
   } catch (error) {
     attachments.value = []
   }
@@ -827,10 +827,10 @@ const getSelectDisplayValue = (field: any, value: string) => {
 const formatDynamicValue = (value: any, fieldType: string) => {
   if (value === null || value === undefined || value === '') return '-'
   if (fieldType === 'currency') {
-    return '¥' + new Intl.NumberFormat('zh-CN').format(Number(value))
+    return '¥' + new Intl.NumberFormat(locale.value === 'en' ? 'en-US' : 'zh-CN').format(Number(value))
   }
   if (fieldType === 'number') {
-    return new Intl.NumberFormat('zh-CN').format(Number(value))
+    return new Intl.NumberFormat(locale.value === 'en' ? 'en-US' : 'zh-CN').format(Number(value))
   }
   return String(value)
 }
@@ -883,10 +883,10 @@ const handleSubmit = async () => {
   actionLoading.value = true
   try {
     await submitContract(contractId.value)
-    ElMessage.success('提交成功')
+    ElMessage.success(t('common.success'))
     fetchContract()
   } catch (error: any) {
-    ElMessage.error(error.message || '提交失败')
+    ElMessage.error(error.message || t('common.error'))
   } finally {
     actionLoading.value = false
   }
@@ -896,10 +896,10 @@ const handleApprove = async () => {
   actionLoading.value = true
   try {
     await approveContract(contractId.value)
-    ElMessage.success('审批通过')
+    ElMessage.success(t('common.success'))
     fetchContract()
   } catch (error: any) {
-    ElMessage.error(error.message || '操作失败')
+    ElMessage.error(error.message || t('common.error'))
   } finally {
     actionLoading.value = false
   }
@@ -928,10 +928,10 @@ const handleSign = async () => {
   actionLoading.value = true
   try {
     await signContract(contractId.value)
-    ElMessage.success('签署成功')
+    ElMessage.success(t('common.success'))
     fetchContract()
   } catch (error: any) {
-    ElMessage.error(error.message || '签署失败')
+    ElMessage.error(error.message || t('common.error'))
   } finally {
     actionLoading.value = false
   }
@@ -941,10 +941,10 @@ const handleArchive = async () => {
   actionLoading.value = true
   try {
     await archiveContract(contractId.value)
-    ElMessage.success('归档成功')
+    ElMessage.success(t('common.success'))
     fetchContract()
   } catch (error: any) {
-    ElMessage.error(error.message || '归档失败')
+    ElMessage.error(error.message || t('common.error'))
   } finally {
     actionLoading.value = false
   }

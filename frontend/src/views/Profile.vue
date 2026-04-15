@@ -184,9 +184,6 @@
             </el-form-item>
             
             <el-divider content-position="left">{{ t('profile.notificationMethods') }}</el-divider>
-            <el-form-item :label="t('profile.emailNotification')">
-              <el-switch v-model="notificationSettings.emailNotification" />
-            </el-form-item>
             <el-form-item :label="t('profile.systemNotification')">
               <el-switch v-model="notificationSettings.systemNotification" />
             </el-form-item>
@@ -292,7 +289,7 @@
 
             <el-divider content-position="left">{{ t('profile.dataAnalysis') }}</el-divider>
 
-            <el-form-item :label="t('profile.riskThreshold')" class="data-analysis-item">
+            <el-form-item :label="t('profile.riskThreshold')" class="data-analysis-item" label-width="140px">
               <div class="form-item-content">
                 <el-slider 
                   v-model="bigDataConfig.riskThreshold" 
@@ -306,7 +303,7 @@
               </div>
             </el-form-item>
 
-            <el-form-item :label="t('profile.maxTokens')" class="data-analysis-item">
+            <el-form-item :label="t('profile.maxTokens')" class="data-analysis-item" label-width="140px">
               <div class="form-item-content">
                 <el-input-number 
                   v-model="bigDataConfig.maxTokens" 
@@ -319,7 +316,7 @@
               </div>
             </el-form-item>
 
-            <el-form-item :label="t('profile.temperature')" class="data-analysis-item">
+            <el-form-item :label="t('profile.temperature')" class="data-analysis-item" label-width="140px">
               <div class="form-item-content">
                 <el-slider 
                   v-model="bigDataConfig.temperature" 
@@ -407,7 +404,7 @@ import { testAiConnection, getOllamaModels } from '@/api/ai'
 import { getSystemConfigs, saveSystemConfigs, getLoginHistory, getActiveSessions, terminateSession } from '@/api/system'
 import { Monitor } from '@element-plus/icons-vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const userStore = useUserStore()
 const appStore = useAppStore()
@@ -473,7 +470,7 @@ const formatDevice = (device: string) => {
 const formatTime = (time: string) => {
   if (!time) return '-'
   const date = new Date(time)
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(locale.value === 'en' ? 'en-US' : 'zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -585,7 +582,7 @@ const loadUserData = async () => {
       Object.assign(form, userStore.userInfo)
       avatarUrl.value = userStore.userInfo.avatar || ''
     } else {
-      ElMessage.error('未找到用户信息')
+      ElMessage.error(t('profile.noUserInfo'))
     }
   } catch (error) {
     ElMessage.error(t('common.error'))
@@ -631,9 +628,9 @@ const activeSessions = ref<any[]>([])
 
 const loadActiveSessions = async () => {
   try {
-    const response = await getActiveSessions()
-    if (response && response.data) {
-      activeSessions.value = response.data.map((s: any) => ({
+    const sessions = await getActiveSessions()
+    if (sessions) {
+      activeSessions.value = sessions.map((s: any) => ({
         id: s.id,
         device: s.device,
         ipAddress: s.ip,
@@ -676,7 +673,6 @@ const notificationSettings = reactive({
   expirationReminder: true,
   approvalNotification: true,
   commentNotification: true,
-  emailNotification: true,
   systemNotification: true
 })
 
@@ -686,7 +682,6 @@ const handleSaveNotificationSettings = async () => {
       ntf_expiration_reminder: notificationSettings.expirationReminder,
       ntf_approval_notification: notificationSettings.approvalNotification,
       ntf_comment_notification: notificationSettings.commentNotification,
-      ntf_email_notification: notificationSettings.emailNotification,
       ntf_system_notification: notificationSettings.systemNotification
     })
     ElMessage.success(t('common.success'))
@@ -897,12 +892,12 @@ const loadOllamaModels = async () => {
       if (!aiConfig.model && response.data.length > 0) {
         aiConfig.model = response.data[0].value
       }
-      ElMessage.success(`已加载 ${response.data.length} 个Ollama模型`)
+      ElMessage.success(t('profile.ollamaModelsLoaded', { count: response.data.length }))
     } else {
-      ElMessage.warning('未找到Ollama模型，请确保Ollama已运行并已下载模型')
+      ElMessage.warning(t('profile.ollamaNoModels'))
     }
   } catch (error: any) {
-    ElMessage.error('获取Ollama模型失败: ' + (error.message || '请检查Ollama是否运行'))
+    ElMessage.error(`${t('profile.ollamaLoadFailed')}: ${error.message || t('common.error')}`)
   } finally {
     ollamaLoading.value = false
   }
@@ -954,7 +949,6 @@ const loadConfigs = async () => {
       if (configs.ntf_expiration_reminder !== undefined) notificationSettings.expirationReminder = configs.ntf_expiration_reminder === true || configs.ntf_expiration_reminder === 'true'
       if (configs.ntf_approval_notification !== undefined) notificationSettings.approvalNotification = configs.ntf_approval_notification === true || configs.ntf_approval_notification === 'true'
       if (configs.ntf_comment_notification !== undefined) notificationSettings.commentNotification = configs.ntf_comment_notification === true || configs.ntf_comment_notification === 'true'
-      if (configs.ntf_email_notification !== undefined) notificationSettings.emailNotification = configs.ntf_email_notification === true || configs.ntf_email_notification === 'true'
       if (configs.ntf_system_notification !== undefined) notificationSettings.systemNotification = configs.ntf_system_notification === true || configs.ntf_system_notification === 'true'
     }
   } catch (error) {
@@ -1046,8 +1040,9 @@ onMounted(() => {
   .data-analysis-item {
     :deep(.el-form-item__content) {
       display: flex;
-      align-items: center;
-      flex-wrap: nowrap;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 8px;
     }
   }
   
@@ -1056,13 +1051,14 @@ onMounted(() => {
     align-items: center;
     gap: 12px;
     width: 100%;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
   
   .form-item-hint {
-    color: var(--text-secondary);
-    white-space: nowrap;
-    flex-shrink: 0;
+    width: 100%;
+    margin-top: 4px;
+    color: #909399;
+    font-size: 12px;
   }
   
   .test-success {

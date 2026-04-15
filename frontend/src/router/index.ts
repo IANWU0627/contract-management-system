@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { t } from '@/locales'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -250,7 +251,7 @@ router.beforeEach(async (to, from) => {
   if (allowedRoles && userRoles.length > 0) {
     const hasAccess = userRoles.some(role => allowedRoles.includes(role))
     if (!hasAccess) {
-      ElMessage.warning('您没有权限访问该页面')
+      ElMessage.warning(t('common.noPermission'))
       return '/dashboard'
     }
   }

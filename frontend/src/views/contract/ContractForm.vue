@@ -435,7 +435,7 @@ const templates = ref<any[]>([])
 const selectedTemplate = ref<any>(null)
 const selectedTemplateId = ref<number | null>(null)
 
-const templateVariables = ref<Record<string, string>>({})
+const templateVariables = ref<Record<string, string | number>>({})
 const extractedVariables = ref<any[]>([])
 const previewContent = ref('')
 const uploadedFile = ref<any>(null)

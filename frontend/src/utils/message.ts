@@ -148,7 +148,6 @@ export const showLoading = (message: string = '加载中...') => {
   return ElMessage({
     message,
     duration: 0,
-    iconClass: 'el-icon-loading',
     customClass: 'loading-message'
   })
 }

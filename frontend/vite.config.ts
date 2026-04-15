@@ -2,6 +2,23 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
+const manualChunks = (id: string) => {
+  if (id.includes('node_modules')) {
+    if (id.includes('element-plus') || id.includes('@element-plus/icons-vue')) {
+      return 'element-plus'
+    }
+    if (id.includes('@antv/g2plot')) {
+      return 'chart-lib'
+    }
+    if (id.includes('axios') || id.includes('xlsx') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('@vueup/vue-quill')) {
+      return 'utils-lib'
+    }
+    if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia') || id.includes('vue-i18n')) {
+      return 'vue-vendor'
+    }
+  }
+}
+
 export default defineConfig({
   plugins: [
     vue()
@@ -30,20 +47,11 @@ export default defineConfig({
     minify: 'esbuild',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router', 'pinia', 'vue-i18n'],
-          'element-plus': ['element-plus', '@element-plus/icons-vue'],
-          'chart-lib': ['@antv/g2plot'],
-          'utils-lib': ['axios', 'xlsx', 'jspdf', 'html2canvas', '@vueup/vue-quill']
-        },
+        manualChunks,
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
       }
     }
-  },
-  esbuild: {
-    drop: ['console', 'debugger'],
-    pure: ['console.log']
   }
 })

@@ -65,7 +65,7 @@ html[data-theme="dark"] {
 }
 
 /* 全局表格优化 - 解决英文过长导致的变形问题 */
-:deep(.el-table) {
+.el-table {
   .el-table__header-wrapper {
     th .cell {
       word-break: break-word;

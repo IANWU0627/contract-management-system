@@ -235,6 +235,14 @@
           </div>
           <el-progress :percentage="aiResult.score" :color="getScoreColor(aiResult.score)" :stroke-width="12" />
         </div>
+        <el-alert
+          v-if="isAiRiskWarning"
+          type="warning"
+          :title="$t('ai.riskThresholdAlert', { threshold: aiPreferences.riskThreshold })"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
 
         <!-- 合同摘要 -->
         <div class="section">
@@ -277,7 +285,7 @@
           </div>
           <ul class="suggestions-list">
             <li v-for="(suggestion, idx) in aiResult.suggestions" :key="idx">
-              <span class="suggestion-index">{{ idx + 1 }}.</span>
+              <span class="suggestion-index">{{ Number(idx) + 1 }}.</span>
               {{ suggestion }}
             </li>
           </ul>
@@ -341,7 +349,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
@@ -350,6 +358,7 @@ import { getContractTypeFieldConfig } from '@/api/contractTypeField'
 import { getAllFolders } from '@/api/folder'
 import { getContractCategories } from '@/api/contractCategory'
 import { getQuickCodeByCode } from '@/api/quickCode'
+import { getSystemConfigs } from '@/api/system'
 import { Search, Refresh, Plus, ArrowDown, Delete, Edit, More, Download, CircleCheck, TopRight, Document, Warning, InfoFilled } from '@element-plus/icons-vue'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -413,6 +422,58 @@ const aiResult = ref<any>({
   suggestions: [],
   keyInfo: {}
 })
+const aiPreferences = ref({
+  riskThreshold: 50,
+  enableCache: false,
+  cacheTimeout: 60
+})
+const isAiRiskWarning = computed(() =>
+  typeof aiResult.value?.score === 'number' && aiResult.value.score < aiPreferences.value.riskThreshold
+)
+
+const getAiAnalysisCacheKey = (contractId: number) => `ai-analysis:${contractId}`
+
+const loadAiRuntimeConfig = async () => {
+  const response = await getSystemConfigs()
+  const configs = response?.data || {}
+
+  aiPreferences.value = {
+    riskThreshold: Number(configs.bd_risk_threshold ?? 50),
+    enableCache: configs.bd_enable_cache === true || configs.bd_enable_cache === 'true',
+    cacheTimeout: Number(configs.bd_cache_timeout ?? 60)
+  }
+
+  return {
+    apiUrl: configs.ai_api_url || '',
+    apiKey: configs.ai_api_key || '',
+    model: configs.ai_model || 'gpt-3.5-turbo',
+    temperature: Number(configs.bd_temperature ?? 0.7),
+    maxTokens: Number(configs.bd_max_tokens ?? 1000)
+  }
+}
+
+const getCachedAiAnalysis = (contractId: number) => {
+  const raw = localStorage.getItem(getAiAnalysisCacheKey(contractId))
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw)
+    const expiresAt = Number(parsed.expiresAt || 0)
+    if (Date.now() > expiresAt) {
+      localStorage.removeItem(getAiAnalysisCacheKey(contractId))
+      return null
+    }
+    return parsed.result || null
+  } catch {
+    localStorage.removeItem(getAiAnalysisCacheKey(contractId))
+    return null
+  }
+}
+
+const setCachedAiAnalysis = (contractId: number, result: any) => {
+  const expiresAt = Date.now() + aiPreferences.value.cacheTimeout * 60 * 1000
+  localStorage.setItem(getAiAnalysisCacheKey(contractId), JSON.stringify({ result, expiresAt }))
+}
 
 // AI分析辅助函数
 const getScoreClass = (score: number) => {
@@ -785,15 +846,15 @@ const handleReset = () => {
 
 const handleDelete = async (id: number) => {
   try {
-    await ElMessageBox.confirm('确定要删除该合同吗？', '提示', {
+    await ElMessageBox.confirm(t('common.confirmDelete'), t('common.warning'), {
       type: 'warning'
     })
     await deleteContract(id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.success'))
     fetchData()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '删除失败')
+      ElMessage.error(error.message || t('common.error'))
     }
   }
 }
@@ -802,17 +863,31 @@ const handleAiAnalyze = async (id: number) => {
   aiDialogVisible.value = true
   aiLoading.value = true
   try {
-    const aiConfig = {
-      provider: localStorage.getItem('ai_provider') || 'none',
-      apiUrl: localStorage.getItem('ai_api_url') || '',
-      apiKey: localStorage.getItem('ai_api_key') || '',
-      model: localStorage.getItem('ai_model') || 'gpt-3.5-turbo'
+    const aiConfig = await loadAiRuntimeConfig()
+
+    if (aiPreferences.value.enableCache) {
+      const cachedResult = getCachedAiAnalysis(id)
+      if (cachedResult) {
+        aiResult.value = cachedResult
+        ElMessage.success(t('ai.cacheHit'))
+        return
+      }
     }
-    
+
+    if (!aiConfig.apiUrl) {
+      aiResult.value = { summary: '', score: 75, risks: [], suggestions: [], keyInfo: {} }
+      ElMessage.warning(t('ai.configRequired'))
+      return
+    }
+
     const res = await analyzeContract(id, aiConfig)
     aiResult.value = res.data || {}
+
+    if (aiPreferences.value.enableCache) {
+      setCachedAiAnalysis(id, aiResult.value)
+    }
   } catch (error) {
-    ElMessage.error('AI分析失败')
+    ElMessage.error(t('ai.analysisFailed'))
   } finally {
     aiLoading.value = false
   }
@@ -860,7 +935,7 @@ onUnmounted(() => {
   indeterminate.value = false
   aiDialogVisible.value = false
   aiLoading.value = false
-  aiResult.value = { summary: '', risks: [], keyInfo: {} }
+  aiResult.value = { summary: '', score: 75, risks: [], suggestions: [], keyInfo: {} }
 })
 </script>
 

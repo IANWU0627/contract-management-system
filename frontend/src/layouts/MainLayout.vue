@@ -757,14 +757,6 @@ watch(() => webSocketService.notifications.value.length, () => {
 onMounted(() => {
   // 加载搜索历史
   loadSearchHistory()
-  
-  // 添加一些默认通知
-  notifications.value = [
-    { id: 1, type: 'approval', priority: 'important', title: t('contract.statuses.pending'), desc: t('contract.statuses.pending') + ' 3', time: new Date(Date.now() - 10 * 60 * 1000), unread: true, important: true, link: '/approvals' },
-    { id: 2, type: 'reminder', priority: 'normal', title: t('statistics.expiringSoon'), desc: t('statistics.expiringSoon') + ' 7', time: new Date(Date.now() - 30 * 60 * 1000), unread: true, important: false, link: '/reminders' },
-    { id: 3, type: 'approval', priority: 'normal', title: t('contract.statuses.approved'), desc: t('contract.statuses.approved'), time: new Date(Date.now() - 2 * 60 * 60 * 1000), unread: false, important: false, link: '/approvals' },
-    { id: 4, type: 'system', priority: 'system', title: t('notification.systemUpdate'), desc: t('notification.systemUpdateDesc'), time: new Date(Date.now() - 24 * 60 * 60 * 1000), unread: false, important: false, link: '/settings' },
-  ]
   mergeWebSocketNotifications()
 })
 
@@ -813,62 +805,7 @@ const notificationSoundEnabled = ref(localStorage.getItem('notificationSound') !
 const toggleSound = () => {
   notificationSoundEnabled.value = !notificationSoundEnabled.value
   localStorage.setItem('notificationSound', String(notificationSoundEnabled.value))
-}
-
-// 播放提示音
-const playNotificationSound = () => {
-  if (notificationSoundEnabled.value) {
-    // 使用 Web Audio API 播放简单提示音
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-      oscillator.frequency.value = 800
-      oscillator.type = 'sine'
-      gainNode.gain.value = 0.1
-      oscillator.start()
-      setTimeout(() => oscillator.stop(), 100)
-    } catch (e) {
-      console.log('Audio not supported')
-    }
-  }
-}
-
-// WebSocket 模拟推送
-let wsTimer: ReturnType<typeof setInterval> | null = null
-const startWebSocket = () => {
-  // 模拟 WebSocket 推送，每 30-60 秒推送一条新通知
-  const simulatePush = () => {
-    const types: Array<{type: 'approval' | 'reminder' | 'system', priority: 'important' | 'normal' | 'system', title: string, desc: string, link: string}> = [
-      { type: 'approval', priority: 'important', title: t('contract.statuses.pending'), desc: t('contract.statuses.pending') + ' 1', link: '/approvals' },
-      { type: 'reminder', priority: 'normal', title: t('statistics.expiringSoon'), desc: t('statistics.expiringSoon') + ' 2', link: '/reminders' },
-      { type: 'system', priority: 'system', title: t('notification.newFeature'), desc: t('notification.newFeatureDesc'), link: '/settings' },
-    ]
-    const random = types[Math.floor(Math.random() * types.length)]
-    
-    const newNotif: Notification = {
-      id: Date.now(),
-      ...random,
-      time: new Date(),
-      unread: true,
-      important: random.priority === 'important'
-    }
-    
-    notifications.value.unshift(newNotif)
-    playNotificationSound()
-  }
-  
-  // 启动定时推送（仅开发环境模拟）
-  wsTimer = setInterval(simulatePush, 45000)
-}
-
-const stopWebSocket = () => {
-  if (wsTimer) {
-    clearInterval(wsTimer)
-    wsTimer = null
-  }
+  webSocketService.setSoundEnabled(notificationSoundEnabled.value)
 }
 
 // 点击通知
@@ -950,10 +887,7 @@ const handleNotificationSettings = (command: string) => {
 
 // 启动时连接 WebSocket (graceful fallback)
 onMounted(() => {
-  // Only simulate notifications in development
-  if (import.meta.env.DEV) {
-    startWebSocket()
-  }
+  webSocketService.setSoundEnabled(notificationSoundEnabled.value)
   // WebSocket connection will silently fail if server doesn't support it
   // App will work normally without real-time notifications
   if (userStore.isLoggedIn && userStore.userInfo?.id) {
@@ -966,7 +900,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopWebSocket()
   webSocketService.disconnect()
 })
 

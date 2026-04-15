@@ -99,6 +99,7 @@ class WebSocketService {
     if (['approval_request', 'approval_result'].includes(type)) return 'approval'
     if (['renewal_request', 'renewal_result'].includes(type)) return 'renewal'
     if (['reminder'].includes(type)) return 'reminder'
+    if (['contract_comment'].includes(type)) return 'system'
     return 'system'
   }
   
@@ -127,6 +128,7 @@ class WebSocketService {
       renewal_result: 'success',
       renewal_request: 'warning',
       reminder: 'info',
+      contract_comment: 'info',
       contract_update: 'info'
     }
     return typeMap[type] || 'info'

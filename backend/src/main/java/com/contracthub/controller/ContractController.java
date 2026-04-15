@@ -14,6 +14,8 @@ import com.contracthub.service.WordExportService;
 import com.contracthub.service.ExcelExportService;
 import com.contracthub.service.ContractNumberService;
 import com.contracthub.service.ContractService;
+import com.contracthub.service.NotificationService;
+import com.contracthub.service.UserConfigService;
 import com.contracthub.util.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -56,6 +58,8 @@ public class ContractController {
     private final ExcelExportService excelExportService;
     private final ContractNumberService contractNumberService;
     private final ContractService contractService;
+    private final NotificationService notificationService;
+    private final UserConfigService userConfigService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -64,6 +68,8 @@ public class ContractController {
                               WordExportService wordExportService, ExcelExportService excelExportService,
                               ContractNumberService contractNumberService,
                               ContractService contractService,
+                              NotificationService notificationService,
+                              UserConfigService userConfigService,
                               RestTemplate restTemplate) {
         this.contractMapper = contractMapper;
         this.commentMapper = commentMapper;
@@ -73,6 +79,8 @@ public class ContractController {
         this.excelExportService = excelExportService;
         this.contractNumberService = contractNumberService;
         this.contractService = contractService;
+        this.notificationService = notificationService;
+        this.userConfigService = userConfigService;
         this.restTemplate = restTemplate;
     }
     
@@ -521,21 +529,24 @@ public class ContractController {
     @SuppressWarnings("unchecked")
     public ApiResponse<Map<String, Object>> analyze(
             @PathVariable Long id,
-            @RequestBody(required = false) Map<String, String> aiConfig) {
+            @RequestBody(required = false) Map<String, Object> aiConfig) {
         
         Contract contract = contractMapper.selectById(id);
         if (contract == null) {
             return ApiResponse.error("合同不存在");
         }
         
+        Long userId = SecurityUtils.getCurrentUserId();
+        Map<String, String> configs = userConfigService.getUserConfigValues(userId);
+        String apiUrl = getConfigValue(aiConfig, "apiUrl", userConfigService.getStringConfig(configs, "ai_api_url", ""));
+        String apiKey = getConfigValue(aiConfig, "apiKey", userConfigService.getStringConfig(configs, "ai_api_key", ""));
+        String model = getConfigValue(aiConfig, "model", userConfigService.getStringConfig(configs, "ai_model", "gpt-3.5-turbo"));
+        double temperature = getDoubleConfigValue(aiConfig, "temperature", userConfigService.getDoubleConfig(configs, "bd_temperature", 0.7));
+        int maxTokens = getIntConfigValue(aiConfig, "maxTokens", userConfigService.getIntConfig(configs, "bd_max_tokens", 1000));
+
         // 如果有 AI 配置，调用 AI 服务
-        if (aiConfig != null && aiConfig.containsKey("apiUrl")) {
+        if (!apiUrl.isBlank()) {
             try {
-                // 调用 AI 分析服务
-                String apiUrl = aiConfig.get("apiUrl");
-                String apiKey = aiConfig.getOrDefault("apiKey", "");
-                String model = aiConfig.getOrDefault("model", "gpt-3.5-turbo");
-                
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 if (apiKey != null && !apiKey.isEmpty()) {
@@ -550,8 +561,8 @@ public class ContractController {
                     Map.of("role", "system", "content", "You are a professional contract analyst. Analyze contracts and provide structured feedback in JSON format."),
                     Map.of("role", "user", "content", prompt)
                 ));
-                requestBody.put("temperature", 0.7);
-                requestBody.put("max_tokens", 1000);
+                requestBody.put("temperature", temperature);
+                requestBody.put("max_tokens", maxTokens);
                 
                 HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
                 ResponseEntity<String> response = restTemplate.exchange(apiUrl, HttpMethod.POST, entity, String.class);
@@ -647,6 +658,40 @@ public class ContractController {
         }
         return null;
     }
+
+    private String getConfigValue(Map<String, Object> configMap, String key, String defaultValue) {
+        if (configMap == null) {
+            return defaultValue;
+        }
+        Object value = configMap.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        String result = String.valueOf(value).trim();
+        return result.isEmpty() ? defaultValue : result;
+    }
+
+    private double getDoubleConfigValue(Map<String, Object> configMap, String key, double defaultValue) {
+        if (configMap == null || configMap.get(key) == null) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(String.valueOf(configMap.get(key)));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private int getIntConfigValue(Map<String, Object> configMap, String key, int defaultValue) {
+        if (configMap == null || configMap.get(key) == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(configMap.get(key)));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
     
     // 评论列表
     @GetMapping("/{id}/comments")
@@ -699,6 +744,7 @@ public class ContractController {
     @PostMapping("/{id}/comments")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> addComment(@PathVariable Long id, @RequestBody Map<String, Object> commentData) {
+        Contract contract = contractMapper.selectById(id);
         ContractComment comment = new ContractComment();
         comment.setContractId(id);
         comment.setUserId(SecurityUtils.getCurrentUserId());
@@ -708,6 +754,32 @@ public class ContractController {
         comment.setCreatedAt(LocalDateTime.now());
         
         commentMapper.insert(comment);
+
+        if (contract != null) {
+            Set<Long> recipients = new LinkedHashSet<>();
+            Long currentUserId = comment.getUserId();
+
+            if (contract.getCreatorId() != null && !contract.getCreatorId().equals(currentUserId)) {
+                recipients.add(contract.getCreatorId());
+            }
+
+            if (comment.getParentId() != null) {
+                ContractComment parentComment = commentMapper.selectById(comment.getParentId());
+                if (parentComment != null && parentComment.getUserId() != null && !parentComment.getUserId().equals(currentUserId)) {
+                    recipients.add(parentComment.getUserId());
+                }
+            }
+
+            for (Long recipientId : recipients) {
+                notificationService.sendCommentNotification(
+                        recipientId,
+                        id,
+                        contract.getContractNo(),
+                        comment.getUsername(),
+                        comment.getContent()
+                );
+            }
+        }
         
         Map<String, Object> result = new HashMap<>();
         result.put("id", comment.getId());

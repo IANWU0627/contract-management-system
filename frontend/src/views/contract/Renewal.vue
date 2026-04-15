@@ -199,7 +199,7 @@ const currentRenewal = ref<any>(null)
 
 const renewalForm = reactive({
   contractId: undefined as number | undefined,
-  newEndDate: '',
+  newEndDate: '' as string | Date,
   renewalType: 'EXTEND',
   remark: ''
 })

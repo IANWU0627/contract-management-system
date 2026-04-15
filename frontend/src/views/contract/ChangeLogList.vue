@@ -3,7 +3,7 @@
     <el-table :data="logs" style="width: 100%" v-loading="loading" size="small">
       <el-table-column prop="changeType" :label="$t('contract.changeType')" width="120">
         <template #default="{ row }">
-          <el-tag :type="getChangeTypeTag(row.changeType)" size="small">
+          <el-tag :type="getTypeTagType(row.changeType)" size="small">
             {{ formatChangeType(row.changeType) }}
           </el-tag>
         </template>

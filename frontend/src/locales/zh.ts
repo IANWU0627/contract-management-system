@@ -1,5 +1,3 @@
-import { createI18n } from 'vue-i18n'
-
 const messages = {
   zh: {
     app: {
@@ -33,6 +31,7 @@ const messages = {
       saveDraft: '保存草稿',
       error: '操作失败',
       warning: '警告',
+      noPermission: '您没有权限访问该页面',
       confirmDelete: '确定要删除吗？',
       selectAll: '全选',
       batchDelete: '批量删除',
@@ -270,7 +269,11 @@ const messages = {
       aiTest: '测试',
       aiTestSuccess: '连接成功',
       aiTestError: '连接失败',
-      aiApiKeyRequired: '请输入 API Key'
+      aiApiKeyRequired: '请输入 API Key',
+      noUserInfo: '未找到用户信息',
+      ollamaModelsLoaded: '已加载 {count} 个 Ollama 模型',
+      ollamaNoModels: '未找到 Ollama 模型，请确保 Ollama 已运行并已下载模型',
+      ollamaLoadFailed: '获取 Ollama 模型失败'
     },
     settings: {
       appearance: '外观',
@@ -312,7 +315,19 @@ const messages = {
       aiTest: '测试连接',
       aiTestSuccess: '连接成功',
       aiTestError: '连接失败',
-      aiApiKeyRequired: '请先输入 API Key'
+      aiApiKeyRequired: '请先输入 API Key',
+      dataAnalysis: '数据分析',
+      riskThreshold: '风险阈值',
+      riskThresholdHint: '低于此值显示风险提醒',
+      maxTokens: '最大 Tokens',
+      maxTokensHint: 'AI 响应的最大长度',
+      temperature: '温度参数',
+      temperatureHint: '值越高越随机，越低越确定性',
+      advancedSettings: '高级设置',
+      enableCache: '启用缓存',
+      enableCacheHint: '缓存 AI 分析结果以减少 API 调用',
+      cacheTimeout: '缓存超时',
+      cacheTimeoutHint: '分钟'
     },
     reminder: {
       check: '手动检查',
@@ -386,7 +401,26 @@ const messages = {
         type: '请选择合同类型',
         remark: '请输入备注信息',
         startDate: '请选择开始日期',
-        endDate: '请选择结束日期'
+        endDate: '请选择结束日期',
+        autoGenerate: '系统自动生成',
+        currentUser: '当前用户',
+        companyName: '单位名称',
+        contact: '联系人',
+        phone: '联系电话',
+        email: '电子邮箱',
+        uploadAttachment: '上传合同附件',
+        dragUpload: '将文件拖到此处，或点击上传',
+        fileTypes: '支持 PDF、Word、文本格式，单个文件不超过 10MB',
+        mainTerms: '主要条款',
+        content: '请输入合同主要条款内容...',
+        noFiles: '暂无合同文件',
+        noAttachments: '暂无附件',
+        supportedFiles: '支持 PDF、Word、Excel、图片格式，单个文件不超过 10MB',
+        search: '搜索合同...',
+        keyword: '搜索合同名称、编号、类型、状态...',
+        categoryName: '请输入分类名称',
+        categoryNameEn: '请输入英文类型名称',
+        categoryCode: '请输入分类编码（英文）'
       },
       counterpartyLabel: '相对方',
       counterpartyPlaceholder: '请输入相对方单位名称',
@@ -593,32 +627,6 @@ const messages = {
         creditCode: '信用代码',
         bank: '开户银行',
         account: '银行账号'
-      },
-      placeholder: {
-        name: '请输入合同名称',
-        autoGenerate: '系统自动生成',
-        currentUser: '当前用户',
-        startDate: '开始日期',
-        endDate: '结束日期',
-        remark: '其他补充说明...',
-        companyName: '单位名称',
-        contact: '联系人',
-        phone: '联系电话',
-        email: '电子邮箱',
-        uploadAttachment: '上传合同附件',
-        dragUpload: '将文件拖到此处，或点击上传',
-        fileTypes: '支持 PDF、Word、文本格式，单个文件不超过 10MB',
-        mainTerms: '主要条款',
-        content: '请输入合同主要条款内容...',
-        noFiles: '暂无合同文件',
-        noAttachments: '暂无附件',
-        supportedFiles: '支持 PDF、Word、Excel、图片格式，单个文件不超过 10MB',
-        search: '搜索合同...',
-        keyword: '搜索合同名称、编号、类型、状态...',
-        categoryName: '请输入分类名称',
-        categoryNameEn: '请输入英文类型名称',
-        categoryCode: '请输入分类编码（英文）',
-        folder: '选择文件夹（可选）'
       },
       error: {
         title: '请输入合同名称',
@@ -1025,7 +1033,11 @@ const messages = {
       analyzing: 'AI分析中...',
       riskScore: '风险评分',
       suggestions: '优化建议',
-      keyClauses: '关键条款'
+      keyClauses: '关键条款',
+      configRequired: '请先在个人中心配置 AI 服务',
+      analysisFailed: 'AI 分析失败',
+      cacheHit: '已使用缓存的分析结果',
+      riskThresholdAlert: '当前风险评分低于阈值 {threshold}，建议优先复核'
     },
     statistics: {
       title: '数据统计',
@@ -1073,6 +1085,7 @@ const messages = {
       saveDraft: 'Save Draft',
       error: 'Error',
       warning: 'Warning',
+      noPermission: 'You do not have permission to access this page',
       confirmDelete: 'Are you sure to delete?',
       selectAll: 'Select All',
       batchDelete: 'Batch Delete',
@@ -1299,7 +1312,23 @@ const messages = {
       aiTest: 'Test',
       aiTestSuccess: 'Connection Success',
       aiTestError: 'Connection Failed',
-      aiApiKeyRequired: 'Please enter API Key'
+      aiApiKeyRequired: 'Please enter API Key',
+      noUserInfo: 'User information was not found',
+      ollamaModelsLoaded: '{count} Ollama models loaded',
+      ollamaNoModels: 'No Ollama models found. Please make sure Ollama is running and models are installed.',
+      ollamaLoadFailed: 'Failed to load Ollama models',
+      dataAnalysis: 'Data Analysis',
+      riskThreshold: 'Risk Threshold',
+      riskThresholdHint: 'Show risk reminder below this value',
+      maxTokens: 'Max Tokens',
+      maxTokensHint: 'Max length of AI response',
+      temperature: 'Temperature',
+      temperatureHint: 'Higher values = more random, lower values = more deterministic',
+      advancedSettings: 'Advanced Settings',
+      enableCache: 'Enable Cache',
+      enableCacheHint: 'Cache AI analysis results to reduce API calls',
+      cacheTimeout: 'Cache Timeout',
+      cacheTimeoutHint: 'minutes'
     },
     settings: {
       appearance: 'Appearance',
@@ -1414,7 +1443,26 @@ const messages = {
         type: 'Please select contract type',
         remark: 'Enter remark',
         startDate: 'Please select start date',
-        endDate: 'Please select end date'
+        endDate: 'Please select end date',
+        autoGenerate: 'Auto generated by system',
+        currentUser: 'Current user',
+        companyName: 'Company name',
+        contact: 'Contact person',
+        phone: 'Phone number',
+        email: 'Email',
+        uploadAttachment: 'Upload contract attachment',
+        dragUpload: 'Drag files here, or click to upload',
+        fileTypes: 'Supports PDF, Word, text formats, single file not exceeding 10MB',
+        mainTerms: 'Main terms',
+        content: 'Please enter main contract terms...',
+        noFiles: 'No contract files',
+        noAttachments: 'No attachments',
+        supportedFiles: 'Supports PDF, Word, Excel, image formats, single file not exceeding 10MB',
+        search: 'Search contracts...',
+        keyword: 'Search name, no., type, status...',
+        categoryName: 'Enter type name',
+        categoryNameEn: 'Enter English type name',
+        categoryCode: 'Enter type code (English)'
       },
       counterpartyLabel: 'Counterparty',
       counterpartyPlaceholder: 'Enter counterparty name',
@@ -1627,31 +1675,6 @@ const messages = {
         creditCode: 'Credit Code',
         bank: 'Bank',
         account: 'Account'
-      },
-      placeholder: {
-        name: 'Please enter contract name',
-        autoGenerate: 'Auto generated by system',
-        currentUser: 'Current user',
-        startDate: 'Start date',
-        endDate: 'End date',
-        remark: 'Additional notes...',
-        companyName: 'Company name',
-        contact: 'Contact person',
-        phone: 'Phone number',
-        email: 'Email',
-        uploadAttachment: 'Upload contract attachment',
-        dragUpload: 'Drag files here, or click to upload',
-        fileTypes: 'Supports PDF, Word, text formats, single file not exceeding 10MB',
-        mainTerms: 'Main terms',
-        content: 'Please enter main contract terms...',
-        noFiles: 'No contract files',
-        noAttachments: 'No attachments',
-        supportedFiles: 'Supports PDF, Word, Excel, image formats, single file not exceeding 10MB',
-        search: 'Search contracts...',
-        keyword: 'Search name, no., type, status...',
-        categoryName: 'Enter type name',
-        categoryNameEn: 'Enter English type name',
-        categoryCode: 'Enter type code (English)'
       },
       error: {
         title: 'Please enter contract name',
@@ -2038,7 +2061,11 @@ const messages = {
       analyzing: 'Analyzing...',
       riskScore: 'Risk Score',
       suggestions: 'Suggestions',
-      keyClauses: 'Key Clauses'
+      keyClauses: 'Key Clauses',
+      configRequired: 'Please configure the AI service in your profile first',
+      analysisFailed: 'AI analysis failed',
+      cacheHit: 'Loaded cached analysis result',
+      riskThresholdAlert: 'The current risk score is below the threshold {threshold}. A priority review is recommended.'
     },
     statistics: {
       title: 'Statistics',
@@ -2056,18 +2083,7 @@ const messages = {
   }
 }
 
-const i18n = createI18n({
-  legacy: false,  // 使用 Composition API 模式
-  locale: localStorage.getItem('locale') || 'zh',
-  fallbackLocale: 'zh',
-  messages
-})
-
-// 导出全局翻译函数供路由守卫使用
-export const t = (key: string) => {
-  return i18n.global.t(key)
-}
-
-export default i18n
 export { messages }
 export const zh = messages.zh
+export const en = messages.en
+export default zh

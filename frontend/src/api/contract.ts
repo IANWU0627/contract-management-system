@@ -198,8 +198,8 @@ export const generateContractPdf = async (data: { content: string; contractNo?: 
   container.style.fontSize = '14px'
   container.style.lineHeight = '1.8'
   container.style.color = '#333'
-  container.style.webkitFontSmoothing = 'antialiased'
-  container.style.mozOsxFontSmoothing = 'grayscale'
+  container.style.setProperty('-webkit-font-smoothing', 'antialiased')
+  container.style.setProperty('-moz-osx-font-smoothing', 'grayscale')
   
   if (watermark) {
     const watermarkDiv = document.createElement('div')

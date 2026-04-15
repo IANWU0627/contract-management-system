@@ -149,7 +149,7 @@
         </el-form-item>
         <el-form-item 
           v-if="form.type === 'select' || form.type === 'multiselect'" 
-          :label="关联快速代码" 
+          :label="'关联快速代码'" 
           prop="quickCodeCode"
         >
           <el-select v-model="form.quickCodeCode" style="width: 100%" clearable placeholder="请选择快速代码">

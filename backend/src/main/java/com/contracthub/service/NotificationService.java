@@ -14,13 +14,29 @@ public class NotificationService {
 
     private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
     private final WebSocketHandler webSocketHandler;
+    private final UserConfigService userConfigService;
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    public NotificationService(WebSocketHandler webSocketHandler) {
+    public NotificationService(WebSocketHandler webSocketHandler, UserConfigService userConfigService) {
         this.webSocketHandler = webSocketHandler;
+        this.userConfigService = userConfigService;
     }
 
     public void sendToUser(Long userId, String type, String title, String content, Map<String, Object> data) {
+        if (userId == null) {
+            return;
+        }
+
+        Map<String, String> configs = userConfigService.getUserConfigValues(userId);
+        if (!userConfigService.getBooleanConfig(configs, "ntf_system_notification", true)) {
+            logger.info("Skip notification for user {} because system notification is disabled", userId);
+            return;
+        }
+        if (!isCategoryEnabled(configs, type)) {
+            logger.info("Skip notification type {} for user {} because category is disabled", type, userId);
+            return;
+        }
+
         Map<String, Object> message = new HashMap<>();
         message.put("type", type);
         message.put("title", title);
@@ -31,6 +47,24 @@ public class NotificationService {
         
         webSocketHandler.sendToUser(userId, message);
         logger.info("Notification sent to user {}: {}", userId, title);
+    }
+
+    private boolean isCategoryEnabled(Map<String, String> configs, String type) {
+        if (type == null) {
+            return true;
+        }
+
+        String configKey = switch (type) {
+            case "approval_request", "approval_result", "renewal_request", "renewal_result" -> "ntf_approval_notification";
+            case "reminder" -> "ntf_expiration_reminder";
+            case "contract_comment" -> "ntf_comment_notification";
+            default -> null;
+        };
+
+        if (configKey == null) {
+            return true;
+        }
+        return userConfigService.getBooleanConfig(configs, configKey, true);
     }
 
     public void sendApprovalRequest(Long approverId, Long contractId, String contractNo, String title) {
@@ -97,6 +131,21 @@ public class NotificationService {
         
         sendToUser(userId, "contract_update", "合同更新", 
                 "合同 " + contractNo + " 发生了" + changeType, data);
+    }
+
+    public void sendCommentNotification(Long userId, Long contractId, String contractNo, String commenterName, String content) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("contractId", contractId);
+        data.put("contractNo", contractNo);
+        data.put("commenterName", commenterName);
+
+        String preview = content == null ? "" : content.trim();
+        if (preview.length() > 60) {
+            preview = preview.substring(0, 60) + "...";
+        }
+
+        sendToUser(userId, "contract_comment", "合同评论通知",
+                commenterName + " 在合同 " + contractNo + " 中评论了您：" + preview, data);
     }
 
     public void broadcast(String type, String title, String content) {

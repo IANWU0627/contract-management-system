@@ -503,9 +503,9 @@ const handleTestSms = async () => {
 const loadSystemStatus = async () => {
   try {
     monitorLoading.value = true
-    const response = await getSystemStatus()
-    if (response && response.data) {
-      systemStatus.value = response.data
+    const status = await getSystemStatus()
+    if (status) {
+      systemStatus.value = status
     }
   } catch (error) {
     console.error('加载系统状态失败:', error)
@@ -523,9 +523,9 @@ const getProgressColor = (percentage: number) => {
 const loadActiveSessions = async () => {
   try {
     sessionsLoading.value = true
-    const response = await getActiveSessions()
-    if (response && response.data) {
-      activeSessions.value = response.data
+    const sessions = await getActiveSessions()
+    if (sessions) {
+      activeSessions.value = sessions
     }
   } catch (error) {
     console.error('加载活跃会话失败:', error)

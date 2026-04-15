@@ -48,7 +48,7 @@ import { getComments, addComment, deleteComment } from '@/api/extra'
 import { useUserStore } from '@/stores/user'
 import { ChatDotRound, Delete } from '@element-plus/icons-vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const route = useRoute()
 const props = defineProps<{ contractId?: number }>()
@@ -102,7 +102,7 @@ const handleDelete = async (commentId: number) => {
 
 const formatTime = (time: string) => {
   if (!time) return ''
-  return new Date(time).toLocaleString('zh-CN')
+  return new Date(time).toLocaleString(locale.value === 'en' ? 'en-US' : 'zh-CN')
 }
 
 onMounted(() => { fetchComments() })
