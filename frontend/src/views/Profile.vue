@@ -289,73 +289,108 @@
 
             <el-divider content-position="left">{{ t('profile.dataAnalysis') }}</el-divider>
 
-            <el-form-item :label="t('profile.riskThreshold')" class="data-analysis-item" label-width="140px">
-              <div class="form-item-content">
-                <el-slider 
-                  v-model="bigDataConfig.riskThreshold" 
-                  :min="0" 
-                  :max="100" 
-                  :step="5"
-                  show-input
-                  style="width: 300px"
-                />
-                <span class="form-item-hint">{{ t('profile.riskThresholdHint') }}</span>
-              </div>
-            </el-form-item>
+            <div class="smart-analysis-panel">
+              <p class="smart-analysis-intro">{{ t('profile.smartAnalysisIntro') }}</p>
 
-            <el-form-item :label="t('profile.maxTokens')" class="data-analysis-item" label-width="140px">
-              <div class="form-item-content">
-                <el-input-number 
-                  v-model="bigDataConfig.maxTokens" 
-                  :min="100" 
-                  :max="8192" 
-                  :step="100"
-                  style="width: 200px"
-                />
-                <span class="form-item-hint">{{ t('profile.maxTokensHint') }}</span>
-              </div>
-            </el-form-item>
+              <el-row :gutter="24">
+                <el-col :xs="24" :md="14">
+                  <div class="analysis-section">
+                    <div class="analysis-section-title">{{ t('profile.riskThresholdSection') }}</div>
+                    <el-form-item :label="t('profile.riskThreshold')" class="smart-analysis-form-item" label-width="112px">
+                      <div class="form-item-stack">
+                        <div class="risk-presets">
+                          <el-button-group>
+                            <el-button size="small" @click="bigDataConfig.riskThreshold = 40">{{ t('profile.riskPresetStrict') }}</el-button>
+                            <el-button size="small" @click="bigDataConfig.riskThreshold = 55">{{ t('profile.riskPresetBalanced') }}</el-button>
+                            <el-button size="small" @click="bigDataConfig.riskThreshold = 70">{{ t('profile.riskPresetLenient') }}</el-button>
+                          </el-button-group>
+                        </div>
+                        <el-slider
+                          v-model="bigDataConfig.riskThreshold"
+                          :min="0"
+                          :max="100"
+                          :step="5"
+                          show-input
+                          class="risk-slider"
+                        />
+                        <span class="form-item-hint">{{ t('profile.riskThresholdHint') }}</span>
+                      </div>
+                    </el-form-item>
+                  </div>
+                </el-col>
 
-            <el-form-item :label="t('profile.temperature')" class="data-analysis-item" label-width="140px">
-              <div class="form-item-content">
-                <el-slider 
-                  v-model="bigDataConfig.temperature" 
-                  :min="0" 
-                  :max="2" 
-                  :step="0.1"
-                  show-input
-                  style="width: 300px"
-                />
-                <span class="form-item-hint">{{ t('profile.temperatureHint') }}</span>
-              </div>
-            </el-form-item>
+                <el-col :xs="24" :md="10">
+                  <div class="analysis-section">
+                    <div class="analysis-section-title">{{ t('profile.modelParamsSection') }}</div>
+                    <el-form-item :label="t('profile.maxTokens')" class="smart-analysis-form-item" label-width="112px">
+                      <div class="form-item-stack">
+                        <el-input-number
+                          v-model="bigDataConfig.maxTokens"
+                          :min="100"
+                          :max="8192"
+                          :step="100"
+                          controls-position="right"
+                          class="token-input"
+                        />
+                        <span class="form-item-hint">{{ t('profile.maxTokensHint') }}</span>
+                      </div>
+                    </el-form-item>
+                    <el-form-item :label="t('profile.temperature')" class="smart-analysis-form-item" label-width="112px">
+                      <div class="form-item-stack">
+                        <el-slider
+                          v-model="bigDataConfig.temperature"
+                          :min="0"
+                          :max="2"
+                          :step="0.1"
+                          show-input
+                          class="temp-slider"
+                        />
+                        <span class="form-item-hint">{{ t('profile.temperatureHint') }}</span>
+                      </div>
+                    </el-form-item>
+                  </div>
+                </el-col>
+              </el-row>
 
-            <el-divider content-position="left">{{ t('profile.advancedSettings') }}</el-divider>
-
-            <el-form-item :label="t('profile.enableCache')" class="data-analysis-item">
-              <div class="form-item-content">
-                <el-switch v-model="bigDataConfig.enableCache" />
-                <span class="form-item-hint">{{ t('profile.enableCacheHint') }}</span>
+              <div class="analysis-section advanced-section">
+                <div class="analysis-section-title">{{ t('profile.advancedSettings') }}</div>
+                <el-row :gutter="20">
+                  <el-col :xs="24" :sm="12">
+                    <el-form-item :label="t('profile.enableCache')" class="smart-analysis-form-item" label-width="112px">
+                      <div class="cache-row">
+                        <el-switch v-model="bigDataConfig.enableCache" />
+                        <span class="form-item-hint cache-hint">{{ t('profile.enableCacheHint') }}</span>
+                      </div>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :xs="24" :sm="12">
+                    <el-form-item
+                      v-show="bigDataConfig.enableCache"
+                      :label="t('profile.cacheTimeout')"
+                      class="smart-analysis-form-item"
+                      label-width="112px"
+                    >
+                      <div class="form-item-stack">
+                        <el-input-number
+                          v-model="bigDataConfig.cacheTimeout"
+                          :min="5"
+                          :max="1440"
+                          :step="5"
+                          controls-position="right"
+                          class="cache-timeout-input"
+                        />
+                        <span class="form-item-hint">{{ t('profile.cacheTimeoutHint') }}</span>
+                      </div>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
               </div>
-            </el-form-item>
 
-            <el-form-item :label="t('profile.cacheTimeout')" class="data-analysis-item">
-              <div class="form-item-content">
-                <el-input-number 
-                  v-model="bigDataConfig.cacheTimeout" 
-                  :min="5" 
-                  :max="1440" 
-                  :step="5"
-                  style="width: 200px"
-                />
-                <span class="form-item-hint">{{ t('profile.cacheTimeoutHint') }}</span>
+              <div class="smart-analysis-actions">
+                <el-button type="primary" @click="handleSaveBigDataConfig">{{ t('common.save') }}</el-button>
+                <el-button @click="handleResetBigDataConfig">{{ t('common.reset') }}</el-button>
               </div>
-            </el-form-item>
-            
-            <el-form-item>
-              <el-button type="primary" @click="handleSaveBigDataConfig">{{ t('common.save') }}</el-button>
-              <el-button @click="handleResetBigDataConfig">{{ t('common.reset') }}</el-button>
-            </el-form-item>
+            </div>
           </el-form>
         </el-card>
       </el-tab-pane>
@@ -973,10 +1008,6 @@ const handleSaveAiConfig = async () => {
 const handleSaveBigDataConfig = async () => {
   try {
     await saveSystemConfigs({
-      ai_provider: aiConfig.provider,
-      ai_api_url: aiConfig.apiUrl,
-      ai_api_key: aiConfig.apiKey,
-      ai_model: aiConfig.model,
       bd_risk_threshold: bigDataConfig.riskThreshold,
       bd_max_tokens: bigDataConfig.maxTokens,
       bd_temperature: bigDataConfig.temperature,
@@ -1037,28 +1068,98 @@ onMounted(() => {
     }
   }
   
-  .data-analysis-item {
+  .smart-analysis-panel {
+    padding: 20px 22px 8px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    background: var(--el-fill-color-blank);
+  }
+
+  .smart-analysis-intro {
+    margin: 0 0 18px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--el-text-color-secondary);
+  }
+
+  .analysis-section {
+    margin-bottom: 8px;
+  }
+
+  .analysis-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+  }
+
+  .advanced-section {
+    margin-top: 8px;
+    padding-top: 4px;
+  }
+
+  .smart-analysis-form-item {
+    margin-bottom: 14px;
     :deep(.el-form-item__content) {
-      display: flex;
       align-items: flex-start;
-      flex-wrap: wrap;
-      gap: 8px;
     }
   }
-  
-  .form-item-content {
+
+  .form-item-stack {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 8px;
     width: 100%;
-    flex-wrap: wrap;
+    min-width: 0;
   }
-  
-  .form-item-hint {
+
+  .risk-presets {
+    margin-bottom: 4px;
+  }
+
+  .risk-slider,
+  .temp-slider {
     width: 100%;
-    margin-top: 4px;
-    color: #909399;
+    max-width: 420px;
+  }
+
+  .token-input,
+  .cache-timeout-input {
+    width: 100%;
+    max-width: 200px;
+  }
+
+  .cache-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .cache-hint {
+    flex: 1;
+    min-width: 160px;
+    margin-top: 0 !important;
+  }
+
+  .smart-analysis-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
+
+  .form-item-hint {
+    display: block;
+    margin-top: 2px;
+    color: var(--el-text-color-secondary);
     font-size: 12px;
+    line-height: 1.45;
   }
   
   .test-success {
