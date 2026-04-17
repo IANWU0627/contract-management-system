@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS user (
     phone VARCHAR(20),
     avatar LONGTEXT,
     role VARCHAR(20) NOT NULL,
-    status INTEGER DEFAULT 1
+    status INTEGER DEFAULT 1,
+    department VARCHAR(100)
 );
 
 -- 创建角色表
@@ -48,26 +49,26 @@ CREATE TABLE IF NOT EXISTS contract (
     contract_no VARCHAR(50) NOT NULL UNIQUE,
     title VARCHAR(255) NOT NULL,
     type VARCHAR(20) NOT NULL,
-    counterparty VARCHAR(255) NOT NULL,
+    counterparty VARCHAR(255),
     counterparties TEXT,
     amount DECIMAL(18,2),
     currency VARCHAR(10) DEFAULT 'CNY',
     start_date DATE,
     end_date DATE,
     status VARCHAR(20) NOT NULL,
-    content TEXT,
-    template_variables TEXT,
-    dynamic_field_values TEXT,
     template_id BIGINT,
     content_mode VARCHAR(32),
     attachment VARCHAR(255),
-    attachments TEXT,
     remark TEXT,
     creator_id BIGINT,
     create_time TIMESTAMP,
     update_time TIMESTAMP,
     folder_id BIGINT,
+    parent_contract_id BIGINT,
+    relation_type VARCHAR(20) DEFAULT 'MAIN',
     starred BOOLEAN DEFAULT FALSE,
+    submitted_at TIMESTAMP NULL,
+    current_approver_name VARCHAR(100),
     timezone VARCHAR(64),
     deleted INTEGER DEFAULT 0
 );
@@ -85,6 +86,19 @@ CREATE TABLE IF NOT EXISTS contract_attachment (
     uploader_id BIGINT,
     uploader_name VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS contract_payload (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    content LONGTEXT,
+    template_variables LONGTEXT,
+    dynamic_field_values LONGTEXT,
+    attachments LONGTEXT,
+    content_hash VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_contract_payload_contract_id (contract_id)
 );
 
 -- 创建合同分类表
@@ -113,6 +127,7 @@ CREATE TABLE IF NOT EXISTS contract_change_log (
     field_name VARCHAR(100),
     old_value TEXT,
     new_value TEXT,
+    diff_json TEXT,
     remark TEXT,
     operator_id BIGINT,
     operator_name VARCHAR(50),
@@ -248,6 +263,22 @@ CREATE TABLE IF NOT EXISTS contract_template (
     updated_at TIMESTAMP
 );
 
+-- 创建标准条款库表
+CREATE TABLE IF NOT EXISTS contract_clause (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    code VARCHAR(64) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    name_en VARCHAR(255),
+    category VARCHAR(100),
+    content TEXT,
+    description VARCHAR(500),
+    status TINYINT DEFAULT 1,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_contract_clause_code (code)
+);
+
 -- 创建合同类型字段配置表
 CREATE TABLE IF NOT EXISTS contract_type_field (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -256,6 +287,7 @@ CREATE TABLE IF NOT EXISTS contract_type_field (
     field_label VARCHAR(100) NOT NULL,
     field_label_en VARCHAR(100),
     field_type VARCHAR(20) NOT NULL DEFAULT 'text',
+    quick_code_id VARCHAR(50),
     required BOOLEAN DEFAULT FALSE,
     show_in_list BOOLEAN DEFAULT FALSE,
     show_in_form BOOLEAN DEFAULT TRUE,
@@ -282,6 +314,70 @@ CREATE TABLE IF NOT EXISTS contract_version (
     operator_name VARCHAR(50),
     created_at TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS contract_version_diff_analysis (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    base_version_id BIGINT NOT NULL,
+    target_version_id BIGINT NOT NULL,
+    diff_json LONGTEXT,
+    risk_json LONGTEXT,
+    overall_risk VARCHAR(20) DEFAULT 'LOW',
+    model_name VARCHAR(100) DEFAULT 'rule-engine',
+    prompt_version VARCHAR(32) DEFAULT 'v1',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_contract_diff_contract_versions ON contract_version_diff_analysis(contract_id, base_version_id, target_version_id);
+CREATE INDEX IF NOT EXISTS idx_contract_diff_updated_at ON contract_version_diff_analysis(updated_at);
+
+-- 创建合同审批快照表（冻结审批时的正文与变量）
+CREATE TABLE IF NOT EXISTS contract_snapshot (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    snapshot_type VARCHAR(32) NOT NULL,
+    content LONGTEXT,
+    template_variables LONGTEXT,
+    snapshot_meta LONGTEXT,
+    content_hash VARCHAR(64),
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_contract_snapshot_contract_time ON contract_snapshot(contract_id, created_at);
+CREATE TABLE IF NOT EXISTS contract_snapshot_diff_analysis (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    base_snapshot_id BIGINT NOT NULL,
+    target_snapshot_id BIGINT NOT NULL,
+    diff_json LONGTEXT,
+    risk_json LONGTEXT,
+    overall_risk VARCHAR(20) DEFAULT 'LOW',
+    model_name VARCHAR(100) DEFAULT 'rule-engine',
+    prompt_version VARCHAR(32) DEFAULT 'v1',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_snapshot_diff_contract_snapshots ON contract_snapshot_diff_analysis(contract_id, base_snapshot_id, target_snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_snapshot_diff_updated_at ON contract_snapshot_diff_analysis(updated_at);
+CREATE TABLE IF NOT EXISTS contract_ai_summary (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    snapshot_id BIGINT NULL,
+    summary_text LONGTEXT,
+    key_terms_json LONGTEXT,
+    risks_json LONGTEXT,
+    confidence_score INT DEFAULT 0,
+    model_name VARCHAR(100),
+    summary_version VARCHAR(32) DEFAULT 'v1',
+    status VARCHAR(32) DEFAULT 'SUCCESS',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_contract_ai_summary_contract_updated ON contract_ai_summary(contract_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_contract_ai_summary_snapshot ON contract_ai_summary(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_contract_payload_updated_at ON contract_payload(updated_at);
 
 -- 创建审批记录表
 CREATE TABLE IF NOT EXISTS approval_record (

@@ -39,8 +39,8 @@
       <el-empty :description="$t('contract.noRenewals')" />
     </div>
 
-    <el-dialog v-model="showCreateDialog" :title="$t('contract.renewContract')" width="500px">
-      <el-form :model="renewalForm" label-width="100px">
+    <el-dialog v-model="showCreateDialog" :title="$t('contract.renewContract')" width="560px" class="renewal-create-dialog">
+      <el-form :model="renewalForm" label-width="170px" class="renewal-form">
         <el-form-item :label="$t('contract.oldEndDate')">
           <el-input :value="contractEndDate" disabled />
         </el-form-item>
@@ -212,6 +212,34 @@ onMounted(() => {
   
   .empty-state {
     padding: 40px 0;
+  }
+}
+
+.renewal-create-dialog {
+  :deep(.renewal-form .el-form-item__label) {
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+@media (max-width: 768px) {
+  .renewal-create-dialog {
+    :deep(.renewal-form) {
+      .el-form-item {
+        display: block;
+      }
+
+      .el-form-item__label {
+        width: 100% !important;
+        text-align: left;
+        margin-bottom: 6px;
+      }
+
+      .el-form-item__content {
+        margin-left: 0 !important;
+      }
+    }
   }
 }
 </style>

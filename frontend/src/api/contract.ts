@@ -5,13 +5,15 @@ export interface Contract {
   contractNo: string
   title: string
   type: string
-  counterparty: string
+  counterparty?: string
   amount: number
   startDate: string
   endDate: string
   status: string
   content?: string
   attachment?: string
+  parentContractId?: number | null
+  relationType?: 'MAIN' | 'SUPPLEMENT'
   createdBy?: number
   createdAt?: string
   updatedAt?: string
@@ -45,6 +47,30 @@ export const getContractList = (params: ContractQuery) =>
 export const getContract = (id: number) => 
   get(`/contracts/${id}`)
 
+// 合同正文 payload（按需加载大字段）
+export const getContractPayload = (id: number) =>
+  get(`/contracts/${id}/payload`)
+
+// 合同快照列表
+export const getContractSnapshots = (id: number) =>
+  get(`/contracts/${id}/snapshots`)
+
+// 合同快照详情
+export const getContractSnapshotDetail = (id: number, snapshotId: number) =>
+  get(`/contracts/${id}/snapshots/${snapshotId}`)
+
+// 审批摘要卡片（查询）
+export const getApprovalSummary = (id: number) =>
+  get(`/contracts/${id}/approval-summary`)
+
+// 审批摘要卡片（生成/刷新）
+export const generateApprovalSummary = (id: number, force = false) =>
+  post(`/contracts/${id}/approval-summary/generate?force=${force}`)
+
+// 合同关联信息（主合同/补充协议）
+export const getRelatedContracts = (id: number) =>
+  get(`/contracts/${id}/related`)
+
 // 创建合同
 export const createContract = (data: Partial<Contract>) => 
   post('/contracts', data)
@@ -77,6 +103,10 @@ export const approveContract = (id: number, comment?: string) =>
 export const rejectContract = (id: number, comment: string) => 
   post(`/contracts/${id}/reject`, { comment })
 
+// 撤回审批
+export const withdrawContract = (id: number, reason?: string) =>
+  post(`/contracts/${id}/withdraw`, { reason })
+
 // 签署合同
 export const signContract = (id: number) => 
   post(`/contracts/${id}/sign`)
@@ -86,8 +116,20 @@ export const archiveContract = (id: number) =>
   post(`/contracts/${id}/archive`)
 
 // 终止合同
-export const terminateContract = (id: number) => 
-  post(`/contracts/${id}/terminate`)
+export const terminateContract = (id: number, reason?: string) => 
+  post(`/contracts/${id}/terminate`, { reason })
+
+// 发起续签流程
+export const startRenewalFlow = (id: number, reason?: string) =>
+  post(`/contracts/${id}/renewal/start`, { reason })
+
+// 续签完成
+export const completeRenewalFlow = (id: number, reason?: string) =>
+  post(`/contracts/${id}/renewal/complete`, { reason })
+
+// 不续签
+export const declineRenewalFlow = (id: number, reason?: string) =>
+  post(`/contracts/${id}/renewal/decline`, { reason })
 
 // 下载PDF
 export const downloadContractPdf = (id: number) => 

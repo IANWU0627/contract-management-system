@@ -116,6 +116,7 @@ public class AuthController {
         data.put("email", user.getEmail());
         data.put("phone", user.getPhone());
         data.put("avatar", user.getAvatar());
+        data.put("department", user.getDepartment());
         
         // 创建会话记录
         try {

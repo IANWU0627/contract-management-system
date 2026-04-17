@@ -17,23 +17,28 @@ public class Contract {
     private String contractNo;
     private String title;
     private String type;
-    private String counterparty; // 传统的单个相对方字段，用于兼容旧数据
     private String counterparties; // 新字段，用于存储多个相对方的JSON数据
     private BigDecimal amount;
     private String currency;
     private LocalDate startDate;
     private LocalDate endDate;
     private String status;
+    @TableField(exist = false)
     private String content;
+    @TableField(exist = false)
     private String templateVariables; // 存储模板变量的JSON数据
+    @TableField(exist = false)
     private String dynamicFieldValues; // 存储动态字段值的JSON数据
     private Long templateId; // 关联的模板ID
     private String contentMode; // 内容模式: template 或 upload
     private String attachment;
+    @TableField(exist = false)
     private String attachments; // 存储附件数组的JSON数据
     private String remark;
     private Long creatorId;
     private Long folderId;
+    private Long parentContractId;
+    private String relationType;
     
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
@@ -42,6 +47,8 @@ public class Contract {
     private LocalDateTime updateTime;
     
     private Boolean starred;
+    private LocalDateTime submittedAt;
+    private String currentApproverName;
     private String timezone;
     
     // Getters and Setters
@@ -53,8 +60,6 @@ public class Contract {
     public void setTitle(String title) { this.title = title; }
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
-    public String getCounterparty() { return counterparty; }
-    public void setCounterparty(String counterparty) { this.counterparty = counterparty; }
     public String getCounterparties() { return counterparties; }
     public void setCounterparties(String counterparties) { this.counterparties = counterparties; }
     public BigDecimal getAmount() { return amount; }
@@ -83,6 +88,10 @@ public class Contract {
     public void setCreatorId(Long creatorId) { this.creatorId = creatorId; }
     public Long getFolderId() { return folderId; }
     public void setFolderId(Long folderId) { this.folderId = folderId; }
+    public Long getParentContractId() { return parentContractId; }
+    public void setParentContractId(Long parentContractId) { this.parentContractId = parentContractId; }
+    public String getRelationType() { return relationType; }
+    public void setRelationType(String relationType) { this.relationType = relationType; }
     public LocalDateTime getCreateTime() { return createTime; }
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
     public LocalDateTime getUpdateTime() { return updateTime; }
@@ -90,6 +99,10 @@ public class Contract {
     
     public Boolean getStarred() { return starred; }
     public void setStarred(Boolean starred) { this.starred = starred; }
+    public LocalDateTime getSubmittedAt() { return submittedAt; }
+    public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
+    public String getCurrentApproverName() { return currentApproverName; }
+    public void setCurrentApproverName(String currentApproverName) { this.currentApproverName = currentApproverName; }
     public String getTimezone() { return timezone; }
     public void setTimezone(String timezone) { this.timezone = timezone; }
     public Long getTemplateId() { return templateId; }

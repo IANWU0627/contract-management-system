@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Results;
 import org.apache.ibatis.annotations.Result;
+import org.apache.ibatis.annotations.Update;
 import java.util.List;
 import java.util.Map;
 
@@ -27,4 +28,26 @@ public interface ContractTypeFieldMapper extends BaseMapper<ContractTypeField> {
         @Result(column = "count", property = "count")
     })
     List<Map<String, Object>> selectCountsByType();
+
+    @Update("""
+            UPDATE contract_type_field
+            SET contract_type = #{contractType},
+                field_key = #{fieldKey},
+                field_label = #{fieldLabel},
+                field_label_en = #{fieldLabelEn},
+                field_type = #{fieldType},
+                required = #{required},
+                show_in_list = #{showInList},
+                show_in_form = #{showInForm},
+                field_order = #{fieldOrder},
+                placeholder = #{placeholder},
+                placeholder_en = #{placeholderEn},
+                default_value = #{defaultValue},
+                options = #{options},
+                min_value = #{minValue},
+                max_value = #{maxValue},
+                updated_at = NOW()
+            WHERE id = #{id}
+            """)
+    int updateByIdWithoutQuickCodeId(ContractTypeField field);
 }

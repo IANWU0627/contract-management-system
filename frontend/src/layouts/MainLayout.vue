@@ -43,6 +43,10 @@
               <el-icon><FolderOpened /></el-icon>
               <span>{{ $t('menu.templates') }}</span>
             </el-menu-item>
+            <el-menu-item index="/clauses" v-if="hasPermission('TEMPLATE_MANAGE')">
+              <el-icon><DocumentCopy /></el-icon>
+              <span>{{ $t('menu.clauses') }}</span>
+            </el-menu-item>
             <el-menu-item index="/approvals" v-if="hasPermission('CONTRACT_APPROVE')">
               <el-icon><Checked /></el-icon>
               <span>{{ $t('menu.approvals') }}</span>

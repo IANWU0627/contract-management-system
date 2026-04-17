@@ -113,9 +113,15 @@ contract-management-system/
 │   │       ├── java/    # Java源代码
 │   │       └── resources/ # 配置文件
 │   └── pom.xml
-├── docs/                 # 项目文档
+├── docs/                 # 项目文档（索引见 docs/README.md）
 └── QUICKSTART.md         # 本文件
 ```
+
+## 📚 相关文档
+
+- [文档索引](./docs/README.md)
+- [API 文档](./docs/API_DOC.md)
+- [数据库说明](./docs/DATABASE.md)
 
 ## 🎯 主要功能
 

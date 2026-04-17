@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS contract_type_field (
     field_label VARCHAR(100) NOT NULL,
     field_label_en VARCHAR(100),
     field_type VARCHAR(20) NOT NULL DEFAULT 'text',
+    quick_code_id VARCHAR(50),
     required BOOLEAN DEFAULT FALSE,
     show_in_list BOOLEAN DEFAULT FALSE,
     show_in_form BOOLEAN DEFAULT TRUE,
@@ -140,13 +141,116 @@ CREATE INDEX IF NOT EXISTS idx_reminder_rule_creator ON reminder_rule(creator_id
 CREATE INDEX IF NOT EXISTS idx_reminder_rule_contract_type ON reminder_rule(contract_type(50));
 
 -- contract 字段兼容（实体已使用这些字段，旧库缺失会触发 500）
-ALTER TABLE contract ADD COLUMN IF NOT EXISTS template_variables TEXT;
-ALTER TABLE contract ADD COLUMN IF NOT EXISTS dynamic_field_values TEXT;
 ALTER TABLE contract ADD COLUMN IF NOT EXISTS template_id BIGINT;
 ALTER TABLE contract ADD COLUMN IF NOT EXISTS content_mode VARCHAR(32);
 ALTER TABLE contract ADD COLUMN IF NOT EXISTS starred BOOLEAN DEFAULT FALSE;
 ALTER TABLE contract ADD COLUMN IF NOT EXISTS timezone VARCHAR(64);
 ALTER TABLE contract ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'CNY';
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS parent_contract_id BIGINT;
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS relation_type VARCHAR(20) DEFAULT 'MAIN';
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP NULL;
+ALTER TABLE contract ADD COLUMN IF NOT EXISTS current_approver_name VARCHAR(100);
+
+CREATE TABLE IF NOT EXISTS contract_snapshot (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    snapshot_type VARCHAR(32) NOT NULL,
+    content LONGTEXT,
+    template_variables LONGTEXT,
+    snapshot_meta LONGTEXT,
+    content_hash VARCHAR(64),
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_contract_snapshot_contract_time ON contract_snapshot(contract_id, created_at);
+CREATE TABLE IF NOT EXISTS contract_snapshot_diff_analysis (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    base_snapshot_id BIGINT NOT NULL,
+    target_snapshot_id BIGINT NOT NULL,
+    diff_json LONGTEXT,
+    risk_json LONGTEXT,
+    overall_risk VARCHAR(20) DEFAULT 'LOW',
+    model_name VARCHAR(100) DEFAULT 'rule-engine',
+    prompt_version VARCHAR(32) DEFAULT 'v1',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_snapshot_diff_contract_snapshots ON contract_snapshot_diff_analysis(contract_id, base_snapshot_id, target_snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_snapshot_diff_updated_at ON contract_snapshot_diff_analysis(updated_at);
+CREATE TABLE IF NOT EXISTS contract_ai_summary (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    snapshot_id BIGINT NULL,
+    summary_text LONGTEXT,
+    key_terms_json LONGTEXT,
+    risks_json LONGTEXT,
+    confidence_score INT DEFAULT 0,
+    model_name VARCHAR(100),
+    summary_version VARCHAR(32) DEFAULT 'v1',
+    status VARCHAR(32) DEFAULT 'SUCCESS',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_contract_ai_summary_contract_updated ON contract_ai_summary(contract_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_contract_ai_summary_snapshot ON contract_ai_summary(snapshot_id);
+CREATE TABLE IF NOT EXISTS contract_payload (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    content LONGTEXT,
+    template_variables LONGTEXT,
+    dynamic_field_values LONGTEXT,
+    attachments LONGTEXT,
+    content_hash VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_contract_payload_contract_id ON contract_payload(contract_id);
+CREATE INDEX IF NOT EXISTS idx_contract_payload_updated_at ON contract_payload(updated_at);
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'contract' AND column_name = 'content') = 1,
+    'ALTER TABLE contract DROP COLUMN content',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'contract' AND column_name = 'template_variables') = 1,
+    'ALTER TABLE contract DROP COLUMN template_variables',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'contract' AND column_name = 'dynamic_field_values') = 1,
+    'ALTER TABLE contract DROP COLUMN dynamic_field_values',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = 'contract' AND column_name = 'attachments') = 1,
+    'ALTER TABLE contract DROP COLUMN attachments',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+ALTER TABLE contract MODIFY COLUMN counterparty VARCHAR(255) NULL;
 
 -- contract_category 字段兼容（前台分类接口依赖）
 ALTER TABLE contract_category ADD COLUMN IF NOT EXISTS name_en VARCHAR(100);
@@ -173,10 +277,28 @@ ALTER TABLE contract_template ADD COLUMN IF NOT EXISTS description VARCHAR(255);
 -- contract_version 字段兼容（合同创建后版本记录依赖）
 ALTER TABLE contract_version ADD COLUMN IF NOT EXISTS attachments TEXT;
 
+CREATE TABLE IF NOT EXISTS contract_version_diff_analysis (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    base_version_id BIGINT NOT NULL,
+    target_version_id BIGINT NOT NULL,
+    diff_json LONGTEXT,
+    risk_json LONGTEXT,
+    overall_risk VARCHAR(20) DEFAULT 'LOW',
+    model_name VARCHAR(100) DEFAULT 'rule-engine',
+    prompt_version VARCHAR(32) DEFAULT 'v1',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_contract_diff_contract_versions ON contract_version_diff_analysis(contract_id, base_version_id, target_version_id);
+CREATE INDEX IF NOT EXISTS idx_contract_diff_updated_at ON contract_version_diff_analysis(updated_at);
+
 -- contract_change_log 字段兼容（合同变更日志实体依赖）
 ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS field_name VARCHAR(100);
 ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS old_value TEXT;
 ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS new_value TEXT;
+ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS diff_json TEXT;
 ALTER TABLE contract_change_log ADD COLUMN IF NOT EXISTS remark TEXT;
 
 -- contract_tag 字段兼容（标签管理接口依赖）
@@ -214,6 +336,9 @@ ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS valid_from DATE;
 ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS valid_to DATE;
 ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE;
 ALTER TABLE quick_code_item ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- contract_type_field 字段兼容（字段配置/排序接口依赖）
+ALTER TABLE contract_type_field ADD COLUMN IF NOT EXISTS quick_code_id VARCHAR(50);
 
 -- 初始化数据去重约束（保证 INSERT IGNORE 幂等）
 ALTER TABLE contract_type_field ADD UNIQUE INDEX uk_contract_type_field_type_key (contract_type, field_key);

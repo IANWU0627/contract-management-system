@@ -62,6 +62,11 @@ public interface ContractService {
     Contract rejectContract(Long id, String comment);
 
     /**
+     * 撤回审批
+     */
+    Contract withdrawApproval(Long id, String reason);
+
+    /**
      * 签署合同
      */
     Contract signContract(Long id);
@@ -74,7 +79,22 @@ public interface ContractService {
     /**
      * 终止合同
      */
-    Contract terminateContract(Long id);
+    Contract terminateContract(Long id, String reason);
+
+    /**
+     * 发起续签流程
+     */
+    Contract startRenewal(Long id, String reason);
+
+    /**
+     * 续签完成
+     */
+    Contract completeRenewal(Long id, String reason);
+
+    /**
+     * 标记不续签
+     */
+    Contract markNotRenewed(Long id, String reason);
 
     /**
      * 复制合同
@@ -87,7 +107,42 @@ public interface ContractService {
     Map<String, Object> buildContractResponse(Contract contract);
 
     /**
+     * 构建合同列表响应Map（轻量，不含正文大字段）
+     */
+    Map<String, Object> buildContractListResponse(Contract contract);
+
+    /**
      * 构建合同详情响应Map（包含fieldDefinitions）
      */
     Map<String, Object> buildContractDetailResponse(Contract contract);
+
+    /**
+     * 获取合同 payload（正文/变量/附件等大字段）
+     */
+    Map<String, Object> buildContractPayloadResponse(Long id);
+
+    /**
+     * 获取合同快照列表（按时间倒序）
+     */
+    java.util.List<Map<String, Object>> listContractSnapshots(Long id);
+
+    /**
+     * 获取指定快照详情
+     */
+    Map<String, Object> getContractSnapshot(Long id, Long snapshotId);
+
+    /**
+     * 对比两个审批快照并返回风险解释
+     */
+    Map<String, Object> compareContractSnapshots(Long id, Long baseSnapshotId, Long targetSnapshotId);
+
+    /**
+     * 生成审批摘要卡片数据
+     */
+    Map<String, Object> generateApprovalSummary(Long id, boolean forceRefresh);
+
+    /**
+     * 获取审批摘要卡片数据
+     */
+    Map<String, Object> getApprovalSummary(Long id);
 }

@@ -3,12 +3,14 @@ import { ElNotification } from 'element-plus'
 
 class WebSocketService {
   private ws: WebSocket | null = null
+  private hasConnectedOnce = false
   private reconnectAttempts = 0
   private maxReconnectAttempts = 20
   private reconnectDelay = 1500
   private maxReconnectDelay = 30000
   private reconnectTimer: number | null = null
   private reconnectUserId?: number
+  private shouldRetryInCurrentSession = true
   private pingInterval: number | null = null
   private storageKey = 'ws-notifications'
   private soundEnabled = ref(localStorage.getItem('notificationSound') !== 'false')
@@ -24,6 +26,10 @@ class WebSocketService {
   
   connect(userId?: number) {
     this.reconnectUserId = userId
+    if (!this.shouldRetryInCurrentSession) {
+      this.connected.value = false
+      return
+    }
     // Avoid duplicate websocket connections.
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return
@@ -43,6 +49,7 @@ class WebSocketService {
       
       this.ws.onopen = () => {
         console.log('WebSocket connected')
+        this.hasConnectedOnce = true
         this.connected.value = true
         this.reconnectAttempts = 0
         if (this.reconnectTimer) {
@@ -65,7 +72,13 @@ class WebSocketService {
         console.log('WebSocket disconnected')
         this.connected.value = false
         this.stopPing()
-        this.scheduleReconnect(userId)
+        // If the connection never succeeded once in this session, do not keep retrying.
+        // This prevents repeated console spam when backend WebSocket is unavailable.
+        if (!this.hasConnectedOnce) {
+          this.shouldRetryInCurrentSession = false
+        } else {
+          this.scheduleReconnect(userId)
+        }
         this.ws = null
       }
       
@@ -192,6 +205,7 @@ class WebSocketService {
   
   disconnect() {
     this.stopPing()
+    this.shouldRetryInCurrentSession = false
     this.reconnectAttempts = this.maxReconnectAttempts // Prevent reconnect
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)

@@ -137,7 +137,11 @@
           <!-- 空状态已移除 -->
         </template>
         <el-table-column type="selection" width="50" />
-        <el-table-column prop="contractNo" :label="$t('contract.no')" width="130" show-overflow-tooltip />
+        <el-table-column prop="contractNo" :label="$t('contract.no')" min-width="220" class-name="contract-no-column">
+          <template #default="{ row }">
+            <span class="contract-no-full">{{ row.contractNo }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="title" :label="$t('contract.name')" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <el-link type="primary" @click="$router.push(`/contracts/${row.id}`)" class="title-link">
@@ -201,7 +205,7 @@
                 <el-dropdown-menu>
                   <el-dropdown-item command="view">{{ $t('common.view') }}</el-dropdown-item>
                   <el-dropdown-item command="edit" v-if="row.status === 'DRAFT'">{{ $t('common.edit') }}</el-dropdown-item>
-                  <el-dropdown-item command="aiAnalyze" v-if="row.content">{{ $t('ai.analyze') }}</el-dropdown-item>
+          <el-dropdown-item command="aiAnalyze" v-if="row.id">{{ $t('ai.analyze') }}</el-dropdown-item>
                   <el-dropdown-item command="delete" v-if="row.status === 'DRAFT'" divided type="danger">{{ $t('common.delete') }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -225,7 +229,7 @@
     </div>
     
     <!-- AI分析对话框 -->
-    <el-dialog v-model="aiDialogVisible" :title="$t('ai.analyze')" width="700px" class="ai-analysis-dialog">
+    <el-dialog v-model="aiDialogVisible" :title="$t('ai.assistantTitle')" width="820px" class="ai-analysis-dialog">
       <div v-loading="aiLoading" class="ai-analysis-content">
         <!-- 风险评分 -->
         <div class="score-section" v-if="aiResult.score !== undefined">
@@ -252,6 +256,46 @@
           </div>
           <p class="summary-text">{{ aiResult.summary }}</p>
         </div>
+
+        <!-- 谈判要点（助手） -->
+        <div class="section" v-if="aiResult.negotiationPoints && aiResult.negotiationPoints.length > 0">
+          <div class="section-title">
+            <el-icon><ChatLineRound /></el-icon>
+            <span>{{ $t('ai.negotiationPoints') }}</span>
+            <el-tag size="small" type="primary">{{ aiResult.negotiationPoints.length }}</el-tag>
+          </div>
+          <ul class="negotiation-list">
+            <li v-for="(pt, idx) in aiResult.negotiationPoints" :key="idx">
+              <span class="suggestion-index">{{ Number(idx) + 1 }}.</span>
+              {{ pt }}
+            </li>
+          </ul>
+        </div>
+
+        <!-- 条款覆盖检查（助手） -->
+        <div class="section" v-if="aiResult.missingClauseChecks && aiResult.missingClauseChecks.length > 0">
+          <div class="section-title">
+            <el-icon><List /></el-icon>
+            <span>{{ $t('ai.missingClauseChecks') }}</span>
+            <el-tag size="small">{{ aiResult.missingClauseChecks.length }}</el-tag>
+          </div>
+          <el-table :data="aiResult.missingClauseChecks" size="small" border class="clause-check-table">
+            <el-table-column prop="topic" :label="$t('ai.checkTopic')" min-width="120" />
+            <el-table-column :label="$t('ai.checkCovered')" width="100" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.present ? 'success' : 'danger'" size="small">
+                  {{ row.present ? $t('ai.yes') : $t('ai.no') }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('ai.checkSeverity')" width="100" align="center">
+              <template #default="{ row }">
+                <el-tag :type="severityTagType(row.severity)" size="small">{{ row.severity }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="note" :label="$t('ai.checkNote')" min-width="160" show-overflow-tooltip />
+          </el-table>
+        </div>
         
         <!-- 风险点 -->
         <div class="section" v-if="aiResult.risks && aiResult.risks.length > 0">
@@ -272,7 +316,10 @@
                   {{ getRiskLevelText(getRiskLevel(risk)) }}
                 </el-tag>
               </div>
-              <div class="risk-content">{{ getRiskContent(risk) }}</div>
+              <div class="risk-main">
+                <div class="risk-content">{{ getRiskContent(risk) }}</div>
+                <blockquote v-if="getRiskAnchor(risk)" class="risk-anchor">{{ getRiskAnchor(risk) }}</blockquote>
+              </div>
             </div>
           </div>
         </div>
@@ -322,6 +369,72 @@
             </div>
           </div>
         </div>
+
+        <div class="section" v-if="aiResult.actionSuggestions && aiResult.actionSuggestions.length > 0">
+          <div class="section-title">
+            <el-icon><MagicStick /></el-icon>
+            <span>{{ $t('ai.actionSuggestions') }}</span>
+            <el-tag size="small" type="success">{{ aiResult.actionSuggestions.length }}</el-tag>
+          </div>
+          <div class="action-suggestion-list">
+            <div v-for="(item, idx) in aiResult.actionSuggestions" :key="`${item.action}-${idx}`" class="action-suggestion-item">
+              <div class="action-suggestion-main">
+                <div class="action-suggestion-title">{{ item.title }}</div>
+                <div class="action-suggestion-description">{{ item.description }}</div>
+              </div>
+              <el-button
+                type="primary"
+                size="small"
+                :loading="aiActionLoading === item.action"
+                @click="handleAiSuggestedAction(item)"
+              >
+                {{ getAiActionButtonText(item.action) }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="section" v-if="aiResult.clauseSuggestions && aiResult.clauseSuggestions.length > 0">
+          <div class="section-title">
+            <el-icon><Collection /></el-icon>
+            <span>{{ $t('ai.clauseSuggestions') }}</span>
+            <el-tag size="small" type="warning">{{ aiResult.clauseSuggestions.length }}</el-tag>
+          </div>
+          <div class="clause-suggestion-list">
+            <div v-for="(item, idx) in aiResult.clauseSuggestions" :key="`${item.code || item.name}-${idx}`" class="clause-suggestion-item">
+              <div class="clause-suggestion-header">
+                <div class="clause-suggestion-title">{{ item.name || item.code }}</div>
+                <el-tag size="small" effect="plain">{{ item.category || '-' }}</el-tag>
+              </div>
+              <div class="clause-suggestion-reason">{{ item.reason }}</div>
+              <div class="clause-suggestion-snippet" v-if="item.snippet">
+                <pre>{{ item.snippet }}</pre>
+              </div>
+              <div class="clause-suggestion-actions" v-if="item.snippet">
+                <el-button size="small" @click="copyClauseSnippet(item.snippet)">{{ $t('ai.copyClause') }}</el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :disabled="isClauseSuggestionSaved(item, Number(idx))"
+                  :loading="aiClauseSavingKey === getClauseSuggestionKey(item, Number(idx))"
+                  @click="saveAiClauseSuggestion(item, Number(idx))"
+                >
+                  {{ isClauseSuggestionSaved(item, Number(idx)) ? $t('ai.savedToClauseLibrary') : $t('ai.saveToClauseLibrary') }}
+                </el-button>
+                <el-button
+                  v-if="getSavedClauseInfo(item, Number(idx))"
+                  size="small"
+                  link
+                  type="primary"
+                  @click="goToSavedClause(item, Number(idx))"
+                >
+                  {{ $t('ai.openClauseLibrary') }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </el-dialog>
     
@@ -353,13 +466,14 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
-import { getContractList, deleteContract, analyzeContract, batchDeleteContracts, batchUpdateStatus, batchApprove, batchSubmit, exportContractsExcel, batchEdit } from '@/api/contract'
+import { getContractList, deleteContract, analyzeContract, batchDeleteContracts, batchUpdateStatus, batchApprove, batchSubmit, exportContractsExcel, batchEdit, submitContract, approveContract, rejectContract, signContract, terminateContract, startRenewalFlow, completeRenewalFlow, declineRenewalFlow } from '@/api/contract'
+import { createClause } from '@/api/clause'
 import { getContractTypeFieldConfig } from '@/api/contractTypeField'
 import { getAllFolders } from '@/api/folder'
 import { getContractCategories } from '@/api/contractCategory'
 import { getQuickCodeByCode } from '@/api/quickCode'
 import { getSystemConfigs } from '@/api/system'
-import { Search, Refresh, Plus, ArrowDown, Delete, Edit, More, Download, CircleCheck, TopRight, Document, Warning, InfoFilled } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus, ArrowDown, Delete, Edit, More, Download, CircleCheck, TopRight, Document, Warning, InfoFilled, MagicStick, Collection, ChatLineRound, List } from '@element-plus/icons-vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
@@ -419,10 +533,19 @@ const aiLoading = ref(false)
 const aiResult = ref<any>({
   summary: '',
   score: 75,
+  negotiationPoints: [],
+  missingClauseChecks: [],
   risks: [],
   suggestions: [],
-  keyInfo: {}
+  keyInfo: {},
+  actionSuggestions: [],
+  clauseSuggestions: []
 })
+const aiActionLoading = ref('')
+const aiClauseSavingKey = ref('')
+const currentAiContract = ref<any>(null)
+const savedClauseSuggestionKeys = ref<string[]>([])
+const savedClauseSuggestionMap = ref<Record<string, { id?: number; code: string }>>({})
 const aiPreferences = ref({
   riskThreshold: 50,
   enableCache: false,
@@ -432,9 +555,77 @@ const isAiRiskWarning = computed(() =>
   typeof aiResult.value?.score === 'number' && aiResult.value.score < aiPreferences.value.riskThreshold
 )
 
-const getAiAnalysisCacheKey = (contractId: number) => `ai-analysis:${contractId}`
+/** Bump when cached payload shape changes; old keys are naturally orphaned. */
+const AI_ANALYSIS_CACHE_VERSION = 'v3'
 
-const loadAiRuntimeConfig = async () => {
+const getAiAnalysisCacheKey = (contractId: number) =>
+  `ai-analysis:${AI_ANALYSIS_CACHE_VERSION}:${contractId}`
+
+const createAiFallbackResult = (contractRow?: any) => ({
+  summary: '未获取到完整 AI 结果，已为你提供基础分析视图。建议补充合同正文后重试，或配置可用的大模型接口以获得更完整输出。',
+  score: 75,
+  negotiationPoints: [
+    '确认付款条件、发票类型与违约责任是否明确',
+    '核对争议解决条款（管辖法院/仲裁地）是否符合公司政策',
+    '检查交付与验收标准是否可量化、可执行'
+  ],
+  missingClauseChecks: [],
+  risks: [{ level: 'low', content: '暂未识别到结构化风险结果，建议人工复核关键条款。', anchor: '' }],
+  suggestions: ['建议完善合同正文后重新分析，以便生成更精准的风险与条款建议。'],
+  keyInfo: {
+    partyA: contractRow?.counterparty || '-',
+    partyB: '-',
+    amount: contractRow?.amount || '-',
+    duration: contractRow?.startDate && contractRow?.endDate ? `${contractRow.startDate} ~ ${contractRow.endDate}` : '-',
+    keyClauses: []
+  },
+  actionSuggestions: [],
+  clauseSuggestions: []
+})
+
+const normalizeAiResult = (raw: any, contractRow?: any) => {
+  if (!raw || typeof raw !== 'object') return createAiFallbackResult(contractRow)
+  const fallback = createAiFallbackResult(contractRow)
+  const keyInfo = raw.keyInfo && typeof raw.keyInfo === 'object' ? raw.keyInfo : {}
+  const summary = typeof raw.summary === 'string' && raw.summary.trim() ? raw.summary : fallback.summary
+  return {
+    summary,
+    score: Number.isFinite(Number(raw.score)) ? Number(raw.score) : fallback.score,
+    negotiationPoints: Array.isArray(raw.negotiationPoints) ? raw.negotiationPoints : fallback.negotiationPoints,
+    missingClauseChecks: Array.isArray(raw.missingClauseChecks) ? raw.missingClauseChecks : fallback.missingClauseChecks,
+    risks: Array.isArray(raw.risks) && raw.risks.length > 0 ? raw.risks : fallback.risks,
+    suggestions: Array.isArray(raw.suggestions) && raw.suggestions.length > 0 ? raw.suggestions : fallback.suggestions,
+    keyInfo: {
+      partyA: keyInfo.partyA || fallback.keyInfo.partyA,
+      partyB: keyInfo.partyB || fallback.keyInfo.partyB,
+      amount: keyInfo.amount || fallback.keyInfo.amount,
+      duration: keyInfo.duration || fallback.keyInfo.duration,
+      keyClauses: Array.isArray(keyInfo.keyClauses) ? keyInfo.keyClauses : []
+    },
+    actionSuggestions: Array.isArray(raw.actionSuggestions) ? raw.actionSuggestions : [],
+    clauseSuggestions: Array.isArray(raw.clauseSuggestions) ? raw.clauseSuggestions : []
+  }
+}
+
+type AiRuntimeConfig = {
+  apiUrl: string
+  apiKey: string
+  model: string
+  temperature: number
+  maxTokens: number
+}
+
+/** 不含 riskThreshold：阈值仅影响展示，不应使缓存失效 */
+const buildAiConfigSignature = (cfg: AiRuntimeConfig) =>
+  [
+    AI_ANALYSIS_CACHE_VERSION,
+    cfg.apiUrl || '',
+    cfg.model || '',
+    String(cfg.temperature ?? ''),
+    String(cfg.maxTokens ?? '')
+  ].join('|')
+
+const loadAiRuntimeConfig = async (): Promise<AiRuntimeConfig> => {
   const response = await getSystemConfigs()
   const configs = response?.data || {}
 
@@ -453,7 +644,7 @@ const loadAiRuntimeConfig = async () => {
   }
 }
 
-const getCachedAiAnalysis = (contractId: number) => {
+const getCachedAiAnalysis = (contractId: number, configSig: string) => {
   const raw = localStorage.getItem(getAiAnalysisCacheKey(contractId))
   if (!raw) return null
 
@@ -464,6 +655,10 @@ const getCachedAiAnalysis = (contractId: number) => {
       localStorage.removeItem(getAiAnalysisCacheKey(contractId))
       return null
     }
+    if (parsed.sig !== configSig) {
+      localStorage.removeItem(getAiAnalysisCacheKey(contractId))
+      return null
+    }
     return parsed.result || null
   } catch {
     localStorage.removeItem(getAiAnalysisCacheKey(contractId))
@@ -471,9 +666,44 @@ const getCachedAiAnalysis = (contractId: number) => {
   }
 }
 
-const setCachedAiAnalysis = (contractId: number, result: any) => {
+const setCachedAiAnalysis = (contractId: number, result: any, configSig: string) => {
   const expiresAt = Date.now() + aiPreferences.value.cacheTimeout * 60 * 1000
-  localStorage.setItem(getAiAnalysisCacheKey(contractId), JSON.stringify({ result, expiresAt }))
+  localStorage.setItem(
+    getAiAnalysisCacheKey(contractId),
+    JSON.stringify({ result, expiresAt, sig: configSig })
+  )
+}
+
+const slugifyClauseCode = (value: string) => {
+  return value
+    .trim()
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase()
+}
+
+const getClauseSuggestionKey = (item: any, idx: number) => {
+  return `${item.code || item.name || 'AI'}-${idx}-${item.snippet || ''}`
+}
+
+const isClauseSuggestionSaved = (item: any, idx: number) => {
+  return savedClauseSuggestionKeys.value.includes(getClauseSuggestionKey(item, idx))
+}
+
+const getSavedClauseInfo = (item: any, idx: number) => {
+  return savedClauseSuggestionMap.value[getClauseSuggestionKey(item, idx)]
+}
+
+const buildClauseSuggestionCode = (item: any, idx: number) => {
+  const contractId = currentAiContract.value?.id || 'GEN'
+  const fromCode = slugifyClauseCode(item.code || '')
+  if (fromCode) return `AI_${fromCode}_${contractId}_${idx + 1}_${Date.now()}`
+
+  const fromName = slugifyClauseCode(item.name || '')
+  if (fromName) return `AI_${fromName}_${contractId}_${idx + 1}_${Date.now()}`
+
+  return `AI_CLAUSE_${contractId}_${idx + 1}_${Date.now()}`
 }
 
 // AI分析辅助函数
@@ -497,6 +727,20 @@ const getRiskLevel = (risk: any): string => {
 const getRiskContent = (risk: any): string => {
   if (typeof risk === 'string') return risk
   return risk?.content || ''
+}
+
+const getRiskAnchor = (risk: any): string => {
+  if (typeof risk === 'string') return ''
+  const a = risk?.anchor ?? risk?.evidence
+  return typeof a === 'string' && a.trim() ? a.trim() : ''
+}
+
+const severityTagType = (sev: string): 'success' | 'warning' | 'danger' | 'info' => {
+  const s = (sev || '').toLowerCase()
+  if (s === 'high') return 'danger'
+  if (s === 'medium') return 'warning'
+  if (s === 'low') return 'success'
+  return 'info'
 }
 
 const getRiskTagType = (level: string): '' | 'success' | 'warning' | 'danger' | 'info' => {
@@ -696,7 +940,11 @@ const formatStatus = (status: string) => {
     DRAFT: t('contract.statuses.draft'),
     PENDING: t('contract.statuses.pending'),
     APPROVING: t('contract.statuses.approving'),
+    APPROVED: t('contract.statuses.approved'),
     SIGNED: t('contract.statuses.signed'),
+    RENEWING: t('contract.statuses.renewing'),
+    RENEWED: t('contract.statuses.renewed'),
+    NOT_RENEWED: t('contract.statuses.notRenewed'),
     ARCHIVED: t('contract.statuses.archived'),
     TERMINATED: t('contract.statuses.terminated')
   }
@@ -722,7 +970,11 @@ const getStatusTagType = (status: string) => {
     DRAFT: 'info',
     PENDING: 'warning',
     APPROVING: 'warning',
+    APPROVED: 'success',
     SIGNED: 'success',
+    RENEWING: 'warning',
+    RENEWED: 'success',
+    NOT_RENEWED: 'info',
     ARCHIVED: 'info',
     TERMINATED: 'danger'
   }
@@ -859,38 +1111,199 @@ const handleDelete = async (id: number) => {
   }
 }
 
-const handleAiAnalyze = async (id: number) => {
+const getAiActionButtonText = (action: string) => {
+  switch (action) {
+    case 'submit': return t('contract.actions.submit')
+    case 'approve': return t('contract.actions.approve')
+    case 'reject': return t('contract.actions.reject')
+    case 'sign': return t('contract.actions.sign')
+    case 'terminate': return t('contract.actions.terminate')
+    case 'startRenewal': return t('contract.actions.startRenewal')
+    case 'completeRenewal': return t('contract.actions.completeRenewal')
+    case 'declineRenewal': return t('contract.actions.declineRenewal')
+    default: return t('common.confirm')
+  }
+}
+
+const handleAiAnalyze = async (row: any, forceRefresh = false) => {
+  const id = row.id
+  currentAiContract.value = row
+  savedClauseSuggestionKeys.value = []
+  savedClauseSuggestionMap.value = {}
   aiDialogVisible.value = true
   aiLoading.value = true
   try {
     const aiConfig = await loadAiRuntimeConfig()
+    const configSig = buildAiConfigSignature(aiConfig)
 
-    if (aiPreferences.value.enableCache) {
-      const cachedResult = getCachedAiAnalysis(id)
+    if (aiPreferences.value.enableCache && !forceRefresh) {
+      const cachedResult = getCachedAiAnalysis(id, configSig)
       if (cachedResult) {
-        aiResult.value = cachedResult
+        aiResult.value = normalizeAiResult(cachedResult, row)
         ElMessage.success(t('ai.cacheHit'))
         return
       }
     }
 
-    if (!aiConfig.apiUrl) {
-      aiResult.value = { summary: '', score: 75, risks: [], suggestions: [], keyInfo: {} }
-      ElMessage.warning(t('ai.configRequired'))
-      return
-    }
-
     const res = await analyzeContract(id, aiConfig)
-    aiResult.value = res.data || {}
+    aiResult.value = normalizeAiResult(res.data, row)
+
+    if (!aiConfig.apiUrl) {
+      ElMessage.info(t('ai.offlineDemoHint'))
+    }
 
     if (aiPreferences.value.enableCache) {
-      setCachedAiAnalysis(id, aiResult.value)
+      setCachedAiAnalysis(id, aiResult.value, configSig)
     }
   } catch (error) {
+    aiResult.value = createAiFallbackResult(row)
     ElMessage.error(t('ai.analysisFailed'))
   } finally {
     aiLoading.value = false
   }
+}
+
+const handleAiSuggestedAction = async (item: any) => {
+  if (!currentAiContract.value?.id || !item?.action) return
+  const contractId = currentAiContract.value.id
+  aiActionLoading.value = item.action
+  try {
+    switch (item.action) {
+      case 'submit':
+        await ElMessageBox.confirm(item.description || t('ai.executeConfirm'), item.title || t('ai.actionSuggestions'), { type: 'info' })
+        await submitContract(contractId)
+        break
+      case 'approve':
+        await ElMessageBox.confirm(item.description || t('ai.executeConfirm'), item.title || t('ai.actionSuggestions'), { type: 'info' })
+        await approveContract(contractId)
+        break
+      case 'sign':
+        await ElMessageBox.confirm(item.description || t('ai.executeConfirm'), item.title || t('ai.actionSuggestions'), { type: 'info' })
+        await signContract(contractId)
+        break
+      case 'reject': {
+        const { value } = await ElMessageBox.prompt(item.description || t('contract.rejectReason'), item.title || t('contract.actions.reject'), {
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+          inputValue: item.reason || ''
+        })
+        await rejectContract(contractId, value)
+        break
+      }
+      case 'terminate': {
+        const { value } = await ElMessageBox.prompt(item.description || t('contract.terminateReason'), item.title || t('contract.actions.terminate'), {
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+          inputPlaceholder: t('contract.terminateReasonPlaceholder'),
+          inputValue: item.reason || ''
+        })
+        await terminateContract(contractId, value)
+        break
+      }
+      case 'startRenewal': {
+        const { value } = await ElMessageBox.prompt(item.description || t('contract.renewalReason'), item.title || t('contract.actions.startRenewal'), {
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+          inputPlaceholder: t('contract.renewalReasonPlaceholder'),
+          inputValue: item.reason || ''
+        })
+        await startRenewalFlow(contractId, value)
+        break
+      }
+      case 'completeRenewal': {
+        const { value } = await ElMessageBox.prompt(item.description || t('contract.renewalCompleteReason'), item.title || t('contract.actions.completeRenewal'), {
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+          inputPlaceholder: t('contract.renewalCompleteReasonPlaceholder'),
+          inputValue: item.reason || ''
+        })
+        await completeRenewalFlow(contractId, value)
+        break
+      }
+      case 'declineRenewal': {
+        const { value } = await ElMessageBox.prompt(item.description || t('contract.notRenewReason'), item.title || t('contract.actions.declineRenewal'), {
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+          inputPlaceholder: t('contract.notRenewReasonPlaceholder'),
+          inputValue: item.reason || ''
+        })
+        await declineRenewalFlow(contractId, value)
+        break
+      }
+      default:
+        return
+    }
+    ElMessage.success(t('ai.executeSuccess'))
+    localStorage.removeItem(getAiAnalysisCacheKey(contractId))
+    await fetchData()
+    const updated = contracts.value.find((contract: any) => contract.id === contractId) || currentAiContract.value
+    currentAiContract.value = updated
+    await handleAiAnalyze(updated, true)
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  } finally {
+    aiActionLoading.value = ''
+  }
+}
+
+const copyClauseSnippet = async (snippet: string) => {
+  if (!snippet) return
+  try {
+    await navigator.clipboard.writeText(snippet)
+    ElMessage.success(t('ai.copyClauseSuccess'))
+  } catch (_error) {
+    ElMessage.error(t('common.error'))
+  }
+}
+
+const saveAiClauseSuggestion = async (item: any, idx: number) => {
+  if (!item?.snippet) return
+  const suggestionKey = getClauseSuggestionKey(item, idx)
+  if (savedClauseSuggestionKeys.value.includes(suggestionKey)) return
+
+  aiClauseSavingKey.value = suggestionKey
+  try {
+    const clauseCode = buildClauseSuggestionCode(item, idx)
+    const clauseName = item.name || item.code || `${t('ai.clauseDefaultName')} ${idx + 1}`
+    const clauseNameEn = item.nameEn || item.name || item.code || clauseCode
+    const res = await createClause({
+      code: clauseCode,
+      name: clauseName,
+      nameEn: clauseNameEn,
+      category: item.category || t('ai.defaultClauseCategory'),
+      content: item.snippet,
+      description: item.reason || `${t('ai.generatedFromContract')}: ${currentAiContract.value?.title || '-'}`
+    })
+    savedClauseSuggestionKeys.value = [...savedClauseSuggestionKeys.value, suggestionKey]
+    savedClauseSuggestionMap.value = {
+      ...savedClauseSuggestionMap.value,
+      [suggestionKey]: {
+        id: res?.data,
+        code: clauseCode
+      }
+    }
+    ElMessage.success(t('ai.saveClauseSuccess'))
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('ai.saveClauseFailed'))
+  } finally {
+    aiClauseSavingKey.value = ''
+  }
+}
+
+const goToSavedClause = (item: any, idx: number) => {
+  const savedInfo = getSavedClauseInfo(item, idx)
+  if (!savedInfo) return
+
+  router.push({
+    path: '/clauses',
+    query: {
+      keyword: savedInfo.code,
+      highlightId: savedInfo.id ? String(savedInfo.id) : undefined,
+      open: savedInfo.id ? 'edit' : undefined
+    }
+  })
 }
 
 const handleAction = (command: string, row: any) => {
@@ -902,7 +1315,7 @@ const handleAction = (command: string, row: any) => {
       router.push(`/contracts/${row.id}/edit`)
       break
     case 'aiAnalyze':
-      handleAiAnalyze(row.id)
+      handleAiAnalyze(row)
       break
     case 'delete':
       handleDelete(row.id)
@@ -935,7 +1348,7 @@ onUnmounted(() => {
   indeterminate.value = false
   aiDialogVisible.value = false
   aiLoading.value = false
-  aiResult.value = { summary: '', score: 75, risks: [], suggestions: [], keyInfo: {} }
+  aiResult.value = { summary: '', score: 75, negotiationPoints: [], missingClauseChecks: [], risks: [], suggestions: [], keyInfo: {}, actionSuggestions: [], clauseSuggestions: [] }
 })
 </script>
 
@@ -1244,6 +1657,18 @@ onUnmounted(() => {
       color: #ef4444;
     }
   }
+
+  .contract-no-full {
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    color: var(--text-primary);
+  }
+
+  :deep(.contract-no-column .cell) {
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
   
   .type-tag {
     display: inline-flex;
@@ -1394,13 +1819,71 @@ onUnmounted(() => {
         margin-top: 2px;
       }
       
-      .risk-content {
+      .risk-main {
         flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .risk-content {
         line-height: 1.5;
         color: var(--text-primary);
         word-break: break-word;
       }
+
+      .risk-anchor {
+        margin: 0;
+        padding: 8px 10px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-color-secondary);
+        background: var(--el-fill-color-light);
+        border-radius: 6px;
+        border-left: 3px solid var(--el-color-primary);
+      }
     }
+  }
+
+  .negotiation-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+
+    li {
+      padding: 10px 12px 10px 32px;
+      background: var(--bg-hover);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      position: relative;
+      line-height: 1.5;
+      color: var(--text-primary);
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .suggestion-index {
+        position: absolute;
+        left: 12px;
+        top: 10px;
+        width: 18px;
+        height: 18px;
+        background: var(--el-color-primary);
+        color: #fff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .clause-check-table {
+    margin-top: 4px;
   }
   
   .suggestions-list {
@@ -1437,6 +1920,98 @@ onUnmounted(() => {
         font-weight: 600;
       }
     }
+  }
+
+  .action-suggestion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .action-suggestion-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--bg-hover);
+    }
+
+    .action-suggestion-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .action-suggestion-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .action-suggestion-description {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+  }
+
+  .clause-suggestion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .clause-suggestion-item {
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-hover);
+  }
+
+  .clause-suggestion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .clause-suggestion-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .clause-suggestion-reason {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+
+  .clause-suggestion-snippet {
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px dashed var(--border-color);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text-primary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+  }
+
+  .clause-suggestion-actions {
+    display: flex;
+    justify-content: flex-end;
   }
   
   .key-info-descriptions {

@@ -53,6 +53,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'menu.templates', roles: ['ADMIN', 'LEGAL', 'USER'] }
       },
       {
+        path: 'clauses',
+        name: 'ClauseLibrary',
+        component: () => import('@/views/template/ClauseLibrary.vue'),
+        meta: { title: 'menu.clauses', roles: ['ADMIN', 'LEGAL'] }
+      },
+      {
         path: 'categories',
         name: 'ContractCategories',
         component: () => import('@/views/contract/ContractCategory.vue'),
@@ -201,6 +207,7 @@ const titleMap: Record<string, { zh: string; en: string }> = {
   'contract.edit': { zh: '编辑合同', en: 'Edit Contract' },
   'contract.categoryManagement': { zh: '合同分类管理', en: 'Category Management' },
   'menu.templates': { zh: '模板管理', en: 'Templates' },
+  'menu.clauses': { zh: '条款库', en: 'Clause Library' },
   'template.create': { zh: '新建模板', en: 'Create Template' },
   'template.preview': { zh: '模板预览', en: 'Template Preview' },
   'menu.approvals': { zh: '审批管理', en: 'Approvals' },

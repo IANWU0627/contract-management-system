@@ -10,6 +10,17 @@
         {{ $t('contract.actions.compare') }}
       </el-button>
     </div>
+    <div class="snapshot-compare-actions">
+      <el-select v-model="selectedSnapshotA" :placeholder="$t('contract.versionsDetail.selectSnapshotA')" style="width: 260px" clearable filterable>
+        <el-option v-for="item in snapshots" :key="item.id" :label="snapshotLabel(item)" :value="item.id" />
+      </el-select>
+      <el-select v-model="selectedSnapshotB" :placeholder="$t('contract.versionsDetail.selectSnapshotB')" style="width: 260px" clearable filterable>
+        <el-option v-for="item in snapshots" :key="item.id" :label="snapshotLabel(item)" :value="item.id" />
+      </el-select>
+      <el-button size="small" @click="compareSelectedSnapshots" :disabled="!selectedSnapshotA || !selectedSnapshotB || selectedSnapshotA === selectedSnapshotB">
+        {{ $t('contract.versionsDetail.compareSnapshots') }}
+      </el-button>
+    </div>
     
     <el-timeline>
       <el-timeline-item
@@ -88,6 +99,67 @@
         <el-statistic :title="$t('contract.versionsDetail.added')" :value="compareResult.addedLines || 0" value-style="color: #67c23a" />
         <el-statistic :title="$t('contract.versionsDetail.removed')" :value="compareResult.removedLines || 0" value-style="color: #f56c6c" />
       </div>
+
+      <div class="risk-panel" v-if="compareResult.overallRisk || (compareResult.riskItems && compareResult.riskItems.length)">
+        <div class="risk-header">
+          <span class="risk-title">{{ $t('contract.versionsDetail.riskTitle') }}</span>
+          <el-tag :type="riskTagType(compareResult.overallRisk)" size="small">
+            {{ $t(`contract.versionsDetail.riskLevels.${(compareResult.overallRisk || 'low').toLowerCase()}`) }}
+          </el-tag>
+        </div>
+        <p class="risk-commentary" v-if="compareResult.aiCommentary || compareResult.aiCommentaryKey">{{ resolveI18nText(compareResult.aiCommentaryKey, compareResult.aiCommentary) }}</p>
+        <div class="risk-items" v-if="compareResult.riskItems && compareResult.riskItems.length">
+          <el-card v-for="(risk, idx) in compareResult.riskItems" :key="idx" shadow="never" class="risk-item">
+            <div class="risk-item-header">
+              <el-tag :type="riskTagType(risk.level)" size="small">
+                {{ $t(`contract.versionsDetail.riskLevels.${(risk.level || 'low').toLowerCase()}`) }}
+              </el-tag>
+              <span class="risk-item-title">{{ resolveI18nText(risk.titleKey, risk.title) || '-' }}</span>
+            </div>
+            <p class="risk-item-line">{{ resolveI18nText(risk.reasonKey, risk.reason) || '-' }}</p>
+            <p class="risk-item-line" v-if="risk.evidence"><strong>{{ $t('contract.versionsDetail.evidence') }}:</strong> {{ risk.evidence }}</p>
+            <p class="risk-item-line" v-if="risk.suggestion || risk.suggestionKey"><strong>{{ $t('contract.versionsDetail.suggestion') }}:</strong> {{ resolveI18nText(risk.suggestionKey, risk.suggestion) }}</p>
+          </el-card>
+        </div>
+      </div>
+
+      <div class="clause-changes" v-if="compareResult.clauseChanges && compareResult.clauseChanges.length">
+        <div class="clause-changes-header">
+          <div class="clause-changes-title">{{ $t('contract.versionsDetail.clauseChanges') }}</div>
+          <div class="clause-changes-tools">
+            <el-select v-model="clauseRiskFilter" size="small" style="width: 170px">
+              <el-option :label="$t('contract.versionsDetail.riskFilterMediumHigh')" value="medium-high" />
+              <el-option :label="$t('contract.versionsDetail.riskFilterHigh')" value="high" />
+              <el-option :label="$t('contract.versionsDetail.riskFilterAll')" value="all" />
+            </el-select>
+            <el-switch
+              v-model="showMinorClauseChanges"
+              :active-text="$t('contract.versionsDetail.showMinorChanges')"
+              size="small"
+            />
+          </div>
+        </div>
+        <div class="clause-changes-stats">
+          <span class="stats-label">{{ $t('contract.versionsDetail.filteredStats') }}:</span>
+          <el-tag size="small" type="danger">{{ $t('contract.versionsDetail.riskLevels.high') }} {{ visibleClauseStats.high }}</el-tag>
+          <el-tag size="small" type="warning">{{ $t('contract.versionsDetail.riskLevels.medium') }} {{ visibleClauseStats.medium }}</el-tag>
+          <el-tag size="small" type="info">{{ $t('contract.versionsDetail.riskLevels.low') }} {{ visibleClauseStats.low }}</el-tag>
+          <el-tag size="small">{{ $t('contract.versionsDetail.changeTypeMinor') }} {{ visibleClauseStats.minor }}</el-tag>
+        </div>
+        <el-empty v-if="!visibleClauseChanges.length" :description="$t('common.none')" />
+        <el-card v-for="(item, idx) in visibleClauseChanges" :key="idx" shadow="never" class="clause-change-item">
+          <div class="clause-change-header">
+            <el-tag size="small" :type="clauseChangeTagType(item.changeType)">{{ clauseChangeTypeLabel(item.changeType) }}</el-tag>
+            <strong>{{ item.title || '-' }}</strong>
+            <el-tag size="small" :type="riskTagType(item.riskLevel)">{{ $t(`contract.versionsDetail.riskLevels.${(item.riskLevel || 'low').toLowerCase()}`) }}</el-tag>
+          </div>
+          <div class="clause-change-body">
+            <p v-if="item.before"><strong>{{ $t('contract.versionsDetail.before') }}:</strong> {{ item.before }}</p>
+            <p v-if="item.after"><strong>{{ $t('contract.versionsDetail.after') }}:</strong> {{ item.after }}</p>
+            <p v-if="item.riskReason || item.riskReasonKey"><strong>{{ $t('contract.versionsDetail.riskReason') }}:</strong> {{ resolveI18nText(item.riskReasonKey, item.riskReason) }}</p>
+          </div>
+        </el-card>
+      </div>
       
       <div class="diff-container">
         <div v-for="(diff, index) in compareResult.differences" :key="index" :class="['diff-line', diff.type]">
@@ -105,7 +177,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { getVersionHistory, getVersionDetail, restoreVersion, compareVersions } from '@/api/extra'
+import { getVersionHistory, getVersionDetail, restoreVersion, compareVersions, compareSnapshots, getContractSnapshots } from '@/api/extra'
 import { User, Right, View, RefreshRight, Connection } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
@@ -115,18 +187,55 @@ const props = defineProps<{ contractId?: number }>()
 const contractId = computed(() => props.contractId || Number(route.params.id))
 
 const versions = ref<any[]>([])
+const snapshots = ref<any[]>([])
 const latestVersion = ref('')
 const detailVisible = ref(false)
 const compareVisible = ref(false)
 const currentVersion = ref<any>(null)
 const currentContent = ref('')
 const selectedVersions = ref<any[]>([])
+const selectedSnapshotA = ref<number | null>(null)
+const selectedSnapshotB = ref<number | null>(null)
 const compareResult = ref<any>({
   version1: '',
   version2: '',
   differences: [],
+  clauseChanges: [],
   addedLines: 0,
-  removedLines: 0
+  removedLines: 0,
+  overallRisk: 'low',
+  riskItems: [],
+  aiCommentary: ''
+})
+const showMinorClauseChanges = ref(false)
+const clauseRiskFilter = ref<'all' | 'high' | 'medium-high'>('medium-high')
+const visibleClauseChanges = computed(() => {
+  let list = Array.isArray(compareResult.value?.clauseChanges) ? compareResult.value.clauseChanges : []
+  if (!showMinorClauseChanges.value) {
+    list = list.filter((item: any) => (item?.changeType || '').toLowerCase() !== 'minor')
+  }
+  if (clauseRiskFilter.value === 'high') {
+    return list.filter((item: any) => (item?.riskLevel || '').toLowerCase() === 'high')
+  }
+  if (clauseRiskFilter.value === 'medium-high') {
+    return list.filter((item: any) => {
+      const level = (item?.riskLevel || '').toLowerCase()
+      return level === 'high' || level === 'medium'
+    })
+  }
+  return list
+})
+const visibleClauseStats = computed(() => {
+  const stats = { high: 0, medium: 0, low: 0, minor: 0 }
+  for (const item of visibleClauseChanges.value) {
+    const level = (item?.riskLevel || '').toLowerCase()
+    const type = (item?.changeType || '').toLowerCase()
+    if (level === 'high') stats.high++
+    else if (level === 'medium') stats.medium++
+    else stats.low++
+    if (type === 'minor') stats.minor++
+  }
+  return stats
 })
 
 const formatChangeDesc = (desc: string): string => {
@@ -145,6 +254,15 @@ const fetchVersions = async () => {
     latestVersion.value = data.latestVersion || ''
   } catch (error) {
     ElMessage.error(t('common.error'))
+  }
+}
+
+const fetchSnapshots = async () => {
+  try {
+    const res = await getContractSnapshots(contractId.value)
+    snapshots.value = Array.isArray(res.data) ? res.data : []
+  } catch (_error) {
+    snapshots.value = []
   }
 }
 
@@ -202,6 +320,19 @@ const showCompareDialog = async () => {
   }
 }
 
+const compareSelectedSnapshots = async () => {
+  if (!selectedSnapshotA.value || !selectedSnapshotB.value || selectedSnapshotA.value === selectedSnapshotB.value) {
+    return
+  }
+  try {
+    const res = await compareSnapshots(contractId.value, selectedSnapshotA.value, selectedSnapshotB.value)
+    compareResult.value = res.data
+    compareVisible.value = true
+  } catch (error) {
+    ElMessage.error(t('contract.versionsDetail.compareFailed'))
+  }
+}
+
 const handleRestore = async (version: any) => {
   try {
     await ElMessageBox.confirm(
@@ -233,7 +364,49 @@ const getDiffMarker = (type: string) => {
   }
 }
 
-onMounted(() => { fetchVersions() })
+const riskTagType = (level: string) => {
+  const normalized = (level || '').toLowerCase()
+  if (normalized === 'high') return 'danger'
+  if (normalized === 'medium') return 'warning'
+  return 'info'
+}
+
+const clauseChangeTagType = (changeType: string) => {
+  const normalized = (changeType || '').toLowerCase()
+  if (normalized === 'added') return 'success'
+  if (normalized === 'removed') return 'danger'
+  if (normalized === 'minor') return 'info'
+  return 'warning'
+}
+
+const clauseChangeTypeLabel = (changeType: string) => {
+  const normalized = (changeType || '').toLowerCase()
+  if (normalized === 'added') return t('contract.versionsDetail.changeTypeAdded')
+  if (normalized === 'removed') return t('contract.versionsDetail.changeTypeRemoved')
+  if (normalized === 'minor') return t('contract.versionsDetail.changeTypeMinor')
+  return t('contract.versionsDetail.changeTypeModified')
+}
+
+const resolveI18nText = (key?: string, fallback?: string) => {
+  if (key && key.trim()) {
+    const translated = t(key)
+    if (translated !== key) {
+      return translated
+    }
+  }
+  return fallback || ''
+}
+
+const snapshotLabel = (item: any) => {
+  const type = item?.snapshotType || 'SNAPSHOT'
+  const time = item?.createdAt ? formatTime(item.createdAt) : '-'
+  return `${type} #${item?.id} (${time})`
+}
+
+onMounted(() => {
+  fetchVersions()
+  fetchSnapshots()
+})
 </script>
 
 <style scoped lang="scss">
@@ -242,6 +415,14 @@ onMounted(() => { fetchVersions() })
     margin-bottom: 16px;
     display: flex;
     justify-content: flex-end;
+  }
+
+  .snapshot-compare-actions {
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
   }
   
   .version-header {
@@ -336,6 +517,126 @@ onMounted(() => { fetchVersions() })
     justify-content: center;
     gap: 48px;
     margin-bottom: 20px;
+  }
+
+  .risk-panel {
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    background: #fafafa;
+
+    .risk-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .risk-title {
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .risk-commentary {
+      margin: 0 0 10px;
+      color: #606266;
+      line-height: 1.6;
+    }
+
+    .risk-items {
+      display: grid;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .risk-item {
+      :deep(.el-card__body) {
+        padding: 10px 12px;
+      }
+    }
+
+    .risk-item-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .risk-item-title {
+      font-weight: 500;
+      color: #303133;
+    }
+
+    .risk-item-line {
+      margin: 0 0 4px;
+      line-height: 1.5;
+      color: #606266;
+      font-size: 13px;
+    }
+  }
+
+  .clause-changes {
+    margin-bottom: 16px;
+
+    .clause-changes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .clause-changes-title {
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .clause-changes-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .clause-change-item {
+      margin-bottom: 8px;
+
+      :deep(.el-card__body) {
+        padding: 10px 12px;
+      }
+    }
+
+    .clause-changes-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .stats-label {
+      color: #606266;
+      font-size: 13px;
+    }
+
+    .clause-change-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .clause-change-body {
+      p {
+        margin: 0 0 4px;
+        line-height: 1.5;
+        color: #606266;
+        font-size: 13px;
+      }
+    }
   }
   
   .diff-container {

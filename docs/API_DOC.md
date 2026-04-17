@@ -1,4 +1,4 @@
-# Toy Contract - API 接口文档
+# 合同管理系统 - API 接口文档
 
 > 合同管理系统 REST API 完整参考
 
@@ -411,6 +411,75 @@ Authorization: Bearer <token>
 | 参数 | 说明 |
 |------|------|
 | format | pdf/word/excel |
+
+---
+
+### 3.19 合同正文载荷（大字段）
+
+列表接口为瘦身响应，正文等从本接口按需加载。
+
+**GET** `/api/contracts/{id}/payload`
+
+需要权限：`CONTRACT_MANAGE`（与合同详情一致策略以服务端为准）。
+
+响应 `data` 中通常包含：`content`、`templateVariables`、`dynamicFieldValues`、`attachments` 等（与 `contract_payload` 表一致）。
+
+---
+
+### 3.20 快照列表
+
+**GET** `/api/contracts/{id}/snapshots`
+
+用于审批审计、版本历史页选择快照对比等场景。
+
+---
+
+### 3.21 快照详情
+
+**GET** `/api/contracts/{id}/snapshots/{snapshotId}`
+
+---
+
+### 3.22 快照对比
+
+**POST** `/api/contracts/{id}/snapshots/compare`
+
+#### 请求参数（Query）
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| baseSnapshotId | long | 基准快照 ID |
+| targetSnapshotId | long | 对比快照 ID |
+
+返回包含行级 `differences`、条款粒度 `clauseChanges`、风险解释 `riskItems`、`aiCommentary` / `aiCommentaryKey` 等（具体字段以后端实现为准）。
+
+---
+
+### 3.23 审批摘要
+
+**GET** `/api/contracts/{id}/approval-summary`  
+**POST** `/api/contracts/{id}/approval-summary/generate`
+
+#### 生成接口参数（Query）
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| force | boolean | 是否强制重新生成，默认 `false` |
+
+---
+
+### 3.24 版本对比（合同版本实体）
+
+在 [3.16 获取版本历史](#316-获取版本历史) 所列版本记录基础上，使用：
+
+**POST** `/api/contracts/{contractId}/versions/compare`
+
+#### 请求参数（Query）
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| versionId1 | long | 版本记录 ID |
+| versionId2 | long | 版本记录 ID |
 
 ---
 

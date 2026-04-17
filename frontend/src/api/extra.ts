@@ -13,6 +13,12 @@ export const restoreVersion = (contractId: number, versionId: number) =>
 export const compareVersions = (contractId: number, versionId1: number, versionId2: number) => 
   post(`/contracts/${contractId}/versions/compare?versionId1=${versionId1}&versionId2=${versionId2}`)
 
+export const compareSnapshots = (contractId: number, baseSnapshotId: number, targetSnapshotId: number) =>
+  post(`/contracts/${contractId}/snapshots/compare?baseSnapshotId=${baseSnapshotId}&targetSnapshotId=${targetSnapshotId}`)
+
+export const getContractSnapshots = (contractId: number) =>
+  get(`/contracts/${contractId}/snapshots`)
+
 // 评论
 export const getComments = (contractId: number) => 
   get(`/contracts/${contractId}/comments`)

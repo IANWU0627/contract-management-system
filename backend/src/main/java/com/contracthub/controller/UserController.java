@@ -125,6 +125,7 @@ public class UserController {
             result.put("email", user.getEmail());
             result.put("phone", user.getPhone());
             result.put("avatar", user.getAvatar());
+            result.put("department", user.getDepartment());
             result.put("role", user.getRole());
             result.put("status", user.getStatus() == 1 ? "active" : "inactive");
             result.put("roles", getRoles(user.getRole()));
@@ -379,6 +380,10 @@ public class UserController {
             if (userData.containsKey("avatar")) {
                 user.setAvatar((String) userData.get("avatar"));
             }
+            if (userData.containsKey("department")) {
+                Object d = userData.get("department");
+                user.setDepartment(d == null ? null : d.toString().trim());
+            }
             
             userMapper.updateById(user);
             
@@ -389,6 +394,7 @@ public class UserController {
             result.put("email", user.getEmail());
             result.put("phone", user.getPhone());
             result.put("avatar", user.getAvatar());
+            result.put("department", user.getDepartment());
             result.put("role", user.getRole());
             result.put("status", user.getStatus() == 1 ? "active" : "inactive");
             

@@ -1,3 +1,9 @@
+# 根目录临时文件
+backups/
+node_modules/
+package-lock.json
+package.json
+
 # 前端
 frontend/node_modules/
 frontend/dist/

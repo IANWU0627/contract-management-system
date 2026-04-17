@@ -16,6 +16,8 @@ import com.contracthub.service.ContractNumberService;
 import com.contracthub.service.ContractService;
 import com.contracthub.service.NotificationService;
 import com.contracthub.service.UserConfigService;
+import com.contracthub.service.ContractDataScopeService;
+import com.contracthub.service.ContractAiAssistantService;
 import com.contracthub.util.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -49,7 +51,6 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/contracts")
 public class ContractController {
-    
     private final ContractMapper contractMapper;
     private final ContractCommentMapper commentMapper;
     private final ApprovalRecordMapper approvalRecordMapper;
@@ -60,6 +61,8 @@ public class ContractController {
     private final ContractService contractService;
     private final NotificationService notificationService;
     private final UserConfigService userConfigService;
+    private final ContractDataScopeService contractDataScopeService;
+    private final ContractAiAssistantService contractAiAssistantService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -70,6 +73,8 @@ public class ContractController {
                               ContractService contractService,
                               NotificationService notificationService,
                               UserConfigService userConfigService,
+                              ContractDataScopeService contractDataScopeService,
+                              ContractAiAssistantService contractAiAssistantService,
                               RestTemplate restTemplate) {
         this.contractMapper = contractMapper;
         this.commentMapper = commentMapper;
@@ -81,6 +86,8 @@ public class ContractController {
         this.contractService = contractService;
         this.notificationService = notificationService;
         this.userConfigService = userConfigService;
+        this.contractDataScopeService = contractDataScopeService;
+        this.contractAiAssistantService = contractAiAssistantService;
         this.restTemplate = restTemplate;
     }
     
@@ -143,7 +150,7 @@ public class ContractController {
         // 转换为需要的格式并补充关联数据
         List<Map<String, Object>> pageList = new ArrayList<>();
         for (Contract contract : resultPage.getRecords()) {
-            pageList.add(contractService.buildContractResponse(contract));
+            pageList.add(contractService.buildContractListResponse(contract));
         }
         
         Map<String, Object> result = new HashMap<>();
@@ -166,6 +173,88 @@ public class ContractController {
         
         Map<String, Object> result = contractService.buildContractDetailResponse(contract);
         return ApiResponse.success(result);
+    }
+
+    @GetMapping("/{id}/payload")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> getPayload(@PathVariable Long id) {
+        try {
+            return ApiResponse.success(contractService.buildContractPayloadResponse(id));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/snapshots")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<List<Map<String, Object>>> listSnapshots(@PathVariable Long id) {
+        try {
+            return ApiResponse.success(contractService.listContractSnapshots(id));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/snapshots/{snapshotId}")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> getSnapshot(@PathVariable Long id, @PathVariable Long snapshotId) {
+        try {
+            return ApiResponse.success(contractService.getContractSnapshot(id, snapshotId));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/snapshots/compare")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> compareSnapshots(
+            @PathVariable Long id,
+            @RequestParam Long baseSnapshotId,
+            @RequestParam Long targetSnapshotId) {
+        try {
+            return ApiResponse.success(contractService.compareContractSnapshots(id, baseSnapshotId, targetSnapshotId));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/approval-summary")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> getApprovalSummary(@PathVariable Long id) {
+        try {
+            return ApiResponse.success(contractService.getApprovalSummary(id));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/approval-summary/generate")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> generateApprovalSummary(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean force) {
+        try {
+            return ApiResponse.success(contractService.generateApprovalSummary(id, force));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/related")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> related(@PathVariable Long id) {
+        Contract contract = contractService.getContractById(id);
+        if (contract == null) {
+            return ApiResponse.error("合同不存在");
+        }
+        Map<String, Object> detail = contractService.buildContractDetailResponse(contract);
+        Object related = detail.get("relatedContracts");
+        if (related instanceof Map<?, ?> relatedMap) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> casted = (Map<String, Object>) relatedMap;
+            return ApiResponse.success(casted);
+        }
+        return ApiResponse.success(new HashMap<>());
     }
     
     private static final String UPLOAD_DIR;
@@ -482,6 +571,20 @@ public class ContractController {
             return ApiResponse.error(e.getMessage());
         }
     }
+
+    // 撤回审批
+    @PostMapping("/{id}/withdraw")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> withdraw(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> data) {
+        try {
+            String reason = data != null ? (String) data.get("reason") : null;
+            Contract contract = contractService.withdrawApproval(id, reason);
+            Map<String, Object> result = contractService.buildContractResponse(contract);
+            return ApiResponse.success(result);
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
     
     // 签署
     @PostMapping("/{id}/sign")
@@ -512,11 +615,56 @@ public class ContractController {
     // 终止
     @PostMapping("/{id}/terminate")
     @PreAuthorize("hasAuthority('CONTRACT_APPROVE')")
-    public ApiResponse<Map<String, Object>> terminate(@PathVariable Long id) {
+    public ApiResponse<Map<String, Object>> terminate(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> data) {
         try {
-            Contract contract = contractService.terminateContract(id);
+            String reason = data != null ? (String) data.get("reason") : null;
+            Contract contract = contractService.terminateContract(id, reason);
             Map<String, Object> result = contractService.buildContractResponse(contract);
             return ApiResponse.success(result);
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/renewal/start")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> startRenewal(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> data) {
+        try {
+            String reason = data != null ? (String) data.get("reason") : null;
+            Contract contract = contractService.startRenewal(id, reason);
+            return ApiResponse.success(contractService.buildContractResponse(contract));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/renewal/complete")
+    @PreAuthorize("hasAuthority('CONTRACT_APPROVE')")
+    public ApiResponse<Map<String, Object>> completeRenewal(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> data) {
+        try {
+            String reason = data != null ? (String) data.get("reason") : null;
+            Contract contract = contractService.completeRenewal(id, reason);
+            return ApiResponse.success(contractService.buildContractResponse(contract));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/renewal/decline")
+    @PreAuthorize("hasAuthority('CONTRACT_APPROVE')")
+    public ApiResponse<Map<String, Object>> declineRenewal(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> data) {
+        try {
+            String reason = data != null ? (String) data.get("reason") : null;
+            Contract contract = contractService.markNotRenewed(id, reason);
+            return ApiResponse.success(contractService.buildContractResponse(contract));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -532,7 +680,7 @@ public class ContractController {
             @PathVariable Long id,
             @RequestBody(required = false) Map<String, Object> aiConfig) {
         
-        Contract contract = contractMapper.selectById(id);
+        Contract contract = contractService.getContractById(id);
         if (contract == null) {
             return ApiResponse.error("合同不存在");
         }
@@ -554,12 +702,12 @@ public class ContractController {
                     headers.set("Authorization", "Bearer " + apiKey);
                 }
                 
-                String prompt = buildAnalysisPrompt(contract);
+                String prompt = contractAiAssistantService.buildUserPrompt(contract);
                 
                 Map<String, Object> requestBody = new HashMap<>();
                 requestBody.put("model", model);
                 requestBody.put("messages", Arrays.asList(
-                    Map.of("role", "system", "content", "You are a professional contract analyst. Analyze contracts and provide structured feedback in JSON format."),
+                    Map.of("role", "system", "content", "You are a bilingual contract assistant. Always respond with a single JSON object only, following the user's schema. Use Chinese for natural-language fields when the user writes in Chinese."),
                     Map.of("role", "user", "content", prompt)
                 ));
                 requestBody.put("temperature", temperature);
@@ -578,8 +726,8 @@ public class ContractController {
                         Map<?, ?> message = (Map<?, ?>) choice.get("message");
                         String aiContent = (String) message.get("content");
                         
-                        Map<String, Object> parsedResult = parseAiResponse(aiContent);
-                        enrichAiResult(contract, parsedResult);
+                        Map<String, Object> parsedResult = contractAiAssistantService.parseModelMessageContent(aiContent);
+                        contractAiAssistantService.enrichResult(contract, parsedResult);
                         return ApiResponse.success(parsedResult);
                     }
                 }
@@ -588,124 +736,7 @@ public class ContractController {
             }
         }
         
-        // 默认返回模拟数据
-        Map<String, Object> result = new HashMap<>();
-        result.put("summary", "本合同为标准的采购合同，主要条款清晰。合同期限为12个月，金额合理。建议关注付款条款和违约责任。");
-        result.put("risks", Arrays.asList(
-            "违约金比例偏高（合同金额的30%），建议协商降低至15%",
-            "付款周期较长（90天），建议缩短至60天",
-            "缺少不可抗力条款，建议补充",
-            "知识产权归属条款不够明确"
-        ));
-        result.put("score", 78);
-        result.put("suggestions", Arrays.asList("建议在签署前与法务团队确认风险条款，特别是违约金和付款周期部分。"));
-        return ApiResponse.success(result);
-    }
-    
-    private String buildAnalysisPrompt(Contract contract) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("请分析以下合同并提供结构化的风险评估报告：\n\n");
-        sb.append("合同名称：").append(contract.getTitle()).append("\n");
-        sb.append("合同编号：").append(contract.getContractNo()).append("\n");
-        sb.append("合同类型：").append(contract.getType()).append("\n");
-        sb.append("相对方：").append(contract.getCounterparty()).append("\n");
-        sb.append("金额：").append(contract.getAmount()).append("\n");
-        sb.append("开始日期：").append(contract.getStartDate()).append("\n");
-        sb.append("结束日期：").append(contract.getEndDate()).append("\n\n");
-        
-        if (contract.getContent() != null && !contract.getContent().isEmpty()) {
-            String plainContent = contract.getContent()
-                    .replaceAll("<[^>]+>", " ")
-                    .replaceAll("&nbsp;", " ")
-                    .replaceAll("\\s+", " ")
-                    .trim();
-            sb.append("合同内容：\n").append(plainContent.substring(0, Math.min(6000, plainContent.length())));
-        }
-        
-        sb.append("\n\n请按照以下JSON格式返回分析结果（只返回JSON，不要其他内容）：\n");
-        sb.append("{\n");
-        sb.append("  \"summary\": \"合同概述（100字以内）\",\n");
-        sb.append("  \"score\": 风险评分（0-100的整数）,\n");
-        sb.append("  \"risks\": [\"风险点1\", \"风险点2\", \"风险点3\", \"风险点4\"],\n");
-        sb.append("  \"suggestions\": [\"建议1\", \"建议2\", \"建议3\"],\n");
-        sb.append("  \"keyInfo\": {\n");
-        sb.append("    \"partyA\": \"甲方\",\n");
-        sb.append("    \"partyB\": \"乙方\",\n");
-        sb.append("    \"amount\": \"金额\",\n");
-        sb.append("    \"duration\": \"有效期\",\n");
-        sb.append("    \"keyClauses\": [\"关键条款1\", \"关键条款2\", \"关键条款3\"]\n");
-        sb.append("  }\n");
-        sb.append("}");
-        
-        return sb.toString();
-    }
-    
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseAiResponse(String content) {
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            String jsonStr = extractJson(content);
-            if (jsonStr != null) {
-                Map<String, Object> parsed = objectMapper.readValue(jsonStr, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                result.put("summary", parsed.getOrDefault("summary", "分析完成"));
-                result.put("score", parsed.getOrDefault("score", 75));
-                result.put("risks", parsed.getOrDefault("risks", Arrays.asList("未发现明显风险")));
-                result.put("suggestions", parsed.getOrDefault("suggestions", Arrays.asList("建议仔细阅读合同条款")));
-                Object keyInfo = parsed.get("keyInfo");
-                result.put("keyInfo", keyInfo instanceof Map ? keyInfo : new HashMap<String, Object>());
-                return result;
-            }
-        } catch (Exception e) {
-            // 解析失败
-        }
-        
-        result.put("summary", "AI 分析完成");
-        result.put("score", 75);
-        result.put("risks", Arrays.asList("请人工审核合同条款"));
-        result.put("suggestions", Arrays.asList("建议与法务团队确认关键条款"));
-        result.put("keyInfo", new HashMap<String, Object>());
-        return result;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void enrichAiResult(Contract contract, Map<String, Object> result) {
-        Map<String, Object> keyInfo;
-        Object keyInfoObj = result.get("keyInfo");
-        if (keyInfoObj instanceof Map<?, ?>) {
-            keyInfo = (Map<String, Object>) keyInfoObj;
-        } else {
-            keyInfo = new HashMap<>();
-        }
-
-        String counterparty = contract.getCounterparty() != null ? contract.getCounterparty() : "";
-        String[] parties = counterparty.split("\\s*/\\s*");
-        keyInfo.putIfAbsent("partyA", parties.length > 0 ? parties[0] : "");
-        keyInfo.putIfAbsent("partyB", parties.length > 1 ? parties[1] : "");
-        keyInfo.putIfAbsent("amount", contract.getAmount() != null ? contract.getAmount().toString() : "");
-        keyInfo.putIfAbsent("duration", String.format("%s ~ %s",
-                contract.getStartDate() != null ? contract.getStartDate() : "",
-                contract.getEndDate() != null ? contract.getEndDate() : ""));
-
-        Object clausesObj = keyInfo.get("keyClauses");
-        if (!(clausesObj instanceof List<?>)) {
-            Object topLevelClauses = result.get("keyClauses");
-            if (topLevelClauses instanceof List<?>) {
-                keyInfo.put("keyClauses", topLevelClauses);
-            } else {
-                keyInfo.put("keyClauses", new ArrayList<>());
-            }
-        }
-        result.put("keyInfo", keyInfo);
-    }
-    
-    private String extractJson(String content) {
-        int start = content.indexOf("{");
-        int end = content.lastIndexOf("}");
-        if (start >= 0 && end > start) {
-            return content.substring(start, end + 1);
-        }
-        return null;
+        return ApiResponse.success(contractAiAssistantService.buildOfflineDemoResult(contract));
     }
 
     private String getConfigValue(Map<String, Object> configMap, String key, String defaultValue) {
@@ -793,7 +824,10 @@ public class ContractController {
     @PostMapping("/{id}/comments")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> addComment(@PathVariable Long id, @RequestBody Map<String, Object> commentData) {
-        Contract contract = contractMapper.selectById(id);
+        Contract contract = contractService.getContractById(id);
+        if (contract == null) {
+            return ApiResponse.error("合同不存在");
+        }
         ContractComment comment = new ContractComment();
         comment.setContractId(id);
         comment.setUserId(SecurityUtils.getCurrentUserId());
@@ -912,7 +946,7 @@ public class ContractController {
             }
             
             // 从数据库获取合同数据
-            List<Contract> contractList = contractMapper.selectList(null);
+            List<Contract> contractList = getVisibleContracts();
             
             // 填充数据
             for (int i = 0; i < contractList.size(); i++) {
@@ -950,7 +984,7 @@ public class ContractController {
                 cell2.setCellValue(typeName);
                 
                 org.apache.poi.ss.usermodel.Cell cell3 = dataRow.createCell(3);
-                cell3.setCellValue(contract.getCounterparty() != null ? contract.getCounterparty() : "");
+                cell3.setCellValue(resolveCounterpartySummary(contract));
                 
                 // 合同金额
                 org.apache.poi.ss.usermodel.Cell cell4 = dataRow.createCell(4);
@@ -975,6 +1009,9 @@ public class ContractController {
                         case "PENDING": statusName = "待审批"; break;
                         case "APPROVED": statusName = "已审批"; break;
                         case "SIGNED": statusName = "已签署"; break;
+                        case "RENEWING": statusName = "续签中"; break;
+                        case "RENEWED": statusName = "已续签"; break;
+                        case "NOT_RENEWED": statusName = "不续签"; break;
                         case "ARCHIVED": statusName = "已归档"; break;
                         case "TERMINATED": statusName = "已终止"; break;
                     }
@@ -1018,7 +1055,7 @@ public class ContractController {
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public void downloadPdf(@PathVariable Long id, HttpServletResponse response) throws IOException {
         // 从数据库查找合同
-        Contract contract = contractMapper.selectById(id);
+        Contract contract = contractService.getContractById(id);
         
         if (contract == null) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -1047,7 +1084,7 @@ public class ContractController {
             // 表格数据
             addTableCell(table, "合同编号", contract.getContractNo() != null ? contract.getContractNo() : "");
             addTableCell(table, "合同类型", getContractTypeName(contract.getType()));
-            addTableCell(table, "交易对方", contract.getCounterparty() != null ? contract.getCounterparty() : "");
+            addTableCell(table, "交易对方", resolveCounterpartySummary(contract));
             addTableCell(table, "合同金额", contract.getAmount() != null ? contract.getAmount().toString() : "0");
             addTableCell(table, "开始日期", contract.getStartDate() != null ? contract.getStartDate().toString() : "");
             addTableCell(table, "结束日期", contract.getEndDate() != null ? contract.getEndDate().toString() : "");
@@ -1109,6 +1146,9 @@ public class ContractController {
             case "PENDING": return "待审批";
             case "APPROVED": return "已审批";
             case "SIGNED": return "已签署";
+            case "RENEWING": return "续签中";
+            case "RENEWED": return "已续签";
+            case "NOT_RENEWED": return "不续签";
             case "ARCHIVED": return "已归档";
             case "TERMINATED": return "已终止";
             default: return "其他";
@@ -1119,7 +1159,7 @@ public class ContractController {
     @GetMapping("/{id}/word")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public void downloadWord(@PathVariable Long id, HttpServletResponse response) throws IOException {
-        Contract contract = contractMapper.selectById(id);
+        Contract contract = contractService.getContractById(id);
         
         if (contract == null) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -1170,7 +1210,7 @@ public class ContractController {
             @RequestParam(required = false) String keyword,
             HttpServletResponse response) throws IOException {
         
-        List<Contract> allContracts = contractMapper.selectList(null);
+        List<Contract> allContracts = getVisibleContracts();
         List<Contract> filteredContracts = new ArrayList<>();
         
         for (Contract contract : allContracts) {
@@ -1184,8 +1224,9 @@ public class ContractController {
             if (status != null && !status.isEmpty() && !status.equals(contract.getStatus())) {
                 continue;
             }
-            if (counterparty != null && !counterparty.isEmpty() && 
-                (contract.getCounterparty() == null || !contract.getCounterparty().toLowerCase().contains(counterparty.toLowerCase()))) {
+            String counterpartySummary = resolveCounterpartySummary(contract);
+            if (counterparty != null && !counterparty.isEmpty() &&
+                (counterpartySummary.isEmpty() || !counterpartySummary.toLowerCase().contains(counterparty.toLowerCase()))) {
                 continue;
             }
             if (startDateFrom != null && !startDateFrom.isEmpty() && contract.getStartDate() != null && 
@@ -1215,7 +1256,7 @@ public class ContractController {
                 String kwLower = keyword.toLowerCase();
                 if (contract.getTitle() != null && contract.getTitle().toLowerCase().contains(kwLower)) match = true;
                 if (contract.getContractNo() != null && contract.getContractNo().toLowerCase().contains(kwLower)) match = true;
-                if (contract.getCounterparty() != null && contract.getCounterparty().toLowerCase().contains(kwLower)) match = true;
+                if (resolveCounterpartySummary(contract).toLowerCase().contains(kwLower)) match = true;
                 if (contract.getContent() != null && contract.getContent().toLowerCase().contains(kwLower)) match = true;
                 if (contract.getRemark() != null && contract.getRemark().toLowerCase().contains(kwLower)) match = true;
                 String typeLower = contract.getType() != null ? contract.getType().toLowerCase() : "";
@@ -1305,5 +1346,36 @@ public class ContractController {
         com.itextpdf.html2pdf.HtmlConverter.convertToPdf(fullHtml, baos);
         response.getOutputStream().write(baos.toByteArray());
         response.getOutputStream().flush();
+    }
+
+    private List<Contract> getVisibleContracts() {
+        if (contractDataScopeService.canViewAllContracts()) {
+            return contractMapper.selectList(null);
+        }
+        QueryWrapper<Contract> wrapper = new QueryWrapper<>();
+        contractDataScopeService.applyContractVisibilityFilter(wrapper);
+        return contractMapper.selectList(wrapper);
+    }
+
+    private String resolveCounterpartySummary(Contract contract) {
+        if (contract == null || contract.getCounterparties() == null || contract.getCounterparties().isBlank()) {
+            return "";
+        }
+        try {
+            List<Map<String, Object>> counterparties = objectMapper.readValue(
+                    contract.getCounterparties(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
+            );
+            return counterparties.stream()
+                    .map(item -> item.get("name"))
+                    .filter(Objects::nonNull)
+                    .map(String::valueOf)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .distinct()
+                    .collect(java.util.stream.Collectors.joining(" / "));
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

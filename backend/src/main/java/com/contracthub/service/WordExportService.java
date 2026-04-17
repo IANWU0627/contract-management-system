@@ -198,6 +198,9 @@ public class WordExportService {
             case "APPROVING" -> "审批中";
             case "APPROVED" -> "已通过";
             case "SIGNED" -> "已签署";
+            case "RENEWING" -> "续签中";
+            case "RENEWED" -> "已续签";
+            case "NOT_RENEWED" -> "不续签";
             case "ARCHIVED" -> "已归档";
             case "TERMINATED" -> "已终止";
             default -> status;

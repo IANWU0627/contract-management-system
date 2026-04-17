@@ -23,6 +23,10 @@
                 <el-form-item :label="$t('user.phone')" prop="phone">
                   <el-input v-model="form.phone" :placeholder="t('profile.placeholder.phone')" />
                 </el-form-item>
+                <el-form-item :label="t('profile.department')" prop="department">
+                  <el-input v-model="form.department" :placeholder="t('profile.placeholder.department')" clearable />
+                  <div class="field-hint">{{ t('profile.departmentHint') }}</div>
+                </el-form-item>
                 <el-form-item :label="$t('user.role')">
                   <el-tag>{{ formatRole(form.role) }}</el-tag>
                 </el-form-item>
@@ -282,9 +286,11 @@
             <div class="smart-analysis-panel">
               <p class="smart-analysis-intro">{{ t('profile.smartAnalysisIntro') }}</p>
 
+              <el-row :gutter="24" class="analysis-columns">
+                <el-col :xs="24" :lg="12">
               <div class="analysis-section">
                 <div class="analysis-section-title">{{ t('profile.riskThresholdSection') }}</div>
-                <el-form-item :label="t('profile.riskThreshold')" class="smart-analysis-form-item" label-width="112px">
+                <el-form-item :label="t('profile.riskThreshold')" class="smart-analysis-form-item" label-width="96px">
                   <div class="form-item-stack">
                     <div class="risk-presets">
                       <el-button-group>
@@ -323,10 +329,11 @@
                   </div>
                 </el-form-item>
               </div>
-
+                </el-col>
+                <el-col :xs="24" :lg="12">
               <div class="analysis-section">
                 <div class="analysis-section-title">{{ t('profile.modelParamsSection') }}</div>
-                <el-form-item :label="t('profile.maxTokens')" class="smart-analysis-form-item" label-width="112px">
+                <el-form-item :label="t('profile.maxTokens')" class="smart-analysis-form-item" label-width="96px">
                   <div class="form-item-stack">
                     <el-slider
                       v-model="bigDataConfig.maxTokens"
@@ -339,7 +346,7 @@
                     <span class="form-item-hint">{{ t('profile.maxTokensHint') }}</span>
                   </div>
                 </el-form-item>
-                <el-form-item :label="t('profile.temperature')" class="smart-analysis-form-item" label-width="112px">
+                <el-form-item :label="t('profile.temperature')" class="smart-analysis-form-item" label-width="96px">
                   <div class="form-item-stack">
                     <el-slider
                       v-model="bigDataConfig.temperature"
@@ -353,12 +360,14 @@
                   </div>
                 </el-form-item>
               </div>
+                </el-col>
+              </el-row>
 
               <div class="analysis-section advanced-section">
                 <div class="analysis-section-title">{{ t('profile.advancedSettings') }}</div>
                 <el-row :gutter="20">
                   <el-col :xs="24" :sm="12">
-                    <el-form-item :label="t('profile.enableCache')" class="smart-analysis-form-item" label-width="112px">
+                    <el-form-item :label="t('profile.enableCache')" class="smart-analysis-form-item" label-width="96px">
                       <div class="cache-row">
                         <el-switch v-model="bigDataConfig.enableCache" />
                         <span class="form-item-hint">{{ t('profile.enableCacheHint') }}</span>
@@ -370,7 +379,7 @@
                       v-if="bigDataConfig.enableCache"
                       :label="t('profile.cacheTimeout')"
                       class="smart-analysis-form-item"
-                      label-width="112px"
+                      label-width="96px"
                     >
                       <div class="form-item-stack">
                         <el-input-number
@@ -488,6 +497,7 @@ const form = reactive({
   nickname: '',
   email: '',
   phone: '',
+  department: '' as string,
   role: ''
 })
 
@@ -576,7 +586,8 @@ const handleSubmit = async () => {
       const updatedInfo = {
         nickname: form.nickname,
         email: form.email,
-        phone: form.phone
+        phone: form.phone,
+        department: form.department?.trim() || null
       }
       await updateUserInfo(updatedInfo)
       if (userStore.userInfo) {
@@ -1128,6 +1139,13 @@ onMounted(() => {
   
   .password-card { margin-top: 20px; }
   
+  .field-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    line-height: 1.45;
+  }
+
   .avatar-section { text-align: center;
     .avatar-upload-tip {
       font-size: 12px;
@@ -1165,6 +1183,10 @@ onMounted(() => {
     border-bottom: 1px solid var(--el-border-color-lighter);
   }
 
+  .analysis-columns {
+    align-items: stretch;
+  }
+
   .advanced-section {
     margin-top: 8px;
     padding-top: 4px;
@@ -1173,7 +1195,7 @@ onMounted(() => {
   .smart-analysis-form-item {
     margin-bottom: 16px;
     :deep(.el-form-item__label) {
-      width: 112px !important;
+      width: 96px !important;
       padding-right: 12px;
       line-height: 32px;
     }
@@ -1188,7 +1210,7 @@ onMounted(() => {
     flex-direction: column;
     gap: 8px;
     width: 100%;
-    max-width: 760px;
+    max-width: 100%;
     min-width: 0;
   }
 
@@ -1203,7 +1225,7 @@ onMounted(() => {
   .risk-slider,
   .temp-slider {
     width: 100%;
-    max-width: 760px;
+    max-width: 100%;
     :deep(.el-slider__runway) {
       margin-right: 8px;
     }
@@ -1223,7 +1245,7 @@ onMounted(() => {
     align-items: flex-start;
     gap: 8px;
     width: 100%;
-    max-width: 760px;
+    max-width: 100%;
   }
 
   .smart-analysis-actions {

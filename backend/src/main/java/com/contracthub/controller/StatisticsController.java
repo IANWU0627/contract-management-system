@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.Contract;
 import com.contracthub.mapper.ContractMapper;
+import com.contracthub.service.ContractDataScopeService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
@@ -18,29 +19,33 @@ import java.util.*;
 public class StatisticsController {
     
     private final ContractMapper contractMapper;
+    private final ContractDataScopeService contractDataScopeService;
     
-    public StatisticsController(ContractMapper contractMapper) {
+    public StatisticsController(ContractMapper contractMapper, ContractDataScopeService contractDataScopeService) {
         this.contractMapper = contractMapper;
+        this.contractDataScopeService = contractDataScopeService;
     }
     
     @GetMapping("/overview")
     public ApiResponse<Map<String, Object>> overview() {
         try {
             QueryWrapper<Contract> wrapper = new QueryWrapper<>();
-            List<Contract> contractList = contractMapper.selectList(wrapper);
+            wrapper.select("amount", "status", "end_date", "create_time", "update_time");
+            applyRoleIsolation(wrapper);
+            List<Map<String, Object>> contractList = contractMapper.selectMaps(wrapper);
             Map<String, Object> stats = new HashMap<>();
             
             int totalContracts = contractList.size();
             stats.put("totalContracts", totalContracts);
             
             BigDecimal totalAmount = contractList.stream()
-                .map(Contract::getAmount)
+                .map(item -> (BigDecimal) item.get("amount"))
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             stats.put("totalAmount", totalAmount.doubleValue());
             
             long pendingApproval = contractList.stream()
-                .filter(c -> "PENDING".equals(c.getStatus()))
+                .filter(c -> "PENDING".equals(String.valueOf(c.get("status"))))
                 .count();
             stats.put("pendingApproval", pendingApproval);
             
@@ -48,7 +53,7 @@ public class StatisticsController {
             LocalDate thirtyDaysLater = today.plusDays(30);
             long expiringSoon = contractList.stream()
                 .filter(c -> {
-                    LocalDate endDate = c.getEndDate();
+                    LocalDate endDate = toLocalDate(c.get("end_date"));
                     return endDate != null && !endDate.isBefore(today) && !endDate.isAfter(thirtyDaysLater);
                 })
                 .count();
@@ -57,7 +62,7 @@ public class StatisticsController {
             String thisMonth = today.format(DateTimeFormatter.ofPattern("yyyy-MM"));
             long monthlyNew = contractList.stream()
                 .filter(c -> {
-                    LocalDateTime createTime = c.getCreateTime();
+                    LocalDateTime createTime = toLocalDateTime(c.get("create_time"));
                     if (createTime == null) return false;
                     return createTime.format(DateTimeFormatter.ofPattern("yyyy-MM")).equals(thisMonth);
                 })
@@ -66,8 +71,8 @@ public class StatisticsController {
             
             long signedThisMonth = contractList.stream()
                 .filter(c -> {
-                    if (!"SIGNED".equals(c.getStatus())) return false;
-                    LocalDateTime updateTime = c.getUpdateTime();
+                    if (!"SIGNED".equals(String.valueOf(c.get("status")))) return false;
+                    LocalDateTime updateTime = toLocalDateTime(c.get("update_time"));
                     if (updateTime == null) return false;
                     return updateTime.format(DateTimeFormatter.ofPattern("yyyy-MM")).equals(thisMonth);
                 })
@@ -86,11 +91,14 @@ public class StatisticsController {
     
     @GetMapping("/status-distribution")
     public ApiResponse<List<Map<String, Object>>> statusDistribution() {
-        List<Contract> contracts = contractMapper.selectList(null);
+        QueryWrapper<Contract> wrapper = new QueryWrapper<>();
+        wrapper.select("status");
+        applyRoleIsolation(wrapper);
+        List<Map<String, Object>> contracts = contractMapper.selectMaps(wrapper);
         
         Map<String, Long> statusCount = new HashMap<>();
-        for (Contract contract : contracts) {
-            String status = contract.getStatus() != null ? contract.getStatus() : "OTHER";
+        for (Map<String, Object> contract : contracts) {
+            String status = contract.get("status") != null ? String.valueOf(contract.get("status")) : "OTHER";
             statusCount.put(status, statusCount.getOrDefault(status, 0L) + 1);
         }
         
@@ -107,11 +115,14 @@ public class StatisticsController {
     
     @GetMapping("/type-distribution")
     public ApiResponse<List<Map<String, Object>>> typeDistribution() {
-        List<Contract> contracts = contractMapper.selectList(null);
+        QueryWrapper<Contract> wrapper = new QueryWrapper<>();
+        wrapper.select("type");
+        applyRoleIsolation(wrapper);
+        List<Map<String, Object>> contracts = contractMapper.selectMaps(wrapper);
         
         Map<String, Long> typeCount = new HashMap<>();
-        for (Contract contract : contracts) {
-            String type = contract.getType() != null ? contract.getType().toUpperCase() : "OTHER";
+        for (Map<String, Object> contract : contracts) {
+            String type = contract.get("type") != null ? String.valueOf(contract.get("type")).toUpperCase() : "OTHER";
             typeCount.put(type, typeCount.getOrDefault(type, 0L) + 1);
         }
         
@@ -141,6 +152,7 @@ public class StatisticsController {
             wrapper.ge("create_time", startOfMonth.atStartOfDay())
                   .lt("create_time", endOfMonth.plusDays(1).atStartOfDay())
                   .select("count(*) as count, coalesce(sum(amount), 0) as total_amount");
+            applyRoleIsolation(wrapper);
             
             Map<String, Object> result = contractMapper.selectMaps(wrapper).stream().findFirst().orElse(new HashMap<>());
             
@@ -157,23 +169,51 @@ public class StatisticsController {
     @GetMapping("/top-counterparties")
     public ApiResponse<List<Map<String, Object>>> topCounterparties() {
         QueryWrapper<Contract> wrapper = new QueryWrapper<>();
-        wrapper.select("counterparty, count(*) as count, coalesce(sum(amount), 0) as total_amount")
-              .isNotNull("counterparty")
-              .groupBy("counterparty")
-              .orderByDesc("total_amount")
-              .last("LIMIT 5");
-        
-        List<Map<String, Object>> rawResult = contractMapper.selectMaps(wrapper);
-        
-        List<Map<String, Object>> data = new ArrayList<>();
-        for (Map<String, Object> row : rawResult) {
-            Map<String, Object> item = new HashMap<>();
-            item.put("name", row.get("counterparty"));
-            item.put("count", row.get("count"));
-            item.put("amount", row.get("total_amount"));
-            data.add(item);
+        wrapper.select("id", "counterparties", "amount");
+        applyRoleIsolation(wrapper);
+        List<Contract> contracts = contractMapper.selectList(wrapper);
+
+        Map<String, Map<String, Object>> agg = new HashMap<>();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+        for (Contract c : contracts) {
+            List<String> names = new ArrayList<>();
+            if (c.getCounterparties() != null && !c.getCounterparties().isBlank()) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> cps = mapper.readValue(c.getCounterparties(), List.class);
+                    for (Map<String, Object> cp : cps) {
+                        Object nameObj = cp.get("name");
+                        if (nameObj != null && !nameObj.toString().isBlank()) {
+                            names.add(nameObj.toString().trim());
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // ignore malformed historical json
+                }
+            }
+            if (names.isEmpty()) {
+                continue;
+            }
+            double amount = c.getAmount() != null ? c.getAmount().doubleValue() : 0d;
+            for (String name : names.stream().distinct().toList()) {
+                Map<String, Object> item = agg.computeIfAbsent(name, k -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("name", k);
+                    m.put("count", 0L);
+                    m.put("amount", 0d);
+                    return m;
+                });
+                item.put("count", ((Long) item.get("count")) + 1L);
+                item.put("amount", ((Double) item.get("amount")) + amount);
+            }
         }
-        
+
+        List<Map<String, Object>> data = new ArrayList<>(agg.values());
+        data.sort((a, b) -> Double.compare((Double) b.get("amount"), (Double) a.get("amount")));
+        if (data.size() > 5) {
+            data = data.subList(0, 5);
+        }
         return ApiResponse.success(data);
     }
     
@@ -189,6 +229,7 @@ public class StatisticsController {
               .isNotNull("creator_id")
               .groupBy("creator_id")
               .orderByDesc("total");
+        applyRoleIsolation(wrapper);
         
         List<Map<String, Object>> rawResult = contractMapper.selectMaps(wrapper);
         
@@ -205,5 +246,58 @@ public class StatisticsController {
         }
         
         return ApiResponse.success(data);
+    }
+
+    private void applyRoleIsolation(QueryWrapper<Contract> wrapper) {
+        contractDataScopeService.applyContractVisibilityFilter(wrapper);
+    }
+
+    private LocalDate toLocalDate(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+        if (value instanceof java.util.Date utilDate) {
+            return utilDate.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        }
+        if (value instanceof CharSequence cs) {
+            try {
+                return LocalDate.parse(cs.toString());
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private LocalDateTime toLocalDateTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime;
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime();
+        }
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate().atStartOfDay();
+        }
+        if (value instanceof java.util.Date utilDate) {
+            return LocalDateTime.ofInstant(utilDate.toInstant(), java.time.ZoneId.systemDefault());
+        }
+        if (value instanceof CharSequence cs) {
+            try {
+                return LocalDateTime.parse(cs.toString());
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 }

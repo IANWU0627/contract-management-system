@@ -11,6 +11,7 @@ import com.contracthub.entity.ApprovalRecord;
 import com.contracthub.entity.User;
 import com.contracthub.mapper.ApprovalRecordMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -32,6 +33,7 @@ public class ContractControllerHelper {
     private final ApprovalRecordMapper approvalRecordMapper;
     private final NotificationService notificationService;
     private final ContractMapper contractMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ContractControllerHelper(ContractFieldValueMapper fieldValueMapper,
                                       UserMapper userMapper,
@@ -179,6 +181,9 @@ public class ContractControllerHelper {
             case "PENDING": return "待审批";
             case "APPROVED": return "已审批";
             case "SIGNED": return "已签署";
+            case "RENEWING": return "续签中";
+            case "RENEWED": return "已续签";
+            case "NOT_RENEWED": return "不续签";
             case "ARCHIVED": return "已归档";
             case "TERMINATED": return "已终止";
             default: return "其他";
@@ -191,7 +196,7 @@ public class ContractControllerHelper {
         result.put("contractNo", contract.getContractNo());
         result.put("title", contract.getTitle());
         result.put("type", contract.getType());
-        result.put("counterparty", contract.getCounterparty());
+        result.put("counterparty", resolveCounterpartySummary(contract));
         result.put("amount", contract.getAmount());
         result.put("startDate", contract.getStartDate());
         result.put("endDate", contract.getEndDate());
@@ -203,5 +208,27 @@ public class ContractControllerHelper {
         result.put("createdAt", contract.getCreateTime());
         result.put("updatedAt", contract.getUpdateTime());
         return result;
+    }
+
+    private String resolveCounterpartySummary(Contract contract) {
+        if (contract == null || contract.getCounterparties() == null || contract.getCounterparties().isBlank()) {
+            return "";
+        }
+        try {
+            List<Map<String, Object>> counterparties = objectMapper.readValue(
+                    contract.getCounterparties(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
+            );
+            return counterparties.stream()
+                    .map(item -> item.get("name"))
+                    .filter(Objects::nonNull)
+                    .map(String::valueOf)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .distinct()
+                    .collect(java.util.stream.Collectors.joining(" / "));
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

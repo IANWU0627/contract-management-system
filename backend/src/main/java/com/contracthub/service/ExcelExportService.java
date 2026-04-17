@@ -8,6 +8,7 @@ import com.contracthub.mapper.ContractTypeFieldMapper;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,6 +21,7 @@ public class ExcelExportService {
     private final ContractTypeFieldMapper typeFieldMapper;
     private final ContractFieldValueMapper fieldValueMapper;
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private final ObjectMapper objectMapper = new ObjectMapper();
     
     public ExcelExportService(ContractTypeFieldMapper typeFieldMapper, ContractFieldValueMapper fieldValueMapper) {
         this.typeFieldMapper = typeFieldMapper;
@@ -88,7 +90,7 @@ public class ExcelExportService {
                         case "contractNo" -> cell.setCellValue(contract.getContractNo() != null ? contract.getContractNo() : "");
                         case "title" -> cell.setCellValue(contract.getTitle() != null ? contract.getTitle() : "");
                         case "type" -> cell.setCellValue(formatType(contract.getType()));
-                        case "counterparty" -> cell.setCellValue(contract.getCounterparty() != null ? contract.getCounterparty() : "");
+                        case "counterparty" -> cell.setCellValue(resolveCounterpartySummary(contract));
                         case "amount" -> cell.setCellValue(contract.getAmount() != null ? contract.getAmount().doubleValue() : 0);
                         case "startDate" -> cell.setCellValue(contract.getStartDate() != null ? contract.getStartDate().format(dateFormatter) : "");
                         case "endDate" -> cell.setCellValue(contract.getEndDate() != null ? contract.getEndDate().format(dateFormatter) : "");
@@ -183,9 +185,34 @@ public class ExcelExportService {
             case "APPROVING" -> "审批中";
             case "APPROVED" -> "已通过";
             case "SIGNED" -> "已签署";
+            case "RENEWING" -> "续签中";
+            case "RENEWED" -> "已续签";
+            case "NOT_RENEWED" -> "不续签";
             case "ARCHIVED" -> "已归档";
             case "TERMINATED" -> "已终止";
             default -> status;
         };
+    }
+
+    private String resolveCounterpartySummary(Contract contract) {
+        if (contract == null || contract.getCounterparties() == null || contract.getCounterparties().isBlank()) {
+            return "";
+        }
+        try {
+            List<Map<String, Object>> counterparties = objectMapper.readValue(
+                    contract.getCounterparties(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
+            );
+            return counterparties.stream()
+                    .map(item -> item.get("name"))
+                    .filter(Objects::nonNull)
+                    .map(String::valueOf)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .distinct()
+                    .collect(java.util.stream.Collectors.joining(" / "));
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

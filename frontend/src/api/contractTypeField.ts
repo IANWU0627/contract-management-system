@@ -58,7 +58,6 @@ const saveToLocalStorage = (cache: Map<string, CacheItem>) => {
 }
 
 let fieldConfigCache = loadFromLocalStorage()
-const contractTypesCache: any = null
 
 export const clearFieldConfigCache = () => {
   fieldConfigCache.clear()

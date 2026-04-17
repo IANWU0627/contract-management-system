@@ -184,14 +184,60 @@ public class ContractTypeFieldController {
     @CacheEvict(value = {"contractTypeFields", "contractTypes"}, allEntries = true)
     @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
     public ApiResponse<Void> updateField(@PathVariable Long id, @RequestBody ContractTypeField field) {
-        ContractTypeField existing = fieldMapper.selectById(id);
-        if (existing == null) {
-            return ApiResponse.error("字段不存在");
+        try {
+            ContractTypeField existing = fieldMapper.selectById(id);
+            if (existing == null) {
+                return ApiResponse.error("字段不存在");
+            }
+
+            // 合并更新：防止前端只传部分字段时把必填列覆盖为 null 导致保存失败
+            existing.setFieldLabel(field.getFieldLabel() != null ? field.getFieldLabel() : existing.getFieldLabel());
+            existing.setFieldLabelEn(field.getFieldLabelEn() != null ? field.getFieldLabelEn() : existing.getFieldLabelEn());
+            existing.setFieldType(field.getFieldType() != null ? field.getFieldType() : existing.getFieldType());
+            existing.setRequired(field.getRequired() != null ? field.getRequired() : existing.getRequired());
+            existing.setShowInList(field.getShowInList() != null ? field.getShowInList() : existing.getShowInList());
+            existing.setShowInForm(field.getShowInForm() != null ? field.getShowInForm() : existing.getShowInForm());
+            existing.setFieldOrder(field.getFieldOrder() != null ? field.getFieldOrder() : existing.getFieldOrder());
+
+            if (field.getPlaceholder() != null) existing.setPlaceholder(field.getPlaceholder());
+            if (field.getPlaceholderEn() != null) existing.setPlaceholderEn(field.getPlaceholderEn());
+            if (field.getDefaultValue() != null) existing.setDefaultValue(field.getDefaultValue());
+            if (field.getOptions() != null) existing.setOptions(field.getOptions());
+            if (field.getMinValue() != null) existing.setMinValue(field.getMinValue());
+            if (field.getMaxValue() != null) existing.setMaxValue(field.getMaxValue());
+
+            // select/multiselect 才使用 quickCodeId；其它类型强制清空，避免脏数据
+            String effectiveType = existing.getFieldType();
+            if ("select".equals(effectiveType) || "multiselect".equals(effectiveType)) {
+                if (field.getQuickCodeId() != null) {
+                    existing.setQuickCodeId(field.getQuickCodeId());
+                }
+            } else {
+                existing.setQuickCodeId(null);
+            }
+
+            // 确保关键字段不丢失
+            if (existing.getContractType() == null || existing.getContractType().isBlank()
+                    || existing.getFieldKey() == null || existing.getFieldKey().isBlank()
+                    || existing.getFieldLabel() == null || existing.getFieldLabel().isBlank()) {
+                return ApiResponse.error("字段配置不完整，无法保存");
+            }
+
+            existing.setId(id);
+            try {
+                fieldMapper.updateById(existing);
+            } catch (Exception ex) {
+                String message = ex.getMessage() != null ? ex.getMessage() : "";
+                if (message.contains("quick_code_id")) {
+                    fieldMapper.updateByIdWithoutQuickCodeId(existing);
+                    return ApiResponse.success(null);
+                }
+                throw ex;
+            }
+            return ApiResponse.success(null);
+        } catch (Exception e) {
+            return ApiResponse.error("保存失败：" + e.getMessage());
         }
-        
-        field.setId(id);
-        fieldMapper.updateById(field);
-        return ApiResponse.success(null);
     }
 
     /**

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.Contract;
 import com.contracthub.mapper.ContractMapper;
+import com.contracthub.service.ContractDataScopeService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
@@ -16,9 +17,11 @@ import java.util.*;
 public class ExpirationWarningController {
     
     private final ContractMapper contractMapper;
+    private final ContractDataScopeService contractDataScopeService;
     
-    public ExpirationWarningController(ContractMapper contractMapper) {
+    public ExpirationWarningController(ContractMapper contractMapper, ContractDataScopeService contractDataScopeService) {
         this.contractMapper = contractMapper;
+        this.contractDataScopeService = contractDataScopeService;
     }
     
     @GetMapping("/expiring")
@@ -42,6 +45,7 @@ public class ExpirationWarningController {
         if (status != null && !status.isEmpty()) {
             wrapper.eq("status", status);
         }
+        applyRoleIsolation(wrapper);
         
         List<Contract> contracts = contractMapper.selectList(wrapper);
         
@@ -62,7 +66,7 @@ public class ExpirationWarningController {
             item.put("startDate", contract.getStartDate());
             item.put("endDate", contract.getEndDate());
             item.put("daysRemaining", daysRemaining);
-            item.put("counterparty", contract.getCounterparty());
+            item.put("counterparty", resolveCounterpartyText(contract));
             item.put("creatorId", contract.getCreatorId());
             
             String expireStatus;
@@ -88,6 +92,7 @@ public class ExpirationWarningController {
         
         QueryWrapper<Contract> expiredWrapper = new QueryWrapper<>();
         expiredWrapper.isNotNull("end_date").lt("end_date", today);
+        applyRoleIsolation(expiredWrapper);
         long expiredCount = contractMapper.selectCount(expiredWrapper);
         
         Map<String, Object> result = new HashMap<>();
@@ -109,33 +114,39 @@ public class ExpirationWarningController {
         LocalDate today = LocalDate.now();
         
         QueryWrapper<Contract> wrapper = new QueryWrapper<>();
+        applyRoleIsolation(wrapper);
         
         long totalContracts = contractMapper.selectCount(wrapper);
         
         wrapper = new QueryWrapper<>();
         wrapper.isNotNull("end_date").lt("end_date", today);
+        applyRoleIsolation(wrapper);
         long alreadyExpired = contractMapper.selectCount(wrapper);
         
         wrapper = new QueryWrapper<>();
         wrapper.isNotNull("end_date")
               .ge("end_date", today)
               .le("end_date", today.plusDays(7));
+        applyRoleIsolation(wrapper);
         long expiringThisWeek = contractMapper.selectCount(wrapper);
         
         wrapper = new QueryWrapper<>();
         wrapper.isNotNull("end_date")
               .ge("end_date", today)
               .le("end_date", today.plusDays(30));
+        applyRoleIsolation(wrapper);
         long expiringThisMonth = contractMapper.selectCount(wrapper);
         
         wrapper = new QueryWrapper<>();
         wrapper.isNotNull("end_date")
               .ge("end_date", today)
               .le("end_date", today.plusDays(90));
+        applyRoleIsolation(wrapper);
         long expiringThisQuarter = contractMapper.selectCount(wrapper);
         
         QueryWrapper<Contract> amountWrapper = new QueryWrapper<>();
         amountWrapper.select("coalesce(sum(amount), 0) as total_amount");
+        applyRoleIsolation(amountWrapper);
         Map<String, Object> totalResult = contractMapper.selectMaps(amountWrapper).stream().findFirst().orElse(new HashMap<>());
         double totalAmount = totalResult.get("total_amount") != null ? ((Number) totalResult.get("total_amount")).doubleValue() : 0;
         
@@ -143,6 +154,7 @@ public class ExpirationWarningController {
         amountWrapper.isNotNull("end_date")
                     .le("end_date", today.plusDays(30))
                     .select("coalesce(sum(amount), 0) as total_amount");
+        applyRoleIsolation(amountWrapper);
         Map<String, Object> expiringResult = contractMapper.selectMaps(amountWrapper).stream().findFirst().orElse(new HashMap<>());
         double expiringAmount = expiringResult.get("total_amount") != null ? ((Number) expiringResult.get("total_amount")).doubleValue() : 0;
         
@@ -157,5 +169,31 @@ public class ExpirationWarningController {
         result.put("expiringPercent", totalAmount > 0 ? (expiringAmount / totalAmount * 100) : 0);
         
         return ApiResponse.success(result);
+    }
+
+    private void applyRoleIsolation(QueryWrapper<Contract> wrapper) {
+        contractDataScopeService.applyContractVisibilityFilter(wrapper);
+    }
+
+    private String resolveCounterpartyText(Contract contract) {
+        String counterpartiesJson = contract.getCounterparties();
+        if (counterpartiesJson == null || counterpartiesJson.isBlank()) {
+            return "";
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> cps = new com.fasterxml.jackson.databind.ObjectMapper().readValue(counterpartiesJson, List.class);
+            return cps.stream()
+                .map(cp -> cp.get("name"))
+                .filter(Objects::nonNull)
+                .map(String::valueOf)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .reduce((a, b) -> a + " / " + b)
+                .orElse("");
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 }

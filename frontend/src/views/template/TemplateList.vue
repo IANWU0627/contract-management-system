@@ -23,8 +23,8 @@
         </div>
         <div class="filter-item" style="width: 160px;">
           <el-select v-model="query.category" clearable :placeholder="$t('template.category')" @change="fetchData">
-            <el-option v-for="cat in categories" :key="cat.code" :label="cat.name" :value="cat.code">
-              <span :style="{ color: cat.color }">●</span> {{ cat.name }}
+            <el-option v-for="cat in categories" :key="cat.code" :label="getCategoryName(cat.code)" :value="cat.code">
+              <span :style="{ color: cat.color }">●</span> {{ getCategoryName(cat.code) }}
             </el-option>
           </el-select>
         </div>
@@ -117,7 +117,7 @@
       </div>
       
       <el-tabs v-model="previewTab" class="preview-tabs">
-        <el-tab-pane label="变量填充" name="variables">
+        <el-tab-pane :label="$t('template.variableFill')" name="variables">
           <div class="variable-fill-form" v-if="previewVariables.length > 0">
             <div class="variable-grid">
               <div v-for="v in previewVariables" :key="v" class="variable-item">
@@ -134,7 +134,7 @@
             <p>{{ t('template.placeholder.noVariablesDetected') }}</p>
           </div>
         </el-tab-pane>
-        <el-tab-pane label="预览效果" name="preview">
+        <el-tab-pane :label="$t('template.previewEffect')" name="preview">
           <div class="preview-content" v-if="previewData.content">
             <div class="preview-html" v-html="filledPreviewContent || previewData.content"></div>
           </div>
@@ -235,7 +235,7 @@ import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(false)
 const templates = ref<any[]>([])
@@ -277,7 +277,11 @@ const categories = ref<any[]>([])
 
 const getCategoryName = (cat: string) => {
   const found = categories.value.find(c => c.code === cat)
-  return found?.name || cat
+  if (!found) return cat
+  if (locale.value === 'en') {
+    return found.nameEn || found.name || cat
+  }
+  return found.name || found.nameEn || cat
 }
 
 const getCategoryColor = (cat: string) => {

@@ -16,6 +16,8 @@ public class User {
     private String avatar;
     private String role;
     private Integer status;
+    /** 部门标识（与创建人同部门时可见合同；空则仅本人数据） */
+    private String department;
     
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -35,4 +37,6 @@ public class User {
     public void setRole(String role) { this.role = role; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
 }

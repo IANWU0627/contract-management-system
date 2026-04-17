@@ -6,6 +6,8 @@ export interface User {
   nickname?: string
   email?: string
   phone?: string
+  /** 部门标识，与数据权限（同部门可见合同）相关 */
+  department?: string | null
   role: string
   status: string
   createdAt?: string

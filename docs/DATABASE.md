@@ -14,16 +14,31 @@
 
 Flyway迁移脚本位于 `backend/src/main/resources/db/migration/` 目录下。
 
-### 迁移脚本列表
+### 迁移脚本列表（与仓库一致）
+
+> 说明：历史文档中的 `V1.0.x` 命名已合并进当前主线；新环境以 `V1__init_schema.sql` + 下列增量脚本为准。
 
 | 版本 | 文件名 | 说明 |
 |------|--------|------|
-| V1.0.0 | V1.0.0__Create_basic_tables.sql | 创建基础表结构 |
-| V1.0.1 | V1.0.1__Add_change_log.sql | 添加变更记录表 |
-| V1.0.2 | V1.0.2__Add_contract_fields.sql | 添加合同字段配置 |
-| V1.1.0 | V1.1.0__Add_quick_code_management.sql | 添加快速代码管理 |
-| V1.1.1 | V1.1.1__Insert_default_quick_codes.sql | 插入默认快速代码数据 |
-| V1.2.0 | V1.2.0__Add_quick_code_to_template_variable.sql | 更新模板变量表，支持快速代码 |
+| V1 | V1__init_schema.sql | 初始化全量基线（含后续演进中已并入的核心表，具体以文件为准） |
+| V1.1.0 | V1.1.0__Add_performance_indexes.sql | 性能相关索引 |
+| V1.2.0 | V1.2.0__Add_quick_code_to_template_variable.sql | 模板变量与快速代码 |
+| V1.3.0 | V1.3.0__Add_name_en_to_template_variable.sql | 模板变量英文名 |
+| V1.4.0 | V1.4.0__Add_quick_code_id_to_contract_type_field.sql | 合同类型字段关联快速代码 |
+| V1.5.0 | V1.5.0__Add_contract_clause_library.sql | 条款库 |
+| V1.5.0 | V1.5.0__Add_contract_relation_for_supplement.sql | 主合同/补充协议关系 |
+| V1.6.0 | V1.6.0__Add_diff_json_to_contract_change_log.sql | 变更记录 diff JSON |
+| V1.7.0 | V1.7.0__Deprecate_contract_counterparty_column.sql | 相对方字段演进 |
+| V1.8.0 | V1.8.0__Add_user_department.sql | 用户部门等 |
+| V1.9.0 | V1.9.0__Extract_approval_snapshot_to_dedicated_table.sql | 审批快照独立表 `contract_snapshot` |
+| V1.9.1 | V1.9.1__Backfill_contract_snapshot_from_legacy_columns.sql | 快照数据回填 |
+| V1.10.0 | V1.10.0__Split_contract_payload_from_contract.sql | 大字段拆分至 `contract_payload` |
+| V1.11.0 | V1.11.0__Add_contract_ai_summary.sql | 审批摘要等 AI 结果表 |
+| V1.12.0 | V1.12.0__Add_contract_version_diff_analysis.sql | 版本对比分析缓存 |
+| V1.13.0 | V1.13.0__Add_contract_snapshot_diff_analysis.sql | 快照对比分析缓存 |
+| V1.14.0 | V1.14.0__Ensure_diff_analysis_schema_compat.sql | 对比分析表/索引幂等补齐 |
+
+同步参考：`backend/src/main/resources/schema.sql`（开发/文档用全量结构说明）。
 
 ### 执行迁移
 
@@ -36,6 +51,13 @@ mvn flyway:migrate
 ```
 
 ## 数据库表结构
+
+### 大字段与快照（重要）
+
+- **`contract_payload`**：与 `contract.id` 一对一（业务上按合同 ID 关联），承载 `content`、`template_variables`、`dynamic_field_values`、`attachments`、内容哈希等，避免主表行过大。
+- **`contract_snapshot`**：审批/关键节点冻结的正文与变量快照，用于审计与「快照对比」。
+- **`contract_ai_summary`**：审批摘要等生成结果，可与 `snapshot_id` 关联。
+- **`contract_version_diff_analysis` / `contract_snapshot_diff_analysis`**：对比结果缓存（JSON），减少重复计算。
 
 ### 核心表
 

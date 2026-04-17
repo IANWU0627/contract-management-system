@@ -1,13 +1,8 @@
 # 合同管理系统
 
-一个功能完整的自己做着玩的合同管理系统，支持合同全生命周期管理、模板管理、审批流程、到期提醒等功能。
+一个覆盖合同全生命周期的管理系统，支持合同管理、模板管理、审批流、到期提醒、统计分析、多语言和权限控制。
 
-作为一个IT咨询顾问，完全使用AI做的，我个人还是比较满意的，后续有空自己在慢慢修改吧
-
-未来可以对接企业的前端业务数据，后端电子签章，以及OA审批流，进行完善，先就这样吧。
-
-首页是找的一个很有趣的登录页面 <img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/c2ccfbd0-e238-4d63-a5d0-51214edf44e6" />
-工作台首页 <img width="1512" height="720" alt="image" src="https://github.com/user-attachments/assets/14fb8b5c-afe2-45a2-9d0a-da92a83b828f" />
+当前项目以可维护性和可扩展性为目标，支持后续对接企业业务数据、电子签章和 OA 审批流。
 
 ## ✨ 功能特性
 
@@ -22,8 +17,13 @@
 - 👥 **用户角色** - 完善的权限管理
 - 🌍 **多语言** - 支持中文和英文
 - 📈 **统计报表** - 数据可视化分析
-- 🤖 **AI分析** - 智能合同内容分析
-- 📦 **版本管理** - 合同变更历史记录
+- 🤖 **AI分析** - 智能合同内容分析（列表侧不依赖正文字段；详情/载荷按需加载）
+- 📦 **版本管理** - 合同变更历史；支持版本对比与审批快照对比（条款粒度 + 风险说明）
+
+### 合同 AI 分析接口说明
+
+- **推荐**：`POST /api/contracts/{id}/analyze`（与前端列表、用户配置、无 API 时的离线演示一致）。
+- **兼容**：`POST /api/ai/analyze/{id}` 与上者共用同一套助手逻辑，新集成请优先使用合同路径。
 
 ## 🚀 快速开始
 
@@ -89,7 +89,7 @@
 - Vue Router
 - Pinia
 - Vue I18n
-- AntV G2Plot
+- AntV G2Plot（工作台与统计页图表）
 
 ### 后端
 
@@ -117,7 +117,7 @@ contract-management-system/
 │   │       ├── java/    # Java源代码
 │   │       └── resources/ # 配置文件
 │   └── pom.xml
-├── docs/                 # 项目文档
+├── docs/                 # 项目文档（见 docs/README.md 索引）
 ├── README.md             # 本文件
 └── QUICKSTART.md         # 快速启动指南
 ```
@@ -130,9 +130,17 @@ contract-management-system/
 
 ## 📝 开发文档
 
+- [文档索引](./docs/README.md)
 - [快速启动指南](./QUICKSTART.md)
-- [API文档](./docs/API_DOC.md)
-- [数据库设计](./docs/DATABASE.md)
+- [API 文档](./docs/API_DOC.md)
+- [数据库说明](./docs/DATABASE.md)
+- [技术规格](./docs/SPEC.md)
+
+## 🧹 维护说明
+
+- **大字段**：合同正文、模板变量、附件等存于 `contract_payload`；列表接口返回精简字段，详情页通过 `GET /api/contracts/{id}/payload` 加载。
+- **快照**：审批冻结内容存 `contract_snapshot`；对比接口见 [API 文档](./docs/API_DOC.md)（快照对比、版本对比）。
+- **数据库**：升级请使用 `backend/src/main/resources/db/migration/` 下 Flyway 脚本；若历史库缺列，优先对照 `DATABASE.md` 与 `V1.14.0__Ensure_diff_analysis_schema_compat.sql` 等幂等脚本。
 
 ## 🤝 贡献指南
 

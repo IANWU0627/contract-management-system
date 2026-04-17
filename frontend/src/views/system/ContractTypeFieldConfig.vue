@@ -164,7 +164,7 @@
                     @click="handleMoveField($index, -1)" 
                     :disabled="$index === 0"
                   >
-                    <el-icon><Top /></el-icon>
+                    <el-icon><SortUp /></el-icon>
                   </el-button>
                   <el-button 
                     size="small" 
@@ -173,7 +173,7 @@
                     @click="handleMoveField($index, 1)" 
                     :disabled="$index === filteredFieldsForSearch.length - 1"
                   >
-                    <el-icon><Bottom /></el-icon>
+                    <el-icon><SortDown /></el-icon>
                   </el-button>
                 </div>
               </template>
@@ -340,7 +340,7 @@ import {
 } from '@/api/contractTypeField'
 import { getContractCategories } from '@/api/contractCategory'
 import { getQuickCodes, getQuickCodeByCode } from '@/api/quickCode'
-import { Plus, Delete, ArrowLeft, Check, Search, Download, Upload, Setting, Refresh, Collection, Close, Edit, Top, Bottom, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Delete, ArrowLeft, Check, Search, Download, Upload, Setting, Refresh, Collection, Close, Edit, SortUp, SortDown, ArrowDown } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
 
@@ -459,10 +459,14 @@ const handleSaveField = async () => {
   try {
     if (isEditMode.value) {
       await updateContractTypeField(fieldForm.id!, {
+        contractType: currentType.value || undefined,
+        fieldKey: fieldForm.fieldKey,
         fieldLabel: fieldForm.fieldLabel,
         fieldLabelEn: fieldForm.fieldLabelEn,
         fieldType: fieldForm.fieldType,
-        quickCodeId: fieldForm.quickCodeId,
+        quickCodeId: (fieldForm.fieldType === 'select' || fieldForm.fieldType === 'multiselect')
+          ? fieldForm.quickCodeId
+          : null,
         required: fieldForm.required,
         showInList: fieldForm.showInList,
         showInForm: fieldForm.showInForm
@@ -954,6 +958,7 @@ const handleMoveField = async (index: number, direction: number) => {
   
   if (newIndex < 0 || newIndex >= allFields.value.length) return
   
+  const prevFields = allFields.value.map(f => ({ ...f }))
   const temp = allFields.value[realIndex]
   allFields.value[realIndex] = allFields.value[newIndex]
   allFields.value[newIndex] = temp
@@ -963,9 +968,16 @@ const handleMoveField = async (index: number, direction: number) => {
   })
   
   try {
-    for (const field of allFields.value) {
-      await updateContractTypeField(field.id!, { fieldOrder: field.fieldOrder })
-    }
+    const changedRows = [allFields.value[realIndex], allFields.value[newIndex]]
+    await Promise.all(
+      changedRows.map(field =>
+        updateContractTypeField(field.id!, {
+          contractType: currentType.value || undefined,
+          fieldKey: field.fieldKey,
+          fieldOrder: field.fieldOrder
+        })
+      )
+    )
     ElMessage.success(t('common.success'))
     
     if (fieldsCache.value[currentType.value!]) {
@@ -975,6 +987,9 @@ const handleMoveField = async (index: number, direction: number) => {
     const start = (currentPage.value - 1) * pageSize.value
     fields.value = filteredFieldsForSearch.value.slice(start, start + pageSize.value)
   } catch (error: any) {
+    allFields.value = prevFields
+    const start = (currentPage.value - 1) * pageSize.value
+    fields.value = filteredFieldsForSearch.value.slice(start, start + pageSize.value)
     ElMessage.error(error.message || t('common.error'))
   }
 }

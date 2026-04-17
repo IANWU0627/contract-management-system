@@ -14,6 +14,7 @@ public class ContractChangeLog {
     private String fieldName;
     private String oldValue;
     private String newValue;
+    private String diffJson;
     private Long operatorId;
     private String operatorName;
     private String remark;
@@ -38,6 +39,8 @@ public class ContractChangeLog {
     
     public String getNewValue() { return newValue; }
     public void setNewValue(String newValue) { this.newValue = newValue; }
+    public String getDiffJson() { return diffJson; }
+    public void setDiffJson(String diffJson) { this.diffJson = diffJson; }
     
     public Long getOperatorId() { return operatorId; }
     public void setOperatorId(Long operatorId) { this.operatorId = operatorId; }

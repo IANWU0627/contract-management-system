@@ -21,7 +21,10 @@
             <div class="stat-value">{{ stats.totalContracts }}</div>
             <div class="stat-label">{{ t('statistics.totalContracts') }}</div>
           </div>
-          <div class="stat-trend up">+12%</div>
+          <div class="stat-meta">
+            <span>{{ t('contract.statuses.signed') }} {{ statsMeta.signedCount }}</span>
+            <span>{{ t('contract.statuses.archived') }} {{ statsMeta.archivedCount }}</span>
+          </div>
         </div>
         
         <div class="stat-card gradient-green" @click="$router.push('/contracts')">
@@ -35,7 +38,10 @@
             <div class="stat-value">{{ getCurrencySymbol(DEFAULT_CURRENCY) }}{{ formatAmount(stats.totalAmount) }}</div>
             <div class="stat-label">{{ t('statistics.totalAmount') }}</div>
           </div>
-          <div class="stat-trend up">+8.5%</div>
+          <div class="stat-meta">
+            <span>{{ t('contract.statuses.signed') }} {{ getCurrencySymbol(DEFAULT_CURRENCY) }}{{ formatAmount(statsMeta.signedAmount) }}</span>
+            <span>{{ t('statistics.totalContracts') }} {{ stats.totalContracts }}</span>
+          </div>
         </div>
         
         <div class="stat-card gradient-orange" @click="$router.push('/approvals')">
@@ -48,6 +54,10 @@
           <div class="stat-info">
             <div class="stat-value">{{ stats.pendingApproval }}</div>
             <div class="stat-label">{{ t('statistics.pendingApproval') }}</div>
+          </div>
+          <div class="stat-meta">
+            <span>{{ t('contract.statuses.draft') }} {{ statsMeta.draftCount }}</span>
+            <span>{{ t('contract.statuses.approving') }} {{ statsMeta.approvingCount }}</span>
           </div>
           <div class="stat-badge warning" v-if="stats.pendingApproval > 0">{{ stats.pendingApproval }}</div>
         </div>
@@ -63,13 +73,17 @@
             <div class="stat-value">{{ stats.expiringSoon }}</div>
             <div class="stat-label">{{ t('statistics.expiringSoon') }}</div>
           </div>
+          <div class="stat-meta">
+            <span>{{ t('dashboard.expiringMonth') }} {{ statsMeta.expiringMonthCount }}</span>
+            <span>{{ t('dashboard.expired') }} {{ statsMeta.expiredCount }}</span>
+          </div>
           <div class="stat-badge danger" v-if="stats.expiringSoon > 0">{{ stats.expiringSoon }}</div>
         </div>
       </template>
     </div>
     
     <!-- 第二行：左侧最近合同 + 右侧快捷方式和分析 -->
-    <el-row :gutter="20" class="main-row">
+    <el-row :gutter="14" class="main-row">
       <!-- 左侧：最近合同 + 搜索 -->
       <el-col :span="14">
         <el-card shadow="hover" class="recent-card">
@@ -85,18 +99,38 @@
                   @change="handleSearch"
                   @keyup.enter="handleSearch"
                   size="small"
-                  style="width: 280px"
+                  class="header-search-input"
                 >
                   <template #prefix><el-icon><Search /></el-icon></template>
                 </el-input>
-                <el-button size="small" @click="clearSearch" v-if="searchKeyword" link>{{ t('common.reset') }}</el-button>
+                <el-select v-model="selectedStatus" :placeholder="t('contract.status')" clearable size="small" class="header-filter-select" @change="handleSearch">
+                  <el-option :label="t('common.all')" value="" />
+                  <el-option v-for="item in statusFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+                <el-select v-model="selectedType" :placeholder="t('contract.type')" clearable size="small" class="header-filter-select" @change="handleSearch">
+                  <el-option :label="t('common.all')" value="" />
+                  <el-option v-for="item in typeFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+                <el-button
+                  size="small"
+                  @click="clearSearch"
+                  v-if="searchKeyword || selectedStatus || selectedType"
+                  link
+                >{{ t('common.reset') }}</el-button>
               </div>
               <el-button type="primary" size="small" @click="$router.push('/contracts')">{{ t('common.viewAll') }}</el-button>
             </div>
           </template>
           
-          <el-table :data="filteredContracts" style="width: 100%" size="small" v-loading="searchLoading" class="dashboard-table">
-            <el-table-column prop="contractNo" :label="t('contract.no')" width="120" show-overflow-tooltip />
+          <el-table
+            :data="filteredContracts"
+            style="width: 100%"
+            size="small"
+            :max-height="dashboardTableMaxHeight"
+            v-loading="searchLoading"
+            class="dashboard-table"
+          >
+            <el-table-column prop="contractNo" :label="t('contract.no')" min-width="178" class-name="contract-no-column" />
             <el-table-column prop="title" :label="t('contract.name')" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">
                 <el-link type="primary" @click="$router.push(`/contracts/${row.id}`)" class="title-link">
@@ -128,6 +162,24 @@
                 </el-icon>
               </template>
             </el-table-column>
+            <el-table-column :label="t('common.more')" width="104" align="center">
+              <template #default="{ row }">
+                <el-dropdown @command="(command) => handleMoreAction(command, row)">
+                  <el-button size="small" class="more-action-btn">
+                    <el-icon><MoreFilled /></el-icon>
+                    <span>{{ t('common.more') }}</span>
+                    <el-icon class="arrow"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="detail">{{ t('contract.actions.view') }}</el-dropdown-item>
+                      <el-dropdown-item v-if="row.status === 'DRAFT'" command="edit">{{ t('contract.actions.edit') }}</el-dropdown-item>
+                      <el-dropdown-item command="copyNo">{{ t('contract.actions.copy') }}{{ t('contract.no') }}</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+            </el-table-column>
           </el-table>
           
           <!-- 分页组件 -->
@@ -140,7 +192,7 @@
               :total="total"
               @size-change="handleSizeChange"
               @current-change="handleCurrentChange"
-              style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); text-align: right"
+              style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-color); text-align: right"
             />
           </div>
         </el-card>
@@ -161,13 +213,13 @@
               <div class="quick-icon blue">
                 <el-icon :size="18"><Plus /></el-icon>
               </div>
-              <span>{{ t('contract.create') }}</span>
+              <span>{{ t('dashboard.createContract') }}</span>
             </div>
             <div class="quick-item" @click="$router.push('/templates')">
               <div class="quick-icon green">
                 <el-icon :size="18"><FolderOpened /></el-icon>
               </div>
-              <span>{{ t('template.title') }}</span>
+              <span>{{ t('dashboard.contractTemplate') }}</span>
             </div>
             <div class="quick-item" @click="$router.push('/favorites')">
               <div class="quick-icon orange">
@@ -187,19 +239,22 @@
         <!-- 合同分析 -->
         <el-card shadow="hover" class="chart-card">
           <template #header>
-            <div class="card-header">
-              <el-icon><DataAnalysis /></el-icon>
-              <span>{{ t('statistics.title') }}</span>
+            <div class="card-header chart-header-with-presets">
+              <div class="chart-header-title">
+                <el-icon><DataAnalysis /></el-icon>
+                <span>{{ t('statistics.title') }}</span>
+              </div>
+              <el-segmented v-model="currentRoughPreset" :options="roughPresetOptions" size="small" />
             </div>
           </template>
           <div class="charts-wrap">
             <div class="chart-item">
               <div class="chart-title">{{ t('statistics.byStatus') }}</div>
-              <div ref="statusChartRef" class="chart-container"></div>
+              <canvas ref="statusChartCanvasRef" class="chart-canvas"></canvas>
             </div>
             <div class="chart-item">
               <div class="chart-title">{{ t('statistics.byType') }}</div>
-              <div ref="typeChartRef" class="chart-container"></div>
+              <canvas ref="typeChartCanvasRef" class="chart-canvas"></canvas>
             </div>
           </div>
         </el-card>
@@ -209,18 +264,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { get, put, post, del } from '@/api'
-import { getContractList } from '@/api/contract'
+import { get } from '@/api'
 import { getContractCategories } from '@/api/contractCategory'
 import { addFavorite, removeFavorite, getFavorites } from '@/api/favorite'
-import { Pie, Bar } from '@antv/g2plot'
-import { Lightning, DataAnalysis, Search, Star, StarFilled, Document, Money, Timer, Bell, Plus, FolderOpened, RefreshRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import rough from 'roughjs'
+import { Lightning, DataAnalysis, Search, Star, StarFilled, Document, Money, Timer, Bell, Plus, FolderOpened, RefreshRight, MoreFilled, ArrowDown } from '@element-plus/icons-vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
 
 const { t, locale } = useI18n()
+const router = useRouter()
 
 const loading = ref(true)
 
@@ -230,9 +287,16 @@ const stats = ref({
   pendingApproval: 0,
   expiringSoon: 0
 })
+const statsMeta = ref({
+  signedCount: 0,
+  archivedCount: 0,
+  signedAmount: 0,
+  draftCount: 0,
+  approvingCount: 0,
+  expiringMonthCount: 0,
+  expiredCount: 0
+})
 
-const pendingCount = ref(0)
-const expireCount = ref(0)
 const recentContracts = ref<any[]>([])
 const filteredContracts = ref<any[]>([])
 const categories = ref<any[]>([])
@@ -244,9 +308,39 @@ const total = ref(0)
 
 // 搜索相关
 const searchKeyword = ref('')
+const selectedStatus = ref('')
+const selectedType = ref('')
 
 // 缓存数据
 let cachedContracts: any[] = []
+type RoughPresetKey = 'chalk' | 'marker' | 'sketch'
+const currentRoughPreset = ref<RoughPresetKey>('chalk')
+const roughPresetOptions = computed(() => [
+  { label: t('dashboard.chalk'), value: 'chalk' },
+  { label: t('dashboard.marker'), value: 'marker' },
+  { label: t('dashboard.sketch'), value: 'sketch' }
+])
+const statusFilterOptions = computed(() => ([
+  'DRAFT',
+  'PENDING',
+  'APPROVING',
+  'APPROVED',
+  'SIGNED',
+  'ARCHIVED',
+  'TERMINATED'
+]).map(code => ({ value: code, label: formatStatus(code) })))
+const typeFilterOptions = computed(() => {
+  if (categories.value.length > 0) {
+    return categories.value.map((item: any) => ({
+      value: item.code,
+      label: locale.value === 'en' && item.nameEn ? item.nameEn : item.name
+    }))
+  }
+  return ['PURCHASE', 'SALES', 'SERVICE', 'LEASE', 'EMPLOYMENT', 'OTHER'].map(code => ({
+    value: code,
+    label: formatType(code)
+  }))
+})
 
 watch(locale, () => {
   nextTick(() => {
@@ -255,12 +349,18 @@ watch(locale, () => {
     }
   })
 })
+watch(currentRoughPreset, () => {
+  nextTick(() => {
+    if (cachedContracts.length > 0) {
+      initCharts(cachedContracts)
+    }
+  })
+})
 const searchLoading = ref(false)
 
-const statusChartRef = ref<HTMLElement>()
-const typeChartRef = ref<HTMLElement>()
-let statusChart: Pie | null = null
-let typeChart: Bar | null = null
+const statusChartCanvasRef = ref<HTMLCanvasElement>()
+const typeChartCanvasRef = ref<HTMLCanvasElement>()
+const dashboardTableMaxHeight = ref(360)
 
 const formatAmount = (amount: number) => {
   return formatAmountByLocale(amount, locale.value)
@@ -269,17 +369,9 @@ const formatAmount = (amount: number) => {
 const formatType = (type: string) => {
   const category = categories.value.find((c: any) => c.code === type)
   if (category) {
-    return category.name
+    return locale.value === 'en' && category.nameEn ? category.nameEn : category.name
   }
-  const map: Record<string, string> = { 
-    PURCHASE: t('contract.types.purchase'), 
-    SALES: t('contract.types.sales'), 
-    LEASE: t('contract.types.lease'), 
-    EMPLOYMENT: t('contract.types.employment'), 
-    SERVICE: t('contract.types.service'), 
-    OTHER: t('contract.types.other') 
-  }
-  return map[type] || type
+  return type
 }
 
 const formatStatus = (status: string) => {
@@ -365,104 +457,158 @@ const initCharts = async (allContracts: any[]) => {
   const css = getComputedStyle(document.documentElement)
   const textPrimary = (css.getPropertyValue('--text-primary') || '#1a1a1a').trim()
   const textSecondary = (css.getPropertyValue('--text-secondary') || '#666666').trim()
-  const isDark = document.documentElement.classList.contains('dark')
-  const pieStroke = isDark ? 'rgba(148,163,184,0.4)' : 'rgba(255,255,255,0.6)'
-  
-  const statusDataFormatted = statusData.map(item => ({
-    type: item.name,
-    value: item.value
-  }))
+  const statusDataFormatted = statusData.map(item => ({ type: item.name, value: item.value }))
   
   const typeLabels = [t('contract.types.purchase'), t('contract.types.sales'), t('contract.types.service'), t('contract.types.lease'), t('contract.types.employment'), t('contract.types.other')]
   
-  const statusTotal = statusDataFormatted.reduce((sum: number, item: any) => sum + item.value, 0)
-  
-  if (statusChartRef.value) {
-    statusChart?.destroy()
-    statusChart = new Pie(statusChartRef.value, {
-      data: statusDataFormatted,
-      angleField: 'value',
-      colorField: 'type',
-      radius: 0.85,
-      innerRadius: 0.65,
-      label: {
-        type: 'spider',
-        content: '{name}\n{percentage}',
-        style: {
-          fontSize: 9,
-          fontWeight: 500,
-        },
-      },
-      legend: {
-        position: 'right' as const,
-        itemWidth: 80,
-        itemName: {
-          style: { fontSize: 10 }
-        },
-        itemValue: {
-          style: { fontSize: 10, fill: textSecondary }
-        },
-      },
-      color: ['#f87171', '#fbbf24', '#60a5fa', '#34d399', '#818cf8', '#94a3b8'],
-      pieStyle: {
-        stroke: pieStroke,
-        lineWidth: 3,
-      },
-      statistic: {
-        title: { content: t('statistics.total'), style: { fontSize: '10px', color: textSecondary } },
-        content: { content: String(statusTotal), style: { fontSize: '18px', fontWeight: 'bold', color: textPrimary } },
-      },
-      animation: {
-        appear: { animation: 'wave-in', duration: 1000 },
-      },
-      interactions: [{ type: 'element-active' }],
-    })
-    statusChart.render()
+  const typeDataFormatted = typeData
+    .map((item: any, index: number) => ({ type: typeLabels[index], value: item.value }))
+    .filter(item => item.value > 0)
+
+  drawRoughChart(statusChartCanvasRef.value, statusDataFormatted, {
+    orientation: 'horizontal',
+    title: `${t('statistics.byStatus')} (${statusDataFormatted.reduce((s, i) => s + i.value, 0)})`,
+    textPrimary,
+    textSecondary
+  })
+
+  drawRoughChart(typeChartCanvasRef.value, typeDataFormatted, {
+    orientation: 'vertical',
+    title: `${t('statistics.byType')} (${typeDataFormatted.reduce((s, i) => s + i.value, 0)})`,
+    textPrimary,
+    textSecondary
+  })
+}
+
+type RoughChartOptions = {
+  orientation: 'horizontal' | 'vertical'
+  title: string
+  textPrimary: string
+  textSecondary: string
+}
+
+const roughPresets: Record<RoughPresetKey, {
+  palette: string[]
+  background: string
+  stroke: string
+  roughness: number
+  bowing: number
+  strokeWidth: number
+  hachureGap: number
+  fillStyle: 'hachure' | 'cross-hatch' | 'zigzag'
+}> = {
+  chalk: {
+    palette: ['#89A8FF', '#8FD6B5', '#F8D27A', '#FF9B8E', '#9EDCF5', '#B9A5E8'],
+    background: '#f7f4ea',
+    stroke: '#2f2f2f',
+    roughness: 2.8,
+    bowing: 2.2,
+    strokeWidth: 2.2,
+    hachureGap: 6,
+    fillStyle: 'hachure'
+  },
+  marker: {
+    palette: ['#5A77FF', '#47C69D', '#FFC145', '#FF6B5A', '#57C7FF', '#8D6BFF'],
+    background: '#fffdf5',
+    stroke: '#272727',
+    roughness: 2.2,
+    bowing: 1.8,
+    strokeWidth: 2.4,
+    hachureGap: 8,
+    fillStyle: 'zigzag'
+  },
+  sketch: {
+    palette: ['#9aa0ac', '#9ab8a9', '#b8b08f', '#b49898', '#93a9b8', '#a99db5'],
+    background: '#f5f5f3',
+    stroke: '#404040',
+    roughness: 3.3,
+    bowing: 2.9,
+    strokeWidth: 1.8,
+    hachureGap: 5,
+    fillStyle: 'cross-hatch'
   }
-  
-  if (typeChartRef.value) {
-    typeChart?.destroy()
-    const pieData = typeData.map((item: any, index: number) => ({
-      type: typeLabels[index],
-      value: item.value
-    })).filter(item => item.value > 0)
-    const typeTotal = pieData.reduce((sum: number, item: any) => sum + item.value, 0)
-    
-    typeChart = new (Pie as any)(typeChartRef.value, {
-      data: pieData,
-      angleField: 'value',
-      colorField: 'type',
-      radius: 0.85,
-      innerRadius: 0.65,
-      label: {
-        type: 'spider',
-        content: '{name}\n{percentage}',
-        style: {
-          fontSize: 10,
-          fontWeight: 500,
-        },
-      },
-      legend: {
-        position: 'right' as const,
-        itemWidth: 80,
-        itemName: { style: { fontSize: 10 } },
-        itemValue: { style: { fontSize: 10, fill: textSecondary } },
-      },
-      color: ['#667eea', '#34d399', '#f87171', '#fbbf24', '#38bdf8', '#a78bfa'],
-      pieStyle: {
-        stroke: pieStroke,
-        lineWidth: 3,
-      },
-      statistic: {
-        title: { content: t('statistics.total'), style: { fontSize: '12px', color: textSecondary } },
-        content: { content: String(typeTotal), style: { fontSize: '24px', fontWeight: 'bold', color: textPrimary } },
-      },
-      animation: {
-        appear: { animation: 'wave-in', duration: 1000 },
-      },
-      interactions: [{ type: 'element-active' }],
+}
+
+const drawRoughChart = (canvas: HTMLCanvasElement | undefined, data: Array<{ type: string; value: number }>, options: RoughChartOptions) => {
+  if (!canvas) return
+  const width = canvas.clientWidth || 360
+  const height = canvas.clientHeight || 180
+  canvas.width = width
+  canvas.height = height
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, width, height)
+
+  const preset = roughPresets[currentRoughPreset.value]
+
+  // Paper-like background
+  ctx.fillStyle = preset.background
+  ctx.fillRect(0, 0, width, height)
+
+  const rc = rough.canvas(canvas)
+  const palette = preset.palette
+
+  const left = 56
+  const right = width - 16
+  const top = 24
+  const bottom = height - 24
+  const drawWidth = right - left
+  const drawHeight = bottom - top
+  const maxValue = Math.max(...data.map(d => d.value), 1)
+
+  // Axes
+  rc.line(left, top, left, bottom, { stroke: preset.stroke, strokeWidth: preset.strokeWidth, roughness: preset.roughness, bowing: preset.bowing })
+  rc.line(left, bottom, right, bottom, { stroke: preset.stroke, strokeWidth: preset.strokeWidth, roughness: preset.roughness, bowing: preset.bowing })
+
+  ctx.font = '600 11px "Comic Sans MS", "Marker Felt", "PingFang SC", sans-serif'
+  ctx.fillStyle = options.textSecondary
+  ctx.fillText(options.title, left, 14)
+
+  if (options.orientation === 'horizontal') {
+    const rowH = drawHeight / Math.max(data.length, 1)
+    data.forEach((item, i) => {
+      const y = top + i * rowH + rowH * 0.2
+      const barH = rowH * 0.58
+      const barW = (item.value / maxValue) * (drawWidth - 12)
+      const color = palette[i % palette.length]
+      rc.rectangle(left + 1, y, barW, barH, {
+        fill: color,
+        fillStyle: preset.fillStyle,
+        hachureGap: preset.hachureGap,
+        stroke: preset.stroke,
+        strokeWidth: preset.strokeWidth,
+        roughness: preset.roughness,
+        bowing: preset.bowing
+      })
+      ctx.fillStyle = options.textPrimary
+      ctx.font = 'italic 10px "Comic Sans MS", "Marker Felt", "PingFang SC", sans-serif'
+      ctx.fillText(item.type, 6, y + barH * 0.68)
+      ctx.fillText(String(item.value), left + barW + 6, y + barH * 0.68)
     })
-    typeChart.render()
+  } else {
+    const colW = drawWidth / Math.max(data.length, 1)
+    data.forEach((item, i) => {
+      const x = left + i * colW + colW * 0.2
+      const barW = colW * 0.56
+      const barH = (item.value / maxValue) * (drawHeight - 22)
+      const y = bottom - barH
+      const color = palette[i % palette.length]
+      rc.rectangle(x, y, barW, barH, {
+        fill: color,
+        fillStyle: preset.fillStyle,
+        hachureGap: preset.hachureGap,
+        stroke: preset.stroke,
+        strokeWidth: preset.strokeWidth,
+        roughness: preset.roughness,
+        bowing: preset.bowing
+      })
+      ctx.fillStyle = options.textPrimary
+      ctx.font = 'italic 10px "Comic Sans MS", "Marker Felt", "PingFang SC", sans-serif'
+      const shortName = item.type.length > 6 ? `${item.type.slice(0, 6)}…` : item.type
+      ctx.fillText(shortName, x - 4, bottom + 14)
+      ctx.fillText(String(item.value), x + 2, y - 6)
+    })
   }
 }
 
@@ -492,6 +638,8 @@ const fetchData = async () => {
     params.append('page', currentPage.value.toString())
     params.append('pageSize', pageSize.value.toString())
     if (searchKeyword.value) params.append('keyword', searchKeyword.value)
+    if (selectedStatus.value) params.append('status', selectedStatus.value)
+    if (selectedType.value) params.append('type', selectedType.value)
     
     const contractsRes = await get(`/contracts?${params.toString()}`)
     recentContracts.value = contractsRes?.data?.list || []
@@ -526,7 +674,8 @@ const fetchData = async () => {
       return contract.status === 'DRAFT' || contract.status === 'APPROVING' || contract.status === 'PENDING'
     }).length
     stats.value.pendingApproval = pendingApprovalCount
-    pendingCount.value = pendingApprovalCount
+    statsMeta.value.draftCount = allContracts.filter(contract => contract.status === 'DRAFT').length
+    statsMeta.value.approvingCount = allContracts.filter(contract => contract.status === 'APPROVING').length
     
     // 计算即将到期数量（距离今天前七天内到期）
     const today = new Date()
@@ -539,7 +688,23 @@ const fetchData = async () => {
       return endDate >= today && endDate <= sevenDaysLater
     }).length
     stats.value.expiringSoon = expiringSoonCount
-    expireCount.value = expiringSoonCount
+    const thirtyDaysLater = new Date()
+    thirtyDaysLater.setDate(today.getDate() + 30)
+    statsMeta.value.expiringMonthCount = allContracts.filter(contract => {
+      if (!contract.endDate) return false
+      const endDate = new Date(contract.endDate)
+      return endDate >= today && endDate <= thirtyDaysLater
+    }).length
+    statsMeta.value.expiredCount = allContracts.filter(contract => {
+      if (!contract.endDate) return false
+      const endDate = new Date(contract.endDate)
+      return endDate < today
+    }).length
+    statsMeta.value.signedCount = allContracts.filter(contract => contract.status === 'SIGNED').length
+    statsMeta.value.archivedCount = allContracts.filter(contract => contract.status === 'ARCHIVED').length
+    statsMeta.value.signedAmount = allContracts
+      .filter(contract => contract.status === 'SIGNED')
+      .reduce((sum, contract) => sum + (contract.amount || 0), 0)
     
     // Initialize charts with real data
     initCharts(allContracts)
@@ -547,6 +712,14 @@ const fetchData = async () => {
     // ignore
   } finally {
     loading.value = false
+  }
+}
+
+const refreshDashboardLayout = () => {
+  const viewportHeight = window.innerHeight || 900
+  dashboardTableMaxHeight.value = Math.max(240, Math.min(420, Math.floor(viewportHeight * 0.36)))
+  if (cachedContracts.length > 0) {
+    initCharts(cachedContracts)
   }
 }
 
@@ -563,6 +736,8 @@ const handleSearch = () => {
 // 清空搜索
 const clearSearch = () => {
   searchKeyword.value = ''
+  selectedStatus.value = ''
+  selectedType.value = ''
   currentPage.value = 1
   fetchData()
 }
@@ -593,25 +768,53 @@ const handleToggleFavorite = async (row: any) => {
   }
 }
 
+const handleMoreAction = async (command: string, row: any) => {
+  if (command === 'detail') {
+    router.push(`/contracts/${row.id}`)
+    return
+  }
+  if (command === 'edit') {
+    if (row.status !== 'DRAFT') {
+      ElMessage.warning(t('contract.onlyDraftCanEdit'))
+      return
+    }
+    router.push(`/contracts/${row.id}/edit`)
+    return
+  }
+  if (command === 'copyNo') {
+    if (!row.contractNo) return
+    try {
+      await navigator.clipboard.writeText(row.contractNo)
+      ElMessage.success(t('contract.actions.copySuccess'))
+    } catch (_err) {
+      ElMessage.error(t('contract.actions.copyError'))
+    }
+    return
+  }
+}
+
 onMounted(async () => {
   await fetchData()
+  refreshDashboardLayout()
+  window.addEventListener('resize', refreshDashboardLayout)
 })
 
 onUnmounted(() => {
-  statusChart?.destroy()
-  typeChart?.destroy()
+  window.removeEventListener('resize', refreshDashboardLayout)
 })
 </script>
 
 <style scoped lang="scss">
 .dashboard {
   padding: 0;
+  display: flex;
+  flex-direction: column;
   
   .page-title {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 24px;
+    margin-bottom: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -634,8 +837,8 @@ onUnmounted(() => {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 12px;
   
   .stat-card-skeleton {
     background: var(--bg-card);
@@ -646,11 +849,11 @@ onUnmounted(() => {
   
   .stat-card {
     border-radius: var(--radius);
-    padding: 16px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     cursor: pointer;
     position: relative;
@@ -703,8 +906,8 @@ onUnmounted(() => {
       position: absolute;
       bottom: -5px;
       right: -5px;
-      width: 50px;
-      height: 50px;
+      width: 42px;
+      height: 42px;
       opacity: 0.08;
       z-index: 0;
       
@@ -716,8 +919,8 @@ onUnmounted(() => {
     }
     
     .stat-icon {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border-radius: 8px;
       display: flex;
       align-items: center;
@@ -730,8 +933,8 @@ onUnmounted(() => {
       backdrop-filter: blur(10px);
       
       svg {
-        width: 16px;
-        height: 16px;
+        width: 14px;
+        height: 14px;
         color: #fff;
       }
     }
@@ -742,7 +945,7 @@ onUnmounted(() => {
       flex: 1;
       
       .stat-value {
-        font-size: 22px;
+        font-size: 18px;
         font-weight: 700;
         color: #fff;
         line-height: 1.2;
@@ -753,39 +956,37 @@ onUnmounted(() => {
       }
       
       .stat-label {
-        font-size: 12px;
+        font-size: 11px;
         color: rgba(255, 255, 255, 0.85);
         margin-top: 2px;
         font-weight: 500;
       }
     }
-    
-    .stat-trend {
+
+    .stat-meta {
       position: relative;
       z-index: 2;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(10px);
-      color: #fff;
-      
-      &.up {
-        background: rgba(255, 255, 255, 0.25);
-      }
-      
-      &.down {
-        background: rgba(255, 255, 255, 0.25);
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+
+      span {
+        font-size: 10px;
+        line-height: 1.2;
+        color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 10px;
+        padding: 2px 7px;
       }
     }
     
     .stat-badge {
       position: absolute;
-      top: 16px;
-      right: 16px;
-      min-width: 24px;
-      height: 24px;
+      top: 12px;
+      right: 12px;
+      min-width: 22px;
+      height: 22px;
       border-radius: 12px;
       display: flex;
       align-items: center;
@@ -847,6 +1048,8 @@ onUnmounted(() => {
 
 /* 主内容行 */
 .main-row {
+  flex: 1;
+  min-height: 0;
   .recent-card {
     height: 100%;
   }
@@ -856,11 +1059,12 @@ onUnmounted(() => {
       display: flex;
       align-items: center;
       gap: 6px;
+      font-size: 15px;
       
       .el-icon {
-        font-size: 16px;
+        font-size: 15px;
         padding: 4px;
-        border-radius: 8px;
+        border-radius: 7px;
         
         svg {
           color: #fff;
@@ -884,32 +1088,73 @@ onUnmounted(() => {
       align-items: center;
       width: 100%;
       gap: 10px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       min-width: 0;
       
       .header-left {
         display: flex;
         align-items: center;
         gap: 8px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        flex: 1;
         min-width: 0;
+        overflow: hidden;
         
         .title {
           font-size: 15px;
           font-weight: 600;
           color: var(--text-primary);
           margin-right: 4px;
-          max-width: 180px;
+          max-width: 140px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
       }
+
+      :deep(.el-select),
+      :deep(.el-input) {
+        flex-shrink: 0;
+      }
     }
   }
   
   .quick-card {
-    margin-bottom: 16px;
+    margin-bottom: 10px;
+
+    :deep(.el-card__header) {
+      padding: 6px 12px;
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+    }
+
+    :deep(.el-card__body) {
+      padding: 16px 12px 16px;
+    }
+  }
+
+  .chart-card {
+    :deep(.el-card__header) {
+      padding: 3px 12px;
+      min-height: 29px;
+      display: flex;
+      align-items: center;
+    }
+
+    :deep(.el-card__body) {
+      padding: 19px 12px 19px;
+    }
+
+    .card-header {
+      font-size: 16px;
+
+      .el-icon {
+        font-size: 16px;
+        padding: 5px;
+        border-radius: 8px;
+      }
+    }
   }
 }
 
@@ -917,14 +1162,14 @@ onUnmounted(() => {
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 8px;
   
   .quick-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    padding: 20px 12px 16px;
+    gap: 8px;
+    padding: 12px 8px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius);
@@ -960,9 +1205,9 @@ onUnmounted(() => {
     }
     
     .quick-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 16px;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -970,8 +1215,8 @@ onUnmounted(() => {
       transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
       
       svg {
-        width: 22px;
-        height: 22px;
+        width: 18px;
+        height: 18px;
         color: #fff;
       }
       
@@ -1030,11 +1275,11 @@ onUnmounted(() => {
     }
 
     span:not(.badge) {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 500;
       color: var(--text-secondary);
       text-align: center;
-      line-height: 1.4;
+      line-height: 1.35;
       max-width: 100%;
       white-space: normal;
       word-wrap: break-word;
@@ -1060,7 +1305,7 @@ onUnmounted(() => {
 /* 图表 */
 .charts-wrap {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   
   .chart-item {
     flex: 1;
@@ -1074,16 +1319,19 @@ onUnmounted(() => {
       font-size: 12px;
       font-weight: 600;
       color: var(--text-secondary);
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       word-break: break-word;
       line-height: 1.4;
     }
     
-    .chart-container {
-      height: 180px;
-      background: var(--bg-hover);
+    .chart-canvas {
+      width: 100%;
+      height: 148px;
+      border: 2px dashed rgba(32, 32, 32, 0.35);
       border-radius: var(--radius);
-      padding: 8px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+      background: #f8f5ec;
+      display: block;
     }
   }
 }
@@ -1116,12 +1364,26 @@ onUnmounted(() => {
   }
 }
 
+.chart-header-with-presets {
+  width: 100%;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chart-header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 /* 搜索栏 */
 .search-bar {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
   align-items: center;
@@ -1409,6 +1671,26 @@ onUnmounted(() => {
 
 /* 表格优化样式 */
 .dashboard-table {
+  .more-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+
+    .arrow {
+      font-size: 12px;
+      opacity: 0.85;
+    }
+  }
+
+  :deep(.el-table__inner-wrapper::before) {
+    height: 0;
+  }
+
   :deep(.el-table__header-wrapper) {
     th .cell {
       word-break: normal;
@@ -1427,6 +1709,17 @@ onUnmounted(() => {
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    td.contract-no-column .cell {
+      overflow: visible;
+      text-overflow: clip;
+    }
+  }
+
+  :deep(.contract-no-column .cell) {
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
   }
   
   .title-link {
@@ -1435,6 +1728,43 @@ onUnmounted(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+.header-search-input {
+  width: 220px;
+}
+
+.header-filter-select {
+  width: 110px;
+}
+
+@media (max-width: 1280px) {
+  .main-row .recent-card .card-header {
+    flex-wrap: wrap;
+
+    .header-left {
+      flex-wrap: wrap;
+      overflow: visible;
+    }
+  }
+}
+
+@media (max-height: 920px) {
+  .dashboard .page-title {
+    margin-bottom: 8px;
+  }
+
+  .stats-grid {
+    margin-bottom: 8px;
+
+    .stat-card {
+      padding: 10px;
+    }
+  }
+
+  .charts-wrap .chart-item .chart-canvas {
+    height: 132px;
   }
 }
 </style>

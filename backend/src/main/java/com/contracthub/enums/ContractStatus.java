@@ -6,6 +6,9 @@ public enum ContractStatus {
     APPROVING("审批中"),
     APPROVED("已批准"),
     SIGNED("已签署"),
+    RENEWING("续签中"),
+    RENEWED("已续签"),
+    NOT_RENEWED("不续签"),
     ARCHIVED("已归档"),
     TERMINATED("已终止"),
     REJECTED("已拒绝");

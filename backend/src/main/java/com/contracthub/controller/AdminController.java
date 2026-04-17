@@ -45,7 +45,11 @@ public class AdminController {
             createPerm("设置管理", "SETTING_MANAGE", "/api/settings", "GET", "设置管理"),
             createPerm("类型字段配置", "TYPE_FIELD_CONFIG", "/api/contract-type-fields", "GET", "类型字段配置"),
             createPerm("变更记录", "CHANGE_LOG_VIEW", "/api/change-logs", "GET", "查看变更记录"),
-            createPerm("合同分类管理", "CONTRACT_CATEGORY_MANAGE", "/api/template-categories", "GET", "合同分类管理")
+            createPerm("类型管理", "CATEGORY_MANAGE", "/api/template-categories", "GET", "合同类型与分类（与 @PreAuthorize 一致）"),
+            createPerm("模板与条款库", "TEMPLATE_MANAGE", "/api/templates", "GET", "合同模板与条款库（/api/clauses 同源权限）"),
+            createPerm("快速代码", "QUICK_CODE_MANAGE", "/api/quick-codes", "GET", "快速代码"),
+            createPerm("变量管理", "VARIABLE_MANAGE", "/api/template-variables", "GET", "模板变量"),
+            createPerm("文件夹管理", "FOLDER_MANAGE", "/api/contract-folders", "GET", "合同文件夹")
         );
         
         // 添加权限
@@ -95,7 +99,8 @@ public class AdminController {
             List<String> legalPerms = Arrays.asList(
                 "CONTRACT_MANAGE", "CONTRACT_APPROVE", "REMINDER_MANAGE", "FAVORITE_MANAGE",
                 "RENEWAL_MANAGE", "REPORT_VIEW", "TAG_MANAGE", "REMINDER_RULE_MANAGE", "CHANGE_LOG_VIEW",
-                "CONTRACT_CATEGORY_MANAGE"
+                "CATEGORY_MANAGE", "TEMPLATE_MANAGE", "QUICK_CODE_MANAGE",
+                "VARIABLE_MANAGE", "FOLDER_MANAGE"
             );
             
             List<Permission> allPerms = permissionMapper.selectList(null);

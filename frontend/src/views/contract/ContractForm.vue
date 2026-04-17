@@ -87,6 +87,28 @@
                 </el-form-item>
               </el-col>
             </el-row>
+            <el-row :gutter="20">
+              <el-col :span="8" :xs="24" :sm="12" :md="8">
+                <el-form-item :label="$t('contract.relationType')">
+                  <el-select v-model="form.relationType" style="width: 100%">
+                    <el-option :label="$t('contract.relationTypes.main')" value="MAIN" />
+                    <el-option :label="$t('contract.relationTypes.supplement')" value="SUPPLEMENT" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="16" :xs="24" :sm="12" :md="16" v-if="form.relationType === 'SUPPLEMENT'">
+                <el-form-item :label="$t('contract.parentContract')">
+                  <el-select v-model="form.parentContractId" filterable clearable :placeholder="$t('contract.placeholder.parentContract')" style="width: 100%">
+                    <el-option
+                      v-for="item in parentContracts.filter((c: any) => (!isEdit || c.id !== contractId) && (c.relationType || 'MAIN') !== 'SUPPLEMENT')"
+                      :key="item.id"
+                      :label="`${item.contractNo} - ${item.title}`"
+                      :value="item.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
             <div class="remark-section">
               <el-form-item :label="$t('contract.remark')">
                 <el-input v-model="form.remark" type="textarea" :rows="2" :placeholder="$t('contract.placeholder.remark')" />
@@ -394,11 +416,66 @@
           </div>
 
         <div class="form-actions">
+          <el-button v-if="isEdit" type="warning" :loading="aiAnalyzing" @click="handleEditAiAnalyze">
+            {{ $t('ai.analyze') }}
+          </el-button>
           <el-button v-if="isEdit" type="info" :loading="savingDraft" @click="handleSaveDraft">{{ $t('common.saveDraft') }}</el-button>
           <el-button type="primary" :loading="loading" @click="handleSubmit">{{ $t('common.submit') }}</el-button>
         </div>
       </el-form>
     </el-card>
+
+    <el-dialog v-model="aiDialogVisible" :title="$t('ai.assistantTitle')" width="820px">
+      <div v-loading="aiAnalyzing">
+        <el-alert
+          v-if="!aiConfigSnapshot.apiUrl"
+          type="info"
+          :closable="false"
+          :title="$t('ai.offlineDemoHint')"
+          style="margin-bottom: 12px;"
+        />
+
+        <el-card shadow="never" style="margin-bottom: 12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span>{{ $t('ai.riskScore') }}</span>
+            <strong style="font-size:24px;">{{ aiResult.score ?? 75 }}</strong>
+          </div>
+          <el-progress :percentage="Number(aiResult.score || 75)" :show-text="false" />
+        </el-card>
+
+        <el-divider content-position="left">{{ $t('ai.summary') }}</el-divider>
+        <p style="line-height:1.7;white-space:pre-wrap;">{{ aiResult.summary || '-' }}</p>
+
+        <el-divider content-position="left">{{ $t('ai.keyInfo') }}</el-divider>
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item :label="$t('contract.partyTypes.partyA')">{{ aiResult.keyInfo?.partyA || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('contract.partyTypes.partyB')">{{ aiResult.keyInfo?.partyB || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('contract.amount')">{{ aiResult.keyInfo?.amount || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('contract.period')">{{ aiResult.keyInfo?.duration || '-' }}</el-descriptions-item>
+        </el-descriptions>
+
+        <el-divider content-position="left">{{ $t('ai.risks') }}</el-divider>
+        <el-empty v-if="!aiResult.risks?.length" :description="$t('common.noData')" :image-size="60" />
+        <el-timeline v-else>
+          <el-timeline-item
+            v-for="(risk, idx) in aiResult.risks"
+            :key="idx"
+            :type="risk.level === 'high' ? 'danger' : risk.level === 'medium' ? 'warning' : 'primary'"
+          >
+            {{ risk.content || '-' }}
+          </el-timeline-item>
+        </el-timeline>
+
+        <el-divider content-position="left">{{ $t('ai.suggestions') }}</el-divider>
+        <el-empty v-if="!aiResult.suggestions?.length" :description="$t('common.noData')" :image-size="60" />
+        <ul v-else style="padding-left: 18px; margin: 0;">
+          <li v-for="(s, idx) in aiResult.suggestions" :key="idx" style="line-height:1.8;">{{ s }}</li>
+        </ul>
+      </div>
+      <template #footer>
+        <el-button @click="aiDialogVisible = false">{{ $t('common.close') }}</el-button>
+      </template>
+    </el-dialog>
 
   </div>
 </template>
@@ -408,7 +485,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { createContract, updateContract, getContract, getNextContractNo, uploadContractFile } from '@/api/contract'
+import { createContract, updateContract, getContract, getContractPayload, getContractList, getNextContractNo, uploadContractFile, analyzeContract } from '@/api/contract'
 import { getContractCategories } from '@/api/contractCategory'
 import { getContractTypeFormFields } from '@/api/contractTypeField'
 import { getQuickCodeByCode } from '@/api/quickCode'
@@ -417,6 +494,7 @@ import { getCounterpartiesByContractId, saveCounterpartiesBatch } from '@/api/co
 import { getAttachmentsByContractId, saveAttachmentsBatch } from '@/api/attachment'
 import { getTemplateList, extractTemplateVariables, replaceTemplateVariables } from '@/api/template'
 import { getTemplateVariables } from '@/api/templateVariable'
+import { getSystemConfigs } from '@/api/system'
 import { generateContractPdf } from '@/api/contract'
 import { ArrowLeft, Collection, User, Edit, Plus, Delete, Tickets, Paperclip, Document, Upload, Close, FolderOpened, Clock, Files, List, View, UploadFilled, Download } from '@element-plus/icons-vue'
 
@@ -427,6 +505,7 @@ const formRef = ref()
 const loading = ref(false)
 const categories = ref<any[]>([])
 const folders = ref<any[]>([])
+const parentContracts = ref<any[]>([])
 const dynamicFields = ref<any[]>([])
 const dynamicFieldValues = reactive<Record<string, any>>({})
 const quickCodeItemsCache = ref<Record<string, any[]>>({})
@@ -450,6 +529,25 @@ const pdfGenerating = ref(false)
 const generatedPdf = ref<{ name: string; url: string; blob?: Blob; serverUrl?: string } | null>(null)
 const savingDraft = ref(false)
 const showFullPreviewDialog = ref(false)
+const aiDialogVisible = ref(false)
+const aiAnalyzing = ref(false)
+const aiConfigSnapshot = reactive({
+  apiUrl: '',
+  model: 'gpt-3.5-turbo',
+  temperature: 0.7,
+  maxTokens: 1000
+})
+const aiResult = ref<any>({
+  summary: '',
+  score: 75,
+  risks: [],
+  suggestions: [],
+  keyInfo: {},
+  negotiationPoints: [],
+  missingClauseChecks: [],
+  actionSuggestions: [],
+  clauseSuggestions: []
+})
 
 const quillToolbar = [
   ['bold', 'italic', 'underline', 'strike'],
@@ -485,6 +583,8 @@ const form = reactive({
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
   folderId: null as number | null,
+  relationType: 'MAIN' as 'MAIN' | 'SUPPLEMENT',
+  parentContractId: null as number | null,
   counterparties: [
     { type: 'partyA', name: '', contact: '', phone: '', email: '' }
   ] as Counterparty[]
@@ -534,6 +634,16 @@ const loadFolders = async () => {
     folders.value = res.data || []
   } catch (error) {
     console.error('Failed to load folders:', error)
+  }
+}
+
+const loadParentContracts = async () => {
+  try {
+    const res = await getContractList({ page: 1, pageSize: 300, status: 'APPROVED,SIGNED,ARCHIVED,RENEWING,RENEWED' } as any)
+    parentContracts.value = res.data?.list || []
+  } catch (error) {
+    console.error('Failed to load parent contracts:', error)
+    parentContracts.value = []
   }
 }
 
@@ -627,9 +737,10 @@ const loadQuickCodeItems = async (quickCodeCode: string) => {
   if (!quickCodeCode || quickCodeItemsCache.value[quickCodeCode]) return
   try {
     const res = await getQuickCodeByCode(quickCodeCode)
-    if (res.data?.items) {
-      quickCodeItemsCache.value[quickCodeCode] = res.data.items.filter((item: any) => item.enabled !== false)
-    }
+    // /quick-codes/code/{code} 的 data 为选项数组；详情接口为 { items: [] }
+    const d = res.data as any[] | { items?: any[] } | undefined
+    const items = Array.isArray(d) ? d : (d?.items ?? [])
+    quickCodeItemsCache.value[quickCodeCode] = items.filter((item: any) => item.enabled !== false)
   } catch (error) {
     console.error('Failed to load quick code items:', error)
   }
@@ -703,6 +814,12 @@ watch(() => form.type, async (newType) => {
   }
 })
 
+watch(() => form.relationType, (newType) => {
+  if (newType !== 'SUPPLEMENT') {
+    form.parentContractId = null
+  }
+})
+
 const handleFileUpload = async (file: any) => {
   uploadedFile.value = file
   const ext = file.name.split('.').pop()?.toLowerCase()
@@ -771,6 +888,18 @@ const loadDynamicFields = async () => {
   } catch (error) {
     console.error('Failed to load dynamic fields:', error)
   }
+}
+
+const normalizeDynamicFieldValue = (field: any, rawValue: any) => {
+  if (rawValue === null || rawValue === undefined) {
+    return field.fieldType === 'number' ? null : ''
+  }
+  if (field.fieldType === 'number') {
+    if (typeof rawValue === 'number') return rawValue
+    const parsed = Number(rawValue)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return rawValue
 }
 
 const handleTypeChange = () => {
@@ -977,8 +1106,19 @@ const handleDownloadGeneratedPdf = () => {
 
 const fetchContract = async () => {
   try {
-    const res = await getContract(contractId.value)
-    const data = res.data
+    const [detailRes, payloadRes] = await Promise.all([
+      getContract(contractId.value),
+      getContractPayload(contractId.value).catch(() => ({ data: null }))
+    ])
+    const detailData = detailRes.data || {}
+    const payloadData = payloadRes?.data || {}
+    const data = {
+      ...detailData,
+      content: payloadData.content ?? detailData.content ?? '',
+      templateVariables: payloadData.templateVariables ?? detailData.templateVariables ?? '',
+      dynamicFields: payloadData.dynamicFields ?? detailData.dynamicFields ?? {},
+      dynamicFieldValues: payloadData.dynamicFieldValues ?? detailData.dynamicFieldValues ?? ''
+    }
     form.title = data.title
     form.type = data.type
     form.amount = data.amount
@@ -990,6 +1130,8 @@ const fetchContract = async () => {
     form.contractNo = data.contractNo
     form.createdBy = data.createdBy
     form.folderId = data.folderId || null
+    form.relationType = data.relationType === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'MAIN'
+    form.parentContractId = data.parentContractId || null
     form.timezone = data.timezone || ''
     form.createdAt = data.createdAt || ''
     
@@ -1019,21 +1161,6 @@ const fetchContract = async () => {
       previewContent.value = form.content
     }
     
-    if (data.dynamicFields && typeof data.dynamicFields === 'object') {
-      for (const key in data.dynamicFields) {
-        dynamicFieldValues[key] = data.dynamicFields[key]
-      }
-    } else if (data.dynamicFieldValues) {
-      try {
-        const dynVals = typeof data.dynamicFieldValues === 'string'
-          ? JSON.parse(data.dynamicFieldValues)
-          : data.dynamicFieldValues
-        for (const key in dynVals) {
-          dynamicFieldValues[key] = dynVals[key]
-        }
-      } catch {}
-    }
-    
     try {
       const cpRes = await getCounterpartiesByContractId(contractId.value)
       const cpList = Array.isArray(cpRes) ? cpRes : (cpRes as any)?.data || []
@@ -1047,14 +1174,14 @@ const fetchContract = async () => {
         }))
       } else {
         form.counterparties = [
-          { type: 'partyA', name: data.counterparty?.split(' / ')[0] || '', contact: '', phone: '', email: '' },
-          { type: 'partyB', name: data.counterparty?.split(' / ')[1] || '', contact: '', phone: '', email: '' }
+          { type: 'partyA', name: '', contact: '', phone: '', email: '' },
+          { type: 'partyB', name: '', contact: '', phone: '', email: '' }
         ]
       }
     } catch {
       form.counterparties = [
-        { type: 'partyA', name: data.counterparty?.split(' / ')[0] || '', contact: '', phone: '', email: '' },
-        { type: 'partyB', name: data.counterparty?.split(' / ')[1] || '', contact: '', phone: '', email: '' }
+        { type: 'partyA', name: '', contact: '', phone: '', email: '' },
+        { type: 'partyB', name: '', contact: '', phone: '', email: '' }
       ]
     }
     
@@ -1091,12 +1218,108 @@ const fetchContract = async () => {
     }
     
     await loadDynamicFields()
+
+    const dynamicSource =
+      data.dynamicFields && typeof data.dynamicFields === 'object'
+        ? data.dynamicFields
+        : (() => {
+            if (!data.dynamicFieldValues) return {}
+            try {
+              return typeof data.dynamicFieldValues === 'string'
+                ? JSON.parse(data.dynamicFieldValues)
+                : data.dynamicFieldValues
+            } catch {
+              return {}
+            }
+          })()
+
+    for (const field of dynamicFields.value) {
+      if (!Object.prototype.hasOwnProperty.call(dynamicSource, field.fieldKey)) {
+        continue
+      }
+      dynamicFieldValues[field.fieldKey] = normalizeDynamicFieldValue(field, dynamicSource[field.fieldKey])
+    }
   } catch (error) {
     ElMessage.error(t('contract.error.fetch'))
   }
 }
 
+const createAiFallbackResult = () => ({
+  summary: '未获取到完整 AI 结果，已提供基础分析视图。请保存合同内容后重试，或配置可用 AI 接口。',
+  score: 75,
+  risks: [{ level: 'low', content: '暂未识别到结构化风险，请人工复核关键条款。' }],
+  suggestions: ['建议先保存草稿并补充正文，再重新分析。'],
+  keyInfo: {
+    partyA: form.counterparties.find(cp => cp.type === 'partyA')?.name || '-',
+    partyB: form.counterparties.find(cp => cp.type === 'partyB')?.name || '-',
+    amount: form.amount || '-',
+    duration: form.startDate && form.endDate ? `${form.startDate} ~ ${form.endDate}` : '-'
+  }
+})
+
+const normalizeAiResult = (raw: any) => {
+  if (!raw || typeof raw !== 'object') return createAiFallbackResult()
+  const fallback = createAiFallbackResult()
+  const keyInfo = raw.keyInfo && typeof raw.keyInfo === 'object' ? raw.keyInfo : {}
+  return {
+    summary: typeof raw.summary === 'string' && raw.summary.trim() ? raw.summary : fallback.summary,
+    score: Number.isFinite(Number(raw.score)) ? Number(raw.score) : fallback.score,
+    risks: Array.isArray(raw.risks) && raw.risks.length > 0 ? raw.risks : fallback.risks,
+    suggestions: Array.isArray(raw.suggestions) && raw.suggestions.length > 0 ? raw.suggestions : fallback.suggestions,
+    keyInfo: {
+      partyA: keyInfo.partyA || fallback.keyInfo.partyA,
+      partyB: keyInfo.partyB || fallback.keyInfo.partyB,
+      amount: keyInfo.amount || fallback.keyInfo.amount,
+      duration: keyInfo.duration || fallback.keyInfo.duration,
+      keyClauses: Array.isArray(keyInfo.keyClauses) ? keyInfo.keyClauses : []
+    },
+    negotiationPoints: Array.isArray(raw.negotiationPoints) ? raw.negotiationPoints : [],
+    missingClauseChecks: Array.isArray(raw.missingClauseChecks) ? raw.missingClauseChecks : [],
+    actionSuggestions: Array.isArray(raw.actionSuggestions) ? raw.actionSuggestions : [],
+    clauseSuggestions: Array.isArray(raw.clauseSuggestions) ? raw.clauseSuggestions : []
+  }
+}
+
+const loadAiRuntimeConfig = async () => {
+  const response = await getSystemConfigs()
+  const configs = response?.data || {}
+  aiConfigSnapshot.apiUrl = configs.ai_api_url || ''
+  aiConfigSnapshot.model = configs.ai_model || 'gpt-3.5-turbo'
+  aiConfigSnapshot.temperature = Number(configs.bd_temperature ?? 0.7)
+  aiConfigSnapshot.maxTokens = Number(configs.bd_max_tokens ?? 1000)
+  return {
+    apiUrl: aiConfigSnapshot.apiUrl,
+    apiKey: configs.ai_api_key || '',
+    model: aiConfigSnapshot.model,
+    temperature: aiConfigSnapshot.temperature,
+    maxTokens: aiConfigSnapshot.maxTokens
+  }
+}
+
+const handleEditAiAnalyze = async () => {
+  if (!isEdit.value || !contractId.value) {
+    ElMessage.warning('请先保存合同后再进行 AI 分析')
+    return
+  }
+  aiDialogVisible.value = true
+  aiAnalyzing.value = true
+  try {
+    const aiConfig = await loadAiRuntimeConfig()
+    const res = await analyzeContract(contractId.value, aiConfig)
+    aiResult.value = normalizeAiResult(res.data)
+  } catch (error: any) {
+    aiResult.value = createAiFallbackResult()
+    ElMessage.error(error?.message || t('ai.analysisFailed'))
+  } finally {
+    aiAnalyzing.value = false
+  }
+}
+
 const handleSaveDraft = async () => {
+  if (form.relationType === 'SUPPLEMENT' && !form.parentContractId) {
+    ElMessage.error(t('contract.error.parentContract'))
+    return
+  }
   savingDraft.value = true
   try {
     const draftData: any = {
@@ -1109,8 +1332,9 @@ const handleSaveDraft = async () => {
       content: form.content,
       remark: form.remark,
       folderId: form.folderId,
+      relationType: form.relationType,
+      parentContractId: form.relationType === 'SUPPLEMENT' ? form.parentContractId : null,
       timezone: form.timezone,
-      counterparty: form.counterparties.map(cp => cp.name).filter(Boolean).join(' / '),
       status: 'DRAFT',
       templateVariables: JSON.stringify(templateVariables.value),
       dynamicFieldValues: JSON.stringify(dynamicFieldValues),
@@ -1187,6 +1411,10 @@ const handleSubmit = async () => {
     ElMessage.error(t('contract.error.counterpartyName'))
     return
   }
+  if (form.relationType === 'SUPPLEMENT' && !form.parentContractId) {
+    ElMessage.error(t('contract.error.parentContract'))
+    return
+  }
 
   loading.value = true
   try {
@@ -1200,8 +1428,9 @@ const handleSubmit = async () => {
       content: form.content,
       remark: form.remark,
       folderId: form.folderId,
+      relationType: form.relationType,
+      parentContractId: form.relationType === 'SUPPLEMENT' ? form.parentContractId : null,
       timezone: form.timezone,
-      counterparty: form.counterparties.map(cp => cp.name).filter(Boolean).join(' / '),
       templateVariables: JSON.stringify(templateVariables.value),
       dynamicFieldValues: JSON.stringify(dynamicFieldValues),
       dynamicFields: { ...dynamicFieldValues },
@@ -1261,7 +1490,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadCategories(), loadFolders(), loadTemplates(), loadTemplateVariables()])
+  await Promise.all([loadCategories(), loadFolders(), loadParentContracts(), loadTemplates(), loadTemplateVariables()])
   if (isEdit.value) {
     await fetchContract()
   } else {

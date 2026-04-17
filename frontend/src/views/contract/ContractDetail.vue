@@ -84,6 +84,30 @@
             <el-descriptions-item :label="$t('contract.createdAt')">{{ contract.createdAt || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="$t('contract.timezone')">{{ contract.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone }}</el-descriptions-item>
             <el-descriptions-item :label="$t('contract.version')">{{ contract.version || '1.0' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.relationType')">
+              <el-tag size="small">{{ formatRelationType(contract.relationType) }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.parentContract')">
+              <template v-if="contract.relatedContracts?.parentContract">
+                <el-link type="primary" @click="goToContract(contract.relatedContracts.parentContract.id)">
+                  {{ contract.relatedContracts.parentContract.contractNo }} - {{ contract.relatedContracts.parentContract.title }}
+                </el-link>
+              </template>
+              <template v-else>-</template>
+            </el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.supplementContracts')" :span="2">
+              <div v-if="(contract.relatedContracts?.supplements || []).length > 0" class="supplement-links">
+                <el-link
+                  v-for="item in contract.relatedContracts.supplements"
+                  :key="item.id"
+                  type="primary"
+                  @click="goToContract(item.id)"
+                >
+                  {{ item.contractNo }} - {{ item.title }}
+                </el-link>
+              </div>
+              <span v-else>-</span>
+            </el-descriptions-item>
             <el-descriptions-item :label="$t('contract.remark')" :span="2">{{ contract.remark || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="$t('contract.tag')" :span="2">
               <div class="tag-list" v-if="contractTags.length > 0">
@@ -288,6 +312,16 @@
             >
               {{ $t('contract.actions.submit') }}
             </el-button>
+
+            <el-button
+              type="warning"
+              :loading="actionLoading"
+              @click="handleWithdraw"
+              v-if="['PENDING', 'APPROVING'].includes(contract.status)"
+              class="action-btn"
+            >
+              {{ $t('contract.actions.withdraw') }}
+            </el-button>
             
             <el-button 
               type="success" 
@@ -326,6 +360,35 @@
             >
               {{ $t('contract.actions.archive') }}
             </el-button>
+
+            <el-button
+              type="warning"
+              :loading="actionLoading"
+              @click="handleStartRenewalFlow"
+              v-if="canStartRenewal"
+              class="action-btn"
+            >
+              {{ $t('contract.actions.startRenewal') }}
+            </el-button>
+
+            <el-button
+              type="success"
+              :loading="actionLoading"
+              @click="handleCompleteRenewalFlow"
+              v-if="canCompleteRenewal"
+              class="action-btn"
+            >
+              {{ $t('contract.actions.completeRenewal') }}
+            </el-button>
+
+            <el-button
+              :loading="actionLoading"
+              @click="handleDeclineRenewalFlow"
+              v-if="canCompleteRenewal"
+              class="action-btn"
+            >
+              {{ $t('contract.actions.declineRenewal') }}
+            </el-button>
             
             <el-button 
               type="danger" 
@@ -337,6 +400,48 @@
               {{ $t('contract.actions.terminate') }}
             </el-button>
           </div>
+        </el-card>
+
+        <el-card shadow="hover" class="history-card">
+          <template #header>
+            <span>{{ $t('contract.approvalFlow') }}</span>
+          </template>
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item :label="$t('contract.currentStage')">{{ formatStatus(approvalFlow.currentStatus || contract.status) }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.blockedBy')">{{ approvalFlow.blockedBy || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.submittedAt')">{{ formatDateTime(approvalFlow.submittedAt) }}</el-descriptions-item>
+            <el-descriptions-item :label="$t('contract.frozen')">{{ approvalFlow.frozen ? $t('common.yes') : $t('common.no') }}</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <el-card shadow="hover" class="history-card">
+          <template #header>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span>审批摘要卡片</span>
+              <el-button size="small" :loading="approvalSummaryLoading" @click="loadApprovalSummary(true)">重新生成</el-button>
+            </div>
+          </template>
+          <el-empty v-if="!approvalSummary.summary" description="暂无摘要，点击重新生成" />
+          <template v-else>
+            <p style="margin: 0 0 8px; line-height: 1.6;">{{ approvalSummary.summary }}</p>
+            <el-tag size="small" type="success" v-if="approvalSummary.score !== null">风险评分：{{ approvalSummary.score }}</el-tag>
+            <el-descriptions :column="1" border size="small" style="margin-top: 12px;" v-if="approvalSummary.keyTerms && Object.keys(approvalSummary.keyTerms).length">
+              <el-descriptions-item label="甲方">{{ approvalSummary.keyTerms.partyA || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="乙方">{{ approvalSummary.keyTerms.partyB || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="金额">{{ approvalSummary.keyTerms.amount || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="期限">{{ approvalSummary.keyTerms.duration || '-' }}</el-descriptions-item>
+            </el-descriptions>
+            <div style="margin-top: 12px;" v-if="Array.isArray(approvalSummary.risks) && approvalSummary.risks.length">
+              <el-tag
+                v-for="(risk, idx) in approvalSummary.risks"
+                :key="idx"
+                :type="risk.level === 'high' ? 'danger' : (risk.level === 'medium' ? 'warning' : 'info')"
+                style="margin: 0 6px 6px 0;"
+              >
+                {{ risk.level || 'low' }}: {{ risk.content || '-' }}
+              </el-tag>
+            </div>
+          </template>
         </el-card>
         
         <!-- 审批历史 -->
@@ -395,15 +500,22 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { 
   getContract, 
+  getContractPayload,
   submitContract, 
+  withdrawContract,
   approveContract, 
   rejectContract,
   signContract,
   archiveContract,
   terminateContract,
+  startRenewalFlow,
+  completeRenewalFlow,
+  declineRenewalFlow,
   downloadContractPdf,
   getApprovalHistory,
-  copyContract
+  copyContract,
+  getApprovalSummary,
+  generateApprovalSummary
 } from '@/api/contract'
 import { addFavorite, removeFavorite, checkFavorite } from '@/api/favorite'
 import { getTags, addTagToContract, removeTagFromContract, getTagsByContract } from '@/api/tag'
@@ -442,6 +554,24 @@ const contract = ref<any>({
   createdBy: ''
 })
 
+const approvalFlow = ref<any>({
+  currentStatus: '',
+  submittedAt: '',
+  blockedBy: '-',
+  frozen: false,
+  steps: [],
+  lastAction: '-',
+  lastActionAt: ''
+})
+const approvalSummary = ref<any>({
+  summary: '',
+  score: null,
+  keyTerms: {},
+  risks: [],
+  updatedAt: ''
+})
+const approvalSummaryLoading = ref(false)
+
 const actionLoading = ref(false)
 const approvalHistory = ref<any[]>([])
 const isFavorited = ref(false)
@@ -460,7 +590,15 @@ const canApprove = computed(() => {
 })
 
 const canTerminate = computed(() => {
-  return ['SIGNED', 'APPROVED'].includes(contract.value.status)
+  return ['SIGNED', 'APPROVED', 'ARCHIVED', 'RENEWING'].includes(contract.value.status)
+})
+
+const canStartRenewal = computed(() => {
+  return ['SIGNED', 'APPROVED', 'ARCHIVED'].includes(contract.value.status)
+})
+
+const canCompleteRenewal = computed(() => {
+  return contract.value.status === 'RENEWING'
 })
 
 const formatAmount = (amount: number) => {
@@ -488,16 +626,25 @@ const formatStatus = (status: string) => {
     APPROVING: t('contract.statuses.approving'),
     APPROVED: t('contract.statuses.approved'),
     SIGNED: t('contract.statuses.signed'),
+    RENEWING: t('contract.statuses.renewing'),
+    RENEWED: t('contract.statuses.renewed'),
+    NOT_RENEWED: t('contract.statuses.notRenewed'),
     ARCHIVED: t('contract.statuses.archived'),
     TERMINATED: t('contract.statuses.terminated')
   }
   return map[status] || status
 }
 
+const formatRelationType = (relationType?: string) => {
+  if (relationType === 'SUPPLEMENT') return t('contract.relationTypes.supplement')
+  return t('contract.relationTypes.main')
+}
+
 const getStatusTagType = (status: string) => {
   const map: Record<string, string> = {
     DRAFT: 'info', PENDING: 'warning', APPROVING: 'warning',
-    APPROVED: 'success', SIGNED: 'success', ARCHIVED: 'info', TERMINATED: 'danger'
+    APPROVED: 'success', SIGNED: 'success', RENEWING: 'warning',
+    RENEWED: 'success', NOT_RENEWED: 'info', ARCHIVED: 'info', TERMINATED: 'danger'
   }
   return map[status] || 'info'
 }
@@ -546,7 +693,8 @@ const getApprovalActionLabel = (action: string) => {
   const map: Record<string, string> = {
     APPROVE: t('contract.approvalActions.approve'),
     REJECT: t('contract.approvalActions.reject'),
-    SUBMIT: t('contract.approvalActions.submit')
+    SUBMIT: t('contract.approvalActions.submit'),
+    WITHDRAW: t('contract.approvalActions.withdraw')
   }
   return map[action] || action
 }
@@ -555,7 +703,8 @@ const getApprovalTagType = (action: string) => {
   const map: Record<string, string> = {
     APPROVE: 'success',
     REJECT: 'danger',
-    SUBMIT: 'warning'
+    SUBMIT: 'warning',
+    WITHDRAW: 'info'
   }
   return map[action] || 'info'
 }
@@ -564,7 +713,8 @@ const getApprovalType = (action: string) => {
   const map: Record<string, string> = {
     APPROVE: 'success',
     REJECT: 'danger',
-    SUBMIT: 'primary'
+    SUBMIT: 'primary',
+    WITHDRAW: 'info'
   }
   return map[action] || 'info'
 }
@@ -716,19 +866,60 @@ const handleDownloadAttachment = (attachment: any) => {
 
 const fetchContract = async () => {
   try {
-    const res = await getContract(contractId.value)
-    contract.value = res.data
+    const [detailRes, payloadRes] = await Promise.all([
+      getContract(contractId.value),
+      getContractPayload(contractId.value).catch(() => ({ data: null }))
+    ])
+    const detailData = detailRes.data || {}
+    const payloadData = payloadRes?.data || {}
+    contract.value = {
+      ...detailData,
+      content: payloadData.content ?? detailData.content ?? '',
+      templateVariables: payloadData.templateVariables ?? detailData.templateVariables ?? '',
+      dynamicFields: payloadData.dynamicFields ?? detailData.dynamicFields ?? {},
+      dynamicFieldValues: payloadData.dynamicFieldValues ?? detailData.dynamicFieldValues ?? ''
+    }
+    approvalFlow.value = detailData?.approvalFlow || approvalFlow.value
     await Promise.all([
       loadFavoriteStatus(), 
       loadContractTags(), 
       loadDynamicFields(), 
       loadApprovalHistory(), 
+      loadApprovalSummary(false),
       loadContractFolder(),
       loadCounterparties(),
       loadAttachments()
     ])
   } catch (error) {
     ElMessage.error(t('contract.error.fetch'))
+  }
+}
+
+const loadApprovalSummary = async (forceGenerate = false) => {
+  approvalSummaryLoading.value = true
+  try {
+    const res = forceGenerate
+      ? await generateApprovalSummary(contractId.value, true)
+      : await getApprovalSummary(contractId.value)
+    const data = res?.data || {}
+    if (!data.summary && !forceGenerate) {
+      const generated = await generateApprovalSummary(contractId.value, false)
+      approvalSummary.value = generated?.data || approvalSummary.value
+      return
+    }
+    approvalSummary.value = {
+      summary: data.summary || '',
+      score: data.score ?? null,
+      keyTerms: data.keyTerms || {},
+      risks: Array.isArray(data.risks) ? data.risks : [],
+      updatedAt: data.updatedAt || ''
+    }
+  } catch (_error) {
+    if (forceGenerate) {
+      ElMessage.error('审批摘要生成失败')
+    }
+  } finally {
+    approvalSummaryLoading.value = false
   }
 }
 
@@ -887,6 +1078,10 @@ const handleEdit = () => {
   router.push(`/contracts/${contractId.value}/edit`)
 }
 
+const goToContract = (id: number) => {
+  router.push(`/contracts/${id}`)
+}
+
 const handleSubmit = async () => {
   actionLoading.value = true
   try {
@@ -895,6 +1090,26 @@ const handleSubmit = async () => {
     fetchContract()
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleWithdraw = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt(t('contract.withdrawReason'), t('contract.actions.withdraw'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      inputPlaceholder: t('contract.withdrawReasonPlaceholder')
+    })
+    actionLoading.value = true
+    await withdrawContract(contractId.value, value)
+    ElMessage.success(t('common.success'))
+    fetchContract()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
   } finally {
     actionLoading.value = false
   }
@@ -960,9 +1175,74 @@ const handleArchive = async () => {
 
 const handleTerminate = async () => {
   try {
+    const { value } = await ElMessageBox.prompt(t('contract.terminateReason'), t('contract.actions.terminate'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      inputPlaceholder: t('contract.terminateReasonPlaceholder')
+    })
     await ElMessageBox.confirm(t('contract.confirmTerminate'), t('common.warning'), { type: 'warning' })
     actionLoading.value = true
-    await terminateContract(contractId.value)
+    await terminateContract(contractId.value, value)
+    ElMessage.success(t('common.success'))
+    fetchContract()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleStartRenewalFlow = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt(t('contract.renewalReason'), t('contract.actions.startRenewal'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      inputPlaceholder: t('contract.renewalReasonPlaceholder')
+    })
+    actionLoading.value = true
+    await startRenewalFlow(contractId.value, value)
+    ElMessage.success(t('common.success'))
+    fetchContract()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleCompleteRenewalFlow = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt(t('contract.renewalCompleteReason'), t('contract.actions.completeRenewal'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      inputPlaceholder: t('contract.renewalCompleteReasonPlaceholder')
+    })
+    actionLoading.value = true
+    await completeRenewalFlow(contractId.value, value)
+    ElMessage.success(t('common.success'))
+    fetchContract()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+const handleDeclineRenewalFlow = async () => {
+  try {
+    const { value } = await ElMessageBox.prompt(t('contract.notRenewReason'), t('contract.actions.declineRenewal'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      inputPlaceholder: t('contract.notRenewReasonPlaceholder')
+    })
+    actionLoading.value = true
+    await declineRenewalFlow(contractId.value, value)
     ElMessage.success(t('common.success'))
     fetchContract()
   } catch (error: any) {
@@ -1418,6 +1698,12 @@ onMounted(async () => {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+  }
+
+  .supplement-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
   }
   
   .tag-dot {
