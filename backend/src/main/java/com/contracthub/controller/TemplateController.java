@@ -53,12 +53,12 @@ public class TemplateController {
             "【甲方】：[[partyA]]\n【乙方】：[[partyB]]\n\n" +
             "一、合同标的\n甲方同意购买，乙方同意出售以下商品/服务：\n商品名称：[[productName]]\n数量：[[quantity]]\n单价：[[unitPrice]]\n总价：[[totalPrice]]\n\n" +
             "二、质量标准\n符合国家相关质量标准及双方约定的技术规范。\n\n" +
-            "三、交货/服务期限\n自合同签订之日起[[deliveryDays]]日内完成。\n\n" +
+            "三、交货/服务期限\n自合同签订之日起[[deliveryDays]]日内完成。\n交货地点：[[deliveryAddress]]\n\n" +
             "四、付款方式\n□ 全款预付  □ 货到付款  □ 分期付款\n付款周期：[[paymentDays]]天\n\n" +
             "五、违约责任\n任一方违约，应向守约方支付合同总金额[[penaltyRate]]%的违约金。\n\n" +
             "六、争议解决\n本合同适用中华人民共和国法律。如有争议，提交甲方所在地人民法院管辖。\n\n" +
             "【甲方签章】：[[partyASign]]  【乙方签章】：[[partyBSign]]\n【签订日期】：[[signDate]]");
-        template1.setVariables("{\"contractNo\": \"合同编号\", \"partyA\": \"甲方名称\", \"partyB\": \"乙方名称\", \"productName\": \"商品名称\", \"quantity\": \"数量\", \"unitPrice\": \"单价\", \"totalPrice\": \"总价\", \"deliveryDays\": \"交货天数\", \"paymentDays\": \"付款周期\", \"penaltyRate\": \"违约金比例\", \"signDate\": \"签订日期\", \"partyASign\": \"甲方签章\", \"partyBSign\": \"乙方签章\"}");
+        template1.setVariables("{\"contractNo\": \"合同编号\", \"partyA\": \"甲方名称\", \"partyB\": \"乙方名称\", \"productName\": \"商品名称\", \"quantity\": \"数量\", \"unitPrice\": \"单价\", \"totalPrice\": \"总价\", \"deliveryDays\": \"交货天数\", \"deliveryAddress\": \"交货地址\", \"paymentDays\": \"付款周期\", \"penaltyRate\": \"违约金比例\", \"signDate\": \"签订日期\", \"partyASign\": \"甲方签章\", \"partyBSign\": \"乙方签章\"}");
         templateMapper.insert(template1);
         
         

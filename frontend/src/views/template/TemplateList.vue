@@ -135,8 +135,10 @@
           </div>
         </el-tab-pane>
         <el-tab-pane :label="$t('template.previewEffect')" name="preview">
-          <div class="preview-content" v-if="previewData.content">
-            <div class="preview-html" v-html="filledPreviewContent || previewData.content"></div>
+          <div class="preview-content preview-content--rich" v-if="previewData.content">
+            <div class="ql-snow template-preview-quill">
+              <div class="ql-editor" v-html="filledPreviewContent || previewData.content"></div>
+            </div>
           </div>
           <div class="preview-content preview-empty" v-else>
             <p>{{ t('template.previewEmpty') }}</p>
@@ -229,6 +231,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTemplateList, deleteTemplate, previewTemplate, exportTemplate, watermarkTemplate, cloneTemplate } from '@/api/template'
+import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { getContractCategories } from '@/api/contractCategory'
 import { Plus, Document, View, Download, Edit, Delete, CopyDocument, Files, MoreFilled, Stamp, Search, Refresh } from '@element-plus/icons-vue'
 import html2canvas from 'html2canvas'
@@ -332,7 +335,7 @@ const handleCreate = () => {
 }
 
 const handleEdit = (id: number) => {
-  router.push(`/templates/${id}`)
+  router.push({ name: 'TemplateEdit', params: { id: String(id) } })
 }
 
 const handleUse = (id: number) => {
@@ -418,20 +421,21 @@ const updatePreviewContent = () => {
 
 const fillSampleData = () => {
   const today = new Date().toISOString().split('T')[0]
+  const end = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   const samples: Record<string, string> = {
-    contractNo: 'HT-2026-001',
-    partyA: '甲方公司',
-    partyB: '乙方公司',
-    productName: '示例产品',
-    quantity: '100',
-    unitPrice: '1000',
-    totalPrice: '100000',
+    contractNo: t('template.sampleData.contractNo'),
+    partyA: t('template.sampleData.partyA'),
+    partyB: t('template.sampleData.partyB'),
+    productName: t('template.sampleData.productName'),
+    quantity: t('template.sampleData.quantity'),
+    unitPrice: t('template.sampleData.unitPrice'),
+    totalPrice: t('template.sampleData.totalPrice'),
     signDate: today,
     startDate: today,
-    endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    amount: '100000',
-    projectName: '示例项目',
-    address: '示例地址'
+    endDate: end,
+    amount: t('template.sampleData.amount'),
+    projectName: t('template.sampleData.projectName'),
+    address: t('template.sampleData.address')
   }
   for (const v of previewVariables.value) {
     if (samples[v]) {
@@ -856,89 +860,66 @@ onMounted(() => {
   }
 }
 
-.preview-content {
+.preview-content--rich {
+  padding: 12px;
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+  background: var(--el-bg-color-page, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.template-preview-quill {
+  background: var(--el-bg-color, #fff);
+  border: 1px solid var(--el-border-color-lighter, #ebeef5);
+  border-radius: 6px;
+  overflow: hidden;
+
+  :deep(.ql-editor) {
+    min-height: 120px;
+    box-sizing: border-box;
+    word-break: break-word;
+  }
+
+  :deep(.ql-table-embed) {
+    margin: 0.75em 0;
+  }
+
+  :deep(.ql-table-embed table) {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  :deep(.ql-table-embed td),
+  :deep(.ql-table-embed th) {
+    border: 1px solid var(--el-border-color, #dcdfe6);
+    padding: 6px 8px;
+  }
+
+  :deep(.ql-editor:not(.ql-blank) table) {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  :deep(.ql-editor:not(.ql-blank) td),
+  :deep(.ql-editor:not(.ql-blank) th) {
+    border: 1px solid var(--el-border-color, #dcdfe6);
+    padding: 6px 8px;
+  }
+
+  :deep(.ql-editor img) {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+.preview-content.preview-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary);
   background: #fff;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 20px;
-  max-height: 500px;
-  overflow-y: auto;
-  
-  .preview-html {
-    font-size: 14px;
-    line-height: 1.8;
-    color: var(--text-regular);
-    
-    h1, h2, h3, h4, h5, h6 {
-      margin: 12px 0 8px;
-      font-weight: 600;
-    }
-    
-    p {
-      margin: 8px 0;
-    }
-    
-    img {
-      max-width: 100%;
-      height: auto;
-      display: block;
-      margin: 10px 0;
-    }
-    
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 10px 0;
-      
-      th, td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-      }
-      
-      th {
-        background: #f5f5f5;
-        font-weight: 600;
-      }
-    }
-    
-    ul, ol {
-      margin: 8px 0;
-      padding-left: 24px;
-    }
-    
-    li {
-      margin: 4px 0;
-    }
-    
-    blockquote {
-      border-left: 3px solid #ddd;
-      margin: 10px 0;
-      padding: 8px 16px;
-      background: #f9f9f9;
-    }
-    
-    pre, code {
-      background: #f5f5f5;
-      border-radius: 4px;
-      font-family: 'Monaco', 'Menlo', monospace;
-    }
-    
-    code {
-      padding: 2px 6px;
-      font-size: 13px;
-    }
-    
-    pre {
-      padding: 12px;
-      overflow-x: auto;
-      
-      code {
-        padding: 0;
-        background: none;
-      }
-    }
-  }
 }
 
 /* 预览弹窗变量填充 */

@@ -12,9 +12,11 @@ public class TemplateVariable {
     private String code;
     
     private String name;
-    
+
+    /** 显式映射列名；ALWAYS 避免部分环境下更新时未写入 name_en */
+    @TableField(value = "name_en", insertStrategy = FieldStrategy.ALWAYS, updateStrategy = FieldStrategy.ALWAYS)
     private String nameEn;
-    
+
     private String label;
     
     private String type;

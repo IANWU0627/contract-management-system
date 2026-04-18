@@ -326,6 +326,7 @@ const getCategoryTagType = (category: string) => {
     service: 'info',
     lease: 'danger',
     employment: 'warning',
+    agency: 'info',
     custom: 'info'
   }
   return types[category] || ''

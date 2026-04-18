@@ -1,6 +1,10 @@
 import { get, post, put, del } from './index'
 import type { ApiResponse, PageData } from './types'
 
+/** 模板内容 AI 分析（基于当前表单，无需先保存；走 /api/ai 避免与 /templates/{id} 冲突） */
+export const analyzeTemplate = (data: Record<string, unknown>) =>
+  post<ApiResponse<Record<string, unknown>>>('/ai/template/analyze', data)
+
 export interface Template {
   id?: number
   name: string

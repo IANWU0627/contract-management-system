@@ -25,6 +25,7 @@ public class DatabaseSchemaHealthCheck implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         checkContractTypeFieldQuickCodeId();
+        checkContractTypeFieldDraftSchema();
         ensurePerformanceMilestoneTable();
     }
 
@@ -48,6 +49,50 @@ public class DatabaseSchemaHealthCheck implements ApplicationRunner {
             }
         } catch (Exception e) {
             log.warn("Database schema check failed for contract_type_field.quick_code_id: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 草稿表结构由 Flyway（V1.16.0 + V1.19.0）与 schema.sql 提供；应用不再在运行时 ALTER。
+     * 仅检测并提示，不自动改表。
+     */
+    private void checkContractTypeFieldDraftSchema() {
+        try {
+            Integer tableCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'contract_type_field_draft'
+                    """,
+                    Integer.class
+            );
+            if (tableCount == null || tableCount == 0) {
+                log.warn("Database schema check: table contract_type_field_draft is missing. " +
+                        "Apply Flyway migrations through V1.19.0 or import schema.sql.");
+                return;
+            }
+            Integer colCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'contract_type_field_draft'
+                      AND COLUMN_NAME IN (
+                          'contract_type', 'fields_json', 'draft_updated_at',
+                          'published_at', 'publish_version'
+                      )
+                    """,
+                    Integer.class
+            );
+            if (colCount == null || colCount < 5) {
+                log.warn("Database schema check: contract_type_field_draft is missing expected columns. " +
+                        "Run Flyway migration V1.19.0__Ensure_contract_type_field_draft_schema.sql.");
+            } else {
+                log.info("Database schema check: contract_type_field_draft schema is present.");
+            }
+        } catch (Exception e) {
+            log.warn("Database schema check failed for contract_type_field_draft: {}", e.getMessage());
         }
     }
 

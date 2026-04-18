@@ -27,6 +27,7 @@ const messages = {
       no: '否',
       all: '全部',
       none: '暂无数据',
+      noData: '暂无数据',
       loading: '加载中...',
       success: '操作成功',
       saveSuccess: '保存成功',
@@ -98,6 +99,8 @@ const messages = {
       goHome: '返回首页',
       requestFailed: '请求失败',
       networkError: '网络错误',
+      backendUnreachable:
+        '无法连接后端（常见为未启动或端口不对）。请在本机先启动 backend（默认 http://127.0.0.1:8081），再刷新页面。',
       sessionExpired: '登录已过期，请重新登录',
       business: '业务处理失败',
       http: {
@@ -295,7 +298,7 @@ const messages = {
       nameEn: '变量名称(英)',
       nameEnPlaceholder: '英文名称',
       label: '显示名称',
-      category: '合同类型',
+      category: '变量分类',
       type: '类型',
       defaultValue: '默认值',
       required: '必填',
@@ -314,6 +317,7 @@ const messages = {
         service: '服务合同',
         lease: '租赁合同',
         employment: '劳动合同',
+        agency: '代理/渠道',
         custom: '自定义'
       },
       error: {
@@ -877,6 +881,7 @@ const messages = {
       uploadMode: '上传模式',
       selectTemplate: '选择模板',
       selectTemplatePlaceholder: '请选择模板',
+      selectTemplateNeedType: '请先选择合同类型',
       templateVariables: '模板变量',
       preview: '实时预览',
       fullPreview: '合同预览',
@@ -885,6 +890,7 @@ const messages = {
       noVariables: '模板中暂无变量',
       selectTemplateToStart: '请选择一个模板开始编辑',
       uploadFileTip: '将文件拖到此处，或点击上传',
+      uploadFormatsShort: 'PDF、Word',
       contentRequired: '请先创建合同内容',
       uploadedFileHint: '文件已上传，请下载查看:',
       maxCounterparties: '已达最大相对方数量（10个）',
@@ -929,6 +935,7 @@ const messages = {
         partyBEmail: '乙方邮箱',
         partyBAddress: '乙方地址',
         deliveryDays: '交货天数',
+        deliveryAddress: '交货地址',
         penaltyRate: '违约金比例',
         projectName: '项目名称',
         projectDesc: '项目描述',
@@ -1346,7 +1353,7 @@ const messages = {
       clone: '复制',
       use: '使用',
       name: '模板名称',
-      category: '分类',
+      category: '合同类型',
       content: '模板内容',
       variables: '变量',
       usage: '使用 {count} 次',
@@ -1371,7 +1378,10 @@ const messages = {
         preview: '预览失败',
         export: '导出失败',
         watermark: '添加水印失败',
-        download: '下载失败'
+        download: '下载失败',
+        name: '请输入模板名称',
+        category: '请选择合同类型',
+        content: '请输入模板内容'
       },
       warning: {
         watermark: '请先应用水印'
@@ -1381,16 +1391,18 @@ const messages = {
         selectPreview: '选择左侧模板查看预览',
         noDescription: '暂无描述',
         noTemplates: '暂无模板',
+        name: '请输入模板名称',
+        variables: 'JSON 格式：键为变量名，值为列表/表单中的展示名称',
         watermarkText: '如：CONFIDENTIAL',
         previewText: '预览文字',
         description: '请输入模板描述（可选）',
         watermarkImage: '请输入图片URL地址',
-        categoryName: '请输入分类名称',
+        categoryName: '请输入合同类型名称',
         inputVariable: '请输入 {variable}',
         noVariablesDetected: '模板中未检测到变量',
         templateContent: '请输入模板内容，可使用下方工具栏插入变量...',
         content: '请输入模板内容...',
-        categoryCode: '请输入分类编码（英文）'
+        categoryCode: '请输入合同类型编码（英文）'
       },
       watermarkPositions: {
         diagonal: '对角线',
@@ -1418,7 +1430,8 @@ const messages = {
       systemVariables: '系统变量',
       customVariables: '自定义变量',
       variableTip: '使用 [[变量名]] 格式插入变量，系统会自动替换为实际值',
-      variablesTip: `以 JSON 格式定义自定义变量，如：{"productName": "产品名称", "quantity": "数量"}`,
+      variablesTip:
+        '以 JSON 格式定义自定义变量（键为变量名，值为展示名称）。示例键：productName、quantity 等，勿在文案中直接写花括号以免被系统解析。',
       selectVariable: '选择变量',
       insert: '插入',
       inserted: '已插入变量',
@@ -1433,12 +1446,55 @@ const messages = {
       generatingPdf: '正在生成PDF...',
       extractedVariables: '自动识别的变量',
       extractedVariablesTip: '保存模板时将自动提取这些变量',
+      extractedVariablesExpandHint: '点击展开完整列表',
       fillSampleData: '填充示例数据',
       clearValues: '清空值',
       insertTable: '插入表格',
       tableRows: '行数',
       tableCols: '列数',
-      tableInserted: '表格已插入'
+      tableHeaderCell: '列{col}',
+      tableInserted: '表格已插入',
+      editorHelpHint:
+        '提示：工具栏在滚动时保持可见；支持撤销/重做（Ctrl+Z、Ctrl+Y，Mac 为 ⌘Z、⌘⇧Z）。选中文本后可插入链接或调整格式。',
+      clauseQuickUseTitle: '如何快速使用条款库',
+      clauseQuickUseP1:
+        '请先在「条款库」中编写并保存条款正文；再回到本页，在下方工具栏选择分类与条款，点击「插入」将内容写入编辑器光标处。',
+      clauseQuickUseP2:
+        '若需按固定顺序一次插入多条，可先多次「加入编排」，再点击「按顺序插入」。',
+      openClauseLibrary: '打开条款库',
+      contentStats: '约 {chars} 字',
+      saveAndReturn: '保存并返回列表',
+      leaveUnsavedTitle: '有未保存的更改',
+      leaveUnsavedMessage: '确定离开当前页吗？未保存的内容将丢失。',
+      previewFallbackHint: '已使用本地替换预览；连接服务端失败时可检查网络后重试。',
+      fullEditorTitle: '需要条款库与完整编辑？',
+      fullEditorDesc:
+        '插入标准条款、编排顺序、自定义变量 JSON、服务端预览等能力仅在「完整模板编辑器」中提供。',
+      openFullEditor: '打开完整编辑器',
+      sampleData: {
+        contractNo: 'HT-2026-001',
+        partyA: '甲方示例公司',
+        partyB: '乙方示例公司',
+        productName: '示例产品',
+        quantity: '100',
+        unitPrice: '1000',
+        totalPrice: '100000',
+        amount: '100000',
+        projectName: '示例项目',
+        address: '示例地址'
+      },
+      ai: {
+        assistantTitle: '模板内容分析',
+        qualityScore: '模板质量分',
+        insights: '要点与提示',
+        structureNotes: '结构与条款',
+        variableHints: '变量与占位符',
+        consistency: '变量一致性提醒',
+        contentRequired: '请先填写模板正文后再进行 AI 分析',
+        fallbackSummary: '未获取到完整分析结果，已展示占位说明。请稍后重试或检查 AI 配置。',
+        fallbackRisk: '请人工核对正文、占位符与变量 JSON 是否一致。',
+        fallbackSuggestion: '保存草稿后再次分析，或联系管理员检查 AI 接口配置。'
+      }
     },
     user: {
       title: '用户管理',
@@ -1726,6 +1782,7 @@ const messages = {
       no: 'No',
       all: 'All',
       none: 'No data',
+      noData: 'No data',
       loading: 'Loading...',
       success: 'Success',
       saveSuccess: 'Saved successfully',
@@ -1797,6 +1854,8 @@ const messages = {
       goHome: 'Go to Home',
       requestFailed: 'Request failed',
       networkError: 'Network error',
+      backendUnreachable:
+        'Cannot reach the backend (often not running or wrong port). Start the backend (default http://127.0.0.1:8081), then refresh.',
       sessionExpired: 'Session expired. Please sign in again.',
       business: 'The operation could not be completed.',
       http: {
@@ -1994,7 +2053,7 @@ const messages = {
       nameEn: 'Variable Name (EN)',
       nameEnPlaceholder: 'English name',
       label: 'Display Label',
-      category: 'Contract Type',
+      category: 'Category',
       type: 'Type',
       defaultValue: 'Default Value',
       required: 'Required',
@@ -2013,6 +2072,7 @@ const messages = {
         service: 'Service',
         lease: 'Lease',
         employment: 'Employment',
+        agency: 'Agency / Channel',
         custom: 'Custom'
       },
       error: {
@@ -2524,6 +2584,7 @@ const messages = {
       uploadMode: 'Upload Mode',
       selectTemplate: 'Select Template',
       selectTemplatePlaceholder: 'Please select a template',
+      selectTemplateNeedType: 'Please select a contract type first',
       templateVariables: 'Template Variables',
       preview: 'Live Preview',
       fullPreview: 'Contract Preview',
@@ -2532,6 +2593,7 @@ const messages = {
       noVariables: 'No variables in template',
       selectTemplateToStart: 'Please select a template to start',
       uploadFileTip: 'Drag file here or click to upload',
+      uploadFormatsShort: 'PDF, Word',
       contentRequired: 'Please create contract content first',
       uploadedFileHint: 'File uploaded. Please download to view:',
       maxCounterparties: 'Maximum counterparties reached (10)',
@@ -2576,6 +2638,7 @@ const messages = {
         partyBEmail: 'Party B Email',
         partyBAddress: 'Party B Address',
         deliveryDays: 'Delivery Days',
+        deliveryAddress: 'Delivery Address',
         penaltyRate: 'Penalty Rate',
         projectName: 'Project Name',
         projectDesc: 'Project Description',
@@ -2982,7 +3045,7 @@ const messages = {
       clone: 'Clone',
       use: 'Use',
       name: 'Template Name',
-      category: 'Category',
+      category: 'Contract type',
       content: 'Template Content',
       variables: 'Variables',
       usage: 'Used {count} times',
@@ -3007,7 +3070,10 @@ const messages = {
         preview: 'Failed to preview',
         export: 'Failed to export',
         watermark: 'Failed to add watermark',
-        download: 'Download failed'
+        download: 'Download failed',
+        name: 'Please enter template name',
+        category: 'Please select a contract type',
+        content: 'Please enter template content'
       },
       warning: {
         watermark: 'Please apply watermark first'
@@ -3017,13 +3083,16 @@ const messages = {
         selectPreview: 'Select a template on the left to view preview',
         noDescription: 'No description',
         noTemplates: 'No templates',
+        name: 'Enter template name',
+        variables: 'JSON: keys are variable names, values are display labels',
         watermarkText: 'e.g. CONFIDENTIAL',
         previewText: 'Preview text',
         inputVariable: 'Enter {variable}',
         noVariablesDetected: 'No variables detected in template',
         templateContent: 'Enter template content, use toolbar below to insert variables...',
         content: 'Please enter template content...',
-        categoryCode: 'Enter category code (English)',
+        categoryCode: 'Enter contract type code (English)',
+        categoryName: 'Enter contract type name',
         description: 'Enter template description (optional)',
         watermarkImage: 'Enter image URL'
       },
@@ -3053,7 +3122,8 @@ const messages = {
       systemVariables: 'System Variables',
       customVariables: 'Custom Variables',
       variableTip: 'Use [[variableName]] format to insert variables. System will auto-replace with actual values.',
-      variablesTip: `Define custom variables in JSON format, e.g.: {"productName": "Product Name", "quantity": "Quantity"}`,
+      variablesTip:
+        'Define custom variables as JSON (keys = variable names, values = display labels). Example keys: productName, quantity. Avoid raw curly braces in copy where possible.',
       selectVariable: 'Select Variable',
       insert: 'Insert',
       inserted: 'Variable inserted',
@@ -3064,7 +3134,56 @@ const messages = {
       richEditor: 'Rich Text',
       codeEditor: 'Code',
       editorMode: 'Editor',
-      description: 'Description'
+      description: 'Description',
+      extractedVariables: 'Detected placeholders',
+      extractedVariablesTip: 'These placeholders are saved with the template',
+      extractedVariablesExpandHint: 'Click to expand the full list',
+      insertTable: 'Insert Table',
+      tableRows: 'Rows',
+      tableCols: 'Columns',
+      tableHeaderCell: 'Col {col}',
+      tableInserted: 'Table inserted',
+      editorHelpHint:
+        'Tip: The toolbar stays visible while scrolling. Undo/redo: Ctrl+Z / Ctrl+Y (⌘Z / ⌘⇧Z on Mac). Select text to add links or formatting.',
+      clauseQuickUseTitle: 'Using the clause library',
+      clauseQuickUseP1:
+        'Create and save clauses in the Clause Library first. Then use the toolbar below to filter, pick a clause, and click Insert to add it at the cursor.',
+      clauseQuickUseP2:
+        'To insert multiple clauses in order, add them to the outline, then use Insert in order.',
+      openClauseLibrary: 'Open clause library',
+      contentStats: 'About {chars} characters',
+      saveAndReturn: 'Save and back to list',
+      leaveUnsavedTitle: 'Unsaved changes',
+      leaveUnsavedMessage: 'Leave this page? Unsaved edits will be lost.',
+      previewFallbackHint: 'Showing local preview; server preview was unavailable.',
+      fullEditorTitle: 'Clause library & full editing?',
+      fullEditorDesc:
+        'Insert clauses, outline order, custom variables JSON, and server preview are available in the full template editor.',
+      openFullEditor: 'Open full editor',
+      sampleData: {
+        contractNo: 'HT-2026-001',
+        partyA: 'Party A Sample Co.',
+        partyB: 'Party B Sample Co.',
+        productName: 'Sample product',
+        quantity: '100',
+        unitPrice: '1000',
+        totalPrice: '100000',
+        amount: '100000',
+        projectName: 'Sample project',
+        address: 'Sample address'
+      },
+      ai: {
+        assistantTitle: 'Template content analysis',
+        qualityScore: 'Template quality score',
+        insights: 'Insights',
+        structureNotes: 'Structure & clauses',
+        variableHints: 'Variables & placeholders',
+        consistency: 'Variable consistency',
+        contentRequired: 'Please enter template body before running AI analysis',
+        fallbackSummary: 'Analysis result was incomplete. Please retry or check AI settings.',
+        fallbackRisk: 'Manually verify body text, placeholders, and variables JSON.',
+        fallbackSuggestion: 'Save a draft and analyze again, or ask an admin to verify the AI endpoint.'
+      }
     },
     clause: {
       title: 'Clause Library',

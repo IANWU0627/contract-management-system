@@ -48,7 +48,6 @@ class WebSocketService {
       this.ws = new WebSocket(url)
       
       this.ws.onopen = () => {
-        console.log('WebSocket connected')
         this.hasConnectedOnce = true
         this.connected.value = true
         this.reconnectAttempts = 0
@@ -69,11 +68,10 @@ class WebSocketService {
       }
       
       this.ws.onclose = () => {
-        console.log('WebSocket disconnected')
         this.connected.value = false
         this.stopPing()
         // If the connection never succeeded once in this session, do not keep retrying.
-        // This prevents repeated console spam when backend WebSocket is unavailable.
+        // Avoid endless reconnect when backend WebSocket is unavailable.
         if (!this.hasConnectedOnce) {
           this.shouldRetryInCurrentSession = false
         } else {
@@ -191,7 +189,6 @@ class WebSocketService {
       const jitter = Math.floor(Math.random() * 500)
       const delay = Math.min(this.reconnectDelay * Math.pow(1.6, this.reconnectAttempts - 1), this.maxReconnectDelay) + jitter
       this.reconnectTimer = window.setTimeout(() => {
-        console.log(`WebSocket reconnect attempt ${this.reconnectAttempts}`)
         this.connect(userId)
       }, delay)
     }

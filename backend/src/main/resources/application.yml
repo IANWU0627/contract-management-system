@@ -9,24 +9,9 @@ spring:
       pool:
         size: 2
 
-  # H2 Database (开发用 - 已禁用)
-  # datasource:
-  #   url: jdbc:h2:file:./data/contractdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
-  #   driver-class-name: org.h2.Driver
-  #   username: sa
-  #   password: 
-  # sql:
-  #   init:
-  #     mode: always
-  #     schema-locations: classpath:schema.sql
-  #     data-locations: classpath:data.sql
-  #     continue-on-error: true
-  # h2:
-  #   console:
-  #     enabled: true
-  #     path: /h2-console
+  # 本地已统一使用下方 MySQL；旧 H2 配置若需恢复可查 Git 历史。
 
-  # Flyway：生产建议启用并由 Flyway 独占 DDL；本地若用 spring.sql.init + schema.sql 可保持 false，避免双轨脚本分叉。
+  # Flyway：生产见 application-prod.yml（enabled + baseline 已有库）。本地仍可用 spring.sql.init + schema.sql，此处保持 false 避免与 sql.init 双轨。
   flyway:
     enabled: false
 

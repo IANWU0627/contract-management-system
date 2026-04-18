@@ -36,6 +36,25 @@ export interface TemplateVariableBatchPayload {
 export const getTemplateVariables = (params?: TemplateVariableQuery) =>
   get<ApiResponse<TemplateVariablePageData>>('/template-variables', { params })
 
+/** 分页拉取全部模板变量（管理列表默认每页 10 条，表单侧若只请求一页会匹配不到变量名） */
+export async function fetchAllTemplateVariables(
+  params?: Omit<TemplateVariableQuery, 'page' | 'pageSize'>
+): Promise<TemplateVariableItem[]> {
+  const pageSize = 200
+  const all: TemplateVariableItem[] = []
+  let page = 1
+  for (;;) {
+    const res = await getTemplateVariables({ ...params, page, pageSize })
+    const list = res.data?.list ?? []
+    const total = res.data?.total ?? 0
+    all.push(...list)
+    if (list.length < pageSize || all.length >= total) break
+    page += 1
+    if (page > 500) break
+  }
+  return all
+}
+
 export const getTemplateVariable = (id: number) =>
   get<ApiResponse<TemplateVariableItem>>(`/template-variables/${id}`)
 

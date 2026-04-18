@@ -311,7 +311,7 @@ const openReferenceDialog = (row: Clause) => {
 
 const goToTemplate = (id: number) => {
   referenceDialogVisible.value = false
-  router.push(`/templates/${id}`)
+  router.push({ name: 'TemplateEdit', params: { id: String(id) } })
 }
 
 const openCreateDialog = () => {

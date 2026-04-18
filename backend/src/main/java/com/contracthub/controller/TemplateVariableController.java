@@ -256,7 +256,7 @@ public class TemplateVariableController {
                 TemplateVariable target = existing == null ? new TemplateVariable() : existing;
                 target.setCode(code);
                 target.setName(name);
-                target.setNameEn(trimToNull(parseString(item.get("nameEn"))));
+                target.setNameEn(trimToNull(parseString(firstNonNull(item.get("nameEn"), item.get("name_en")))));
                 target.setLabel(trimToNull(parseString(item.get("label"))) != null ? parseString(item.get("label")).trim() : name);
                 target.setType(defaultString(trimToNull(parseString(item.get("type"))), "text"));
                 target.setQuickCodeCode(trimToNull(parseString(item.get("quickCodeCode"))));
@@ -293,59 +293,100 @@ public class TemplateVariableController {
     @PostMapping("/init-defaults")
     public ApiResponse<String> initDefaultVariables() {
         List<Map<String, Object>> defaults = new ArrayList<>();
-        
-        defaults.add(createVar("contractNo", "合同编号", "合同编号", "text", "system", "自动生成的合同编号"));
-        defaults.add(createVar("title", "合同名称", "合同名称", "text", "system", "合同的标题"));
-        defaults.add(createVar("amount", "合同金额", "合同金额", "number", "system", "合同的总金额"));
-        defaults.add(createVar("amountChinese", "金额大写", "金额大写", "text", "system", "金额的中文大写形式"));
-        defaults.add(createVar("startDate", "开始日期", "开始日期", "date", "system", "合同开始日期"));
-        defaults.add(createVar("endDate", "结束日期", "结束日期", "date", "system", "合同结束日期"));
-        defaults.add(createVar("signDate", "签订日期", "签订日期", "date", "system", "合同签订日期"));
-        defaults.add(createVar("today", "当前日期", "当前日期", "text", "system", "当前日期"));
-        
-        defaults.add(createVar("partyA", "甲方名称", "甲方公司名称", "text", "party", "甲方公司全称"));
-        defaults.add(createVar("partyAContact", "甲方联系人", "甲方联系人", "text", "party", "甲方的联系人姓名"));
-        defaults.add(createVar("partyAPhone", "甲方电话", "甲方联系电话", "text", "party", "甲方的联系电话"));
-        defaults.add(createVar("partyAEmail", "甲方邮箱", "甲方邮箱", "text", "party", "甲方的电子邮箱"));
-        defaults.add(createVar("partyAAddress", "甲方地址", "甲方地址", "text", "party", "甲方的公司地址"));
-        
-        defaults.add(createVar("partyB", "乙方名称", "乙方公司名称", "text", "party", "乙方公司全称"));
-        defaults.add(createVar("partyBContact", "乙方联系人", "乙方联系人", "text", "party", "乙方的联系人姓名"));
-        defaults.add(createVar("partyBPhone", "乙方电话", "乙方联系电话", "text", "party", "乙方的联系电话"));
-        defaults.add(createVar("partyBEmail", "乙方邮箱", "乙方邮箱", "text", "party", "乙方的电子邮箱"));
-        defaults.add(createVar("partyBAddress", "乙方地址", "乙方地址", "text", "party", "乙方的公司地址"));
-        
-        defaults.add(createVar("productName", "产品名称", "产品名称", "text", "purchase", "采购产品的名称"));
-        defaults.add(createVar("quantity", "数量", "数量", "number", "purchase", "采购产品的数量"));
-        defaults.add(createVar("unitPrice", "单价", "单价", "number", "purchase", "产品的单价"));
-        defaults.add(createVar("totalPrice", "总价", "总价", "number", "purchase", "产品的总价格"));
-        defaults.add(createVar("deliveryDays", "交货天数", "交货天数", "number", "purchase", "交货期限（天）"));
-        defaults.add(createVar("paymentDays", "付款天数", "付款天数", "number", "purchase", "付款期限（天）"));
-        defaults.add(createVar("penaltyRate", "违约金比例", "违约金比例", "number", "purchase", "违约金的百分比"));
-        
-        defaults.add(createVar("projectName", "项目名称", "项目名称", "text", "service", "服务项目的名称"));
-        defaults.add(createVar("projectDesc", "项目描述", "项目描述", "textarea", "service", "项目的详细描述"));
-        defaults.add(createVar("deliverables", "交付成果", "交付成果", "textarea", "service", "项目交付的成果物"));
-        defaults.add(createVar("totalDays", "总工期", "总工期", "number", "service", "项目总工期（天）"));
-        defaults.add(createVar("totalAmount", "总金额", "服务总金额", "number", "service", "服务的总金额"));
-        
-        defaults.add(createVar("address", "房屋地址", "房屋地址", "text", "lease", "租赁房屋的地址"));
-        defaults.add(createVar("area", "建筑面积", "建筑面积", "number", "lease", "房屋的建筑面积（平方米）"));
-        defaults.add(createVar("leaseMonths", "租赁月数", "租赁月数", "number", "lease", "租赁的月数"));
-        defaults.add(createVar("monthlyRent", "月租金", "月租金", "number", "lease", "每月的租金"));
-        defaults.add(createVar("deposit", "押金", "押金", "number", "lease", "租赁押金"));
-        
-        defaults.add(createVar("employeeName", "员工姓名", "员工姓名", "text", "employment", "员工的全名"));
-        defaults.add(createVar("companyName", "公司名称", "公司名称", "text", "employment", "公司的全称"));
-        defaults.add(createVar("position", "职位", "职位", "text", "employment", "员工担任的职位"));
-        defaults.add(createVar("salary", "薪资", "月薪", "number", "employment", "每月的工资"));
-        defaults.add(createVar("probationPeriod", "试用期", "试用期", "number", "employment", "试用期的月数"));
-        
+        // 与 TemplateController 内置五套模板中出现的 [[变量]] 对齐，并保留通用字段；sort_order 与 data.sql / Flyway 一致
+        defaults.add(createVar("contractNo", "合同编号", "Contract Number", "合同编号", "text", "system", "自动生成的合同编号", 1));
+        defaults.add(createVar("title", "合同名称", "Contract Title", "合同名称", "text", "system", "合同的标题", 2));
+        defaults.add(createVar("amount", "合同金额", "Contract Amount", "合同金额", "number", "system", "合同总金额", 3));
+        defaults.add(createVar("amountChinese", "金额大写", "Amount in Words", "金额大写", "text", "system", "金额中文大写", 4));
+        defaults.add(createVar("startDate", "开始日期", "Start Date", "起始日期", "date", "system", "合同开始/起始日期", 5));
+        defaults.add(createVar("endDate", "结束日期", "End Date", "结束日期", "date", "system", "合同结束日期", 6));
+        defaults.add(createVar("signDate", "签订日期", "Signing Date", "签订日期", "date", "system", "合同签订日期", 7));
+        defaults.add(createVar("today", "当前日期", "Today's Date", "当前日期", "text", "system", "当前日期", 8));
+
+        defaults.add(createVar("partyA", "甲方名称", "Party A Name", "甲方公司名称", "text", "party", "甲方公司全称", 10));
+        defaults.add(createVar("partyB", "乙方名称", "Party B Name", "乙方公司名称", "text", "party", "乙方公司全称", 11));
+        defaults.add(createVar("partyAId", "甲方证件号", "Party A ID Number", "甲方证件号码", "text", "party", "甲方身份证明号码", 12));
+        defaults.add(createVar("partyBId", "乙方证件号", "Party B ID Number", "乙方证件号码", "text", "party", "乙方身份证明号码", 13));
+        defaults.add(createVar("partyAContact", "甲方联系人", "Party A Contact", "甲方联系人", "text", "party", "甲方联系人姓名", 14));
+        defaults.add(createVar("partyAPhone", "甲方电话", "Party A Phone", "甲方联系电话", "text", "party", "甲方联系电话", 15));
+        defaults.add(createVar("partyAEmail", "甲方邮箱", "Party A Email", "甲方邮箱", "text", "party", "甲方电子邮箱", 16));
+        defaults.add(createVar("partyAAddress", "甲方地址", "Party A Address", "甲方地址", "text", "party", "甲方公司地址", 17));
+        defaults.add(createVar("partyBContact", "乙方联系人", "Party B Contact", "乙方联系人", "text", "party", "乙方联系人姓名", 18));
+        defaults.add(createVar("partyBPhone", "乙方电话", "Party B Phone", "乙方联系电话", "text", "party", "乙方联系电话", 19));
+        defaults.add(createVar("partyBEmail", "乙方邮箱", "Party B Email", "乙方邮箱", "text", "party", "乙方电子邮箱", 20));
+        defaults.add(createVar("partyBAddress", "乙方地址", "Party B Address", "乙方地址", "text", "party", "乙方公司地址", 21));
+        defaults.add(createVar("partyASign", "甲方签章", "Party A Signature", "甲方签章", "text", "party", "甲方签章栏", 22));
+        defaults.add(createVar("partyBSign", "乙方签章", "Party B Signature", "乙方签章", "text", "party", "乙方签章栏", 23));
+
+        defaults.add(createVar("productName", "产品名称", "Product Name", "产品名称", "text", "purchase", "采购/代理产品名称", 30));
+        defaults.add(createVar("quantity", "数量", "Quantity", "数量", "number", "purchase", "采购数量", 31));
+        defaults.add(createVar("unitPrice", "单价", "Unit Price", "单价", "number", "purchase", "产品单价", 32));
+        defaults.add(createVar("totalPrice", "总价", "Total Price", "总价", "number", "purchase", "产品总价", 33));
+        defaults.add(createVar("deliveryDays", "交货天数", "Delivery Days", "交货天数", "number", "purchase", "交货期限（天）", 34));
+        defaults.add(createVar("deliveryAddress", "交货地址", "Delivery Address", "交货地址", "text", "purchase", "交货/收货详细地址（与表单 delivery_address 对齐）", 35));
+        defaults.add(createVar("paymentDays", "付款天数", "Payment Days", "付款周期", "number", "purchase", "付款期限（天）", 36));
+        defaults.add(createVar("penaltyRate", "违约金比例", "Penalty Rate (%)", "违约金比例", "number", "purchase", "违约金百分比", 37));
+
+        defaults.add(createVar("projectName", "项目名称", "Project Name", "项目名称", "text", "service", "服务项目名称", 40));
+        defaults.add(createVar("projectDesc", "项目描述", "Project Description", "项目描述", "textarea", "service", "项目详细描述", 41));
+        defaults.add(createVar("deliverables", "交付成果", "Deliverables", "交付成果", "textarea", "service", "交付成果物", 42));
+        defaults.add(createVar("totalDays", "总工期", "Total Duration (Days)", "总工期", "number", "service", "项目总工期（工作日）", 43));
+        defaults.add(createVar("totalAmount", "合同总金额", "Total Contract Amount", "合同总金额", "number", "service", "服务合同总金额（数字）", 44));
+        defaults.add(createVar("totalAmountChinese", "合同总金额(大写)", "Total Amount (Chinese)", "合同总金额大写", "text", "service", "服务合同总金额中文大写", 45));
+        defaults.add(createVar("firstPayment", "首付款", "Down Payment", "首付款", "number", "service", "首付款金额", 46));
+        defaults.add(createVar("progressPayment", "进度款", "Progress Payment", "进度款", "number", "service", "进度款金额", 47));
+        defaults.add(createVar("finalPayment", "尾款", "Final Payment", "尾款", "number", "service", "尾款金额", 48));
+
+        defaults.add(createVar("address", "房屋地址", "Property Address", "房屋地址", "text", "lease", "租赁房屋地址", 50));
+        defaults.add(createVar("area", "建筑面积", "Floor Area (sqm)", "建筑面积", "number", "lease", "建筑面积（平方米）", 51));
+        defaults.add(createVar("leaseMonths", "租赁月数", "Lease Term (Months)", "租赁月数", "number", "lease", "租赁期限（月）", 52));
+        defaults.add(createVar("monthlyRent", "月租金", "Monthly Rent", "月租金", "number", "lease", "每月租金", 53));
+        defaults.add(createVar("monthlyRentChinese", "月租金(大写)", "Monthly Rent (Chinese)", "月租金大写", "text", "lease", "月租金中文大写", 54));
+        defaults.add(createVar("deposit", "押金", "Security Deposit", "押金", "number", "lease", "租赁押金", 55));
+        defaults.add(createVar("depositChinese", "押金(大写)", "Deposit (Chinese)", "押金大写", "text", "lease", "押金中文大写", 56));
+        defaults.add(createVar("noticeDays", "提前通知天数", "Notice Period (Days)", "提前通知天数", "number", "lease", "提前解约书面通知天数", 57));
+        defaults.add(createVar("penaltyMonths", "违约金月数", "Penalty (Months of Rent)", "违约金月数", "number", "lease", "提前解约违约金（月租金倍数）", 58));
+
+        defaults.add(createVar("companyName", "公司名称", "Company Name", "公司名称", "text", "employment", "用人单位名称", 60));
+        defaults.add(createVar("employeeName", "员工姓名", "Employee Name", "员工姓名", "text", "employment", "劳动者姓名", 61));
+        defaults.add(createVar("employeeId", "身份证号", "ID Number", "身份证号", "text", "employment", "劳动者身份证号码", 62));
+        defaults.add(createVar("employeePhone", "联系电话", "Phone Number", "联系电话", "text", "employment", "劳动者联系电话", 63));
+        defaults.add(createVar("position", "职位", "Position", "岗位/职位", "text", "employment", "工作岗位", 64));
+        defaults.add(createVar("workContent", "工作内容", "Job Duties", "工作内容", "textarea", "employment", "工作内容描述", 65));
+        defaults.add(createVar("workLocation", "工作地点", "Work Location", "工作地点", "text", "employment", "工作地点", 66));
+        defaults.add(createVar("salary", "月薪(通用)", "Monthly Salary (Generic)", "月薪", "number", "employment", "通用月薪（可与月工资字段并存）", 67));
+        defaults.add(createVar("monthlySalary", "月工资", "Monthly Salary", "月工资", "number", "employment", "劳动合同月工资", 68));
+        defaults.add(createVar("monthlySalaryChinese", "月工资(大写)", "Monthly Salary (Chinese)", "月工资大写", "text", "employment", "月工资中文大写", 69));
+        defaults.add(createVar("payDay", "工资发放日", "Pay Day", "工资发放日", "number", "employment", "每月发薪日（日）", 70));
+        defaults.add(createVar("probationPeriod", "试用期", "Probation Period (Months)", "试用期", "number", "employment", "试用期（月）", 71));
+        defaults.add(createVar("nonCompeteMonths", "竞业限制月数", "Non-compete Period (Months)", "竞业限制月数", "number", "employment", "竞业限制期限（月）", 72));
+        defaults.add(createVar("nonCompeteCompensation", "竞业限制补偿金", "Non-compete Compensation", "竞业限制补偿金", "number", "employment", "竞业限制补偿（元/月）", 73));
+        defaults.add(createVar("companySign", "用人单位签章", "Company Signature", "公司签章", "text", "employment", "用人单位签章栏", 74));
+        defaults.add(createVar("employeeSign", "员工签章", "Employee Signature", "员工签章", "text", "employment", "劳动者签章栏", 75));
+
+        defaults.add(createVar("brand", "品牌", "Brand", "品牌", "text", "agency", "代理产品品牌", 80));
+        defaults.add(createVar("specification", "型号规格", "Model / Specification", "型号规格", "text", "agency", "产品型号规格", 81));
+        defaults.add(createVar("region", "代理区域", "Territory", "代理区域", "text", "agency", "销售代理区域", 82));
+        defaults.add(createVar("annualTask", "年度销售任务", "Annual Sales Target", "年度销售任务", "number", "agency", "年度销售任务金额", 83));
+        defaults.add(createVar("quarterlyTask", "季度任务", "Quarterly Target", "季度任务", "number", "agency", "季度销售任务金额", 84));
+        defaults.add(createVar("consecutiveQuarters", "连续季度数", "Consecutive Quarters", "连续季度数", "number", "agency", "考核连续未完成季度数", 85));
+        defaults.add(createVar("taskPercentage", "任务完成比例", "Task Completion (%)", "任务完成比例", "number", "agency", "任务完成比例阈值（%）", 86));
+        defaults.add(createVar("minRetailPrice", "最低零售价", "Minimum Retail Price", "最低零售价", "number", "agency", "最低零售价格", 87));
+        defaults.add(createVar("priceNoticeDays", "价格调整通知天数", "Price Change Notice (Days)", "价格调整通知天数", "number", "agency", "价格调整提前通知天数", 88));
+        defaults.add(createVar("commissionRate", "佣金比例", "Commission Rate (%)", "佣金比例", "number", "agency", "佣金比例（%）", 89));
+        defaults.add(createVar("salesTarget1", "销售目标1", "Sales Target 1", "销售目标1", "number", "agency", "返利档位销售额1（万）", 90));
+        defaults.add(createVar("rebateRate1", "返利比例1", "Rebate Rate 1 (%)", "返利比例1", "number", "agency", "档位1返利比例（%）", 91));
+        defaults.add(createVar("salesTarget2", "销售目标2", "Sales Target 2", "销售目标2", "number", "agency", "返利档位销售额2（万）", 92));
+        defaults.add(createVar("rebateRate2", "返利比例2", "Rebate Rate 2 (%)", "返利比例2", "number", "agency", "档位2返利比例（%）", 93));
+        defaults.add(createVar("samplesCount", "样品套数", "Sample Sets", "样品数量", "number", "agency", "市场支持样品套数", 94));
+        defaults.add(createVar("promoMaterialsCount", "宣传物料份数", "Promo Materials (Copies)", "宣传物料数量", "number", "agency", "宣传物料份数", 95));
+        defaults.add(createVar("adSupportAmount", "广告支持金额", "Ad Support Amount", "广告支持金额", "number", "agency", "广告支持金额（元）", 96));
+
         Map<String, Object> payload = new HashMap<>();
         payload.put("items", defaults);
-        payload.put("conflictPolicy", "skip");
+        payload.put("conflictPolicy", "overwrite");
         batchCreate(payload);
-        return ApiResponse.success("已初始化 " + defaults.size() + " 个默认变量");
+        return ApiResponse.success("已初始化 " + defaults.size() + " 个默认变量（含内置模板全部占位符）");
     }
 
     private String trimToNull(String value) {
@@ -404,14 +445,29 @@ public class TemplateVariableController {
         return value == null ? fallback : value;
     }
     
-    private Map<String, Object> createVar(String code, String name, String label, String type, String category, String desc) {
+    private static Object firstNonNull(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object v : values) {
+            if (v != null) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Object> createVar(String code, String name, String nameEn, String label, String type, String category, String desc, int sortOrder) {
         Map<String, Object> v = new HashMap<>();
         v.put("code", code);
         v.put("name", name);
+        v.put("nameEn", nameEn);
         v.put("label", label);
         v.put("type", type);
         v.put("category", category);
         v.put("description", desc);
+        v.put("sortOrder", sortOrder);
+        v.put("status", 1);
         return v;
     }
 }

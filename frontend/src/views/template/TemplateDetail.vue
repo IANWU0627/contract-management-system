@@ -7,6 +7,20 @@
       </el-button>
       <h1 class="page-title">{{ isEdit ? $t('template.edit') : $t('template.create') }}</h1>
     </div>
+
+    <el-alert
+      v-if="isEdit"
+      type="info"
+      :closable="false"
+      show-icon
+      class="template-full-editor-banner"
+    >
+      <template #title>{{ $t('template.fullEditorTitle') }}</template>
+      <span class="template-full-editor-banner__text">{{ $t('template.fullEditorDesc') }}</span>
+      <el-button type="primary" link class="template-full-editor-banner__btn" @click="goFullEditor">
+        {{ $t('template.openFullEditor') }}
+      </el-button>
+    </el-alert>
     
     <el-card shadow="hover">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
@@ -77,22 +91,31 @@
                 <el-radio-button value="code">{{ $t('template.codeEditor') }}</el-radio-button>
               </el-radio-group>
             </div>
+
+            <div v-if="editorMode === 'rich'" class="editor-meta-row">
+              <span class="editor-hint-text">{{ $t('template.editorHelpHint') }}</span>
+              <span class="content-stats">{{ $t('template.contentStats', { chars: contentPlainLength }) }}</span>
+            </div>
             
             <!-- Rich Text Editor (Quill) -->
-            <div v-show="editorMode === 'rich'" class="quill-wrapper">
+            <div v-show="editorMode === 'rich'" class="quill-editor-panel">
               <QuillEditor 
                 ref="quillEditor"
                 v-model:content="form.content" 
                 contentType="html"
-                :toolbar="quillToolbarOptions"
+                :options="templateQuillEditorOptions"
                 :placeholder="t('template.placeholder.templateContent')"
                 theme="snow"
                 class="quill-editor"
+                @ready="onQuillReady"
               />
             </div>
             
             <!-- Code Editor (Textarea) -->
             <div v-show="editorMode === 'code'" class="code-wrapper">
+              <div class="editor-meta-row editor-meta-row--code">
+                <span class="content-stats">{{ $t('template.contentStats', { chars: contentPlainLength }) }}</span>
+              </div>
               <el-input
                 ref="contentTextarea"
                 v-model="form.content"
@@ -105,12 +128,49 @@
           </div>
         </el-form-item>
         
-        <el-form-item :label="$t('template.extractedVariables')" v-if="extractedVariables.length > 0">
-          <div class="extracted-variables">
-            <el-tag v-for="v in extractedVariables" :key="v" size="small" type="info" class="var-tag">
-              [[{{ v }}]]
-            </el-tag>
-            <span class="var-tip">{{ $t('template.extractedVariablesTip') }}</span>
+        <el-form-item v-if="sortedExtractedEntries.length > 0" label-width="0" class="extracted-variables-form-item">
+          <div class="extracted-variables-layout">
+            <div class="extracted-variables-header">
+              <span class="extracted-variables-title">{{ $t('template.extractedVariables') }}</span>
+              <el-tag size="small" type="info" effect="plain" round>{{ sortedExtractedEntries.length }}</el-tag>
+            </div>
+            <el-collapse v-model="extractedCollapseActive" class="extracted-variables-collapse">
+            <el-collapse-item name="detail">
+              <template #title>
+                <div class="extracted-collapse-title">
+                  <div class="extracted-preview-tags">
+                    <el-tag
+                      v-for="(code, pi) in extractedPreviewSlice.codes"
+                      :key="code"
+                      :type="previewTagType(pi)"
+                      size="small"
+                      effect="light"
+                      class="extracted-preview-tag"
+                    >{{ code }}</el-tag>
+                    <span v-if="extractedPreviewSlice.overflow > 0" class="extracted-preview-more">+{{ extractedPreviewSlice.overflow }}</span>
+                  </div>
+                  <span class="extracted-expand-hint">{{ $t('template.extractedVariablesExpandHint') }}</span>
+                </div>
+              </template>
+              <div class="extracted-variables-panel">
+                <p class="extracted-variables-hint">{{ $t('template.extractedVariablesTip') }}</p>
+                <div class="extracted-variables-grid" role="list">
+                  <div
+                    v-for="(row, idx) in sortedExtractedEntries"
+                    :key="row.code"
+                    class="extracted-var-cell"
+                    role="listitem"
+                  >
+                    <span class="extracted-var-index">{{ idx + 1 }}</span>
+                    <div class="extracted-var-body">
+                      <code class="extracted-var-code">[[{{ row.code }}]]</code>
+                      <span v-if="row.displayName" class="extracted-var-name">{{ row.displayName }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
           </div>
         </el-form-item>
         
@@ -131,10 +191,15 @@ import { useI18n } from 'vue-i18n'
 import type { FormInstance } from 'element-plus'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
+import '@/utils/quillTableEmbed'
+import Delta from 'quill-delta'
+import Quill from 'quill'
+import type { Quill as QuillInstance } from 'quill'
 import { createTemplate, updateTemplate, getTemplate } from '@/api/template'
-import { getTemplateVariables, type TemplateVariableItem } from '@/api/templateVariable'
+import { fetchAllTemplateVariables, type TemplateVariableItem } from '@/api/templateVariable'
 import { getContractCategories } from '@/api/contractCategory'
 import { ArrowLeft, Refresh, Grid } from '@element-plus/icons-vue'
+import { templateQuillEditorOptions } from './templateQuillConfig'
 
 interface ContractCategoryItem {
   code: string
@@ -142,7 +207,7 @@ interface ContractCategoryItem {
   color?: string
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -156,23 +221,35 @@ const categories = ref<ContractCategoryItem[]>([])
 
 const editorMode = ref('rich')
 
-const quillToolbarOptions = [
-  [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-  [{ 'font': [] }],
-  ['bold', 'italic', 'underline', 'strike', { 'color': [] }, { 'background': [] }],
-  [{ 'script': 'sub' }, { 'script': 'super' }],
-  [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'list': 'check' }],
-  [{ 'indent': '-1' }, { 'indent': '+1' }],
-  [{ 'direction': 'rtl' }],
-  [{ 'align': [] }],
-  ['link', 'image', 'video'],
-  ['blockquote', 'code-block', { 'header': 1 }, { 'header': 2 }],
-  ['superscript', 'subscript'],
-  ['clean']
-]
+const PREVIEW_TAG_TYPES = ['primary', 'success', 'warning', 'info', 'danger'] as const
+
+const previewTagType = (index: number) => PREVIEW_TAG_TYPES[index % PREVIEW_TAG_TYPES.length]
+
+const onQuillReady = (quill: QuillInstance) => {
+  quill.clipboard.addMatcher('table', (node: HTMLElement) => {
+    if (node.tagName !== 'TABLE') {
+      return new Delta()
+    }
+    return new Delta().insert({ 'table-embed': node.outerHTML })
+  })
+}
+
+const contentPlainLength = computed(() => {
+  const html = form.content || ''
+  if (!html) return 0
+  if (editorMode.value === 'code') return html.length
+  if (typeof document === 'undefined') return html.replace(/<[^>]+>/g, '').length
+  const div = document.createElement('div')
+  div.innerHTML = html
+  return (div.textContent || '').length
+})
 
 const isEdit = computed(() => !!route.params.id)
 const templateId = computed(() => Number(route.params.id))
+
+const goFullEditor = () => {
+  router.push({ name: 'TemplateEdit', params: { id: String(templateId.value) } })
+}
 
 const allVariables = ref<TemplateVariableItem[]>([])
 const selectedCategory = ref('')
@@ -186,6 +263,7 @@ const categoryOptions = computed(() => {
     { value: 'service', label: t('variable.categories.service') },
     { value: 'lease', label: t('variable.categories.lease') },
     { value: 'employment', label: t('variable.categories.employment') },
+    { value: 'agency', label: t('variable.categories.agency') },
     { value: 'custom', label: t('variable.categories.custom') }
   ]
   return cats
@@ -201,8 +279,7 @@ const filteredVariables = computed(() => {
 const loadVariables = async () => {
   loadingVariables.value = true
   try {
-    const res = await getTemplateVariables({ status: 1 })
-    allVariables.value = res.data.list
+    allVariables.value = await fetchAllTemplateVariables({ status: 1 })
   } catch (error) {
     console.error('Failed to load variables', error)
     ElMessage.error(t('common.error'))
@@ -228,31 +305,30 @@ const tableForm = reactive({
 const insertTable = () => {
   const rows = tableForm.rows
   const cols = tableForm.cols
-  let tableHtml = '<table style="border-collapse: collapse; width: 100%; margin: 16px 0;">'
+  let tableInner = '<table style="border-collapse: collapse; width: 100%; margin: 16px 0;">'
   
   for (let i = 0; i < rows; i++) {
-    tableHtml += '<tr>'
+    tableInner += '<tr>'
     for (let j = 0; j < cols; j++) {
       const tag = i === 0 ? 'th' : 'td'
       const style = i === 0 ? 'border: 1px solid #333; padding: 8px; background: #f5f5f5; font-weight: bold; text-align: center;' : 'border: 1px solid #333; padding: 8px;'
-      tableHtml += `<${tag} style="${style}">${i === 0 ? `列${j + 1}` : ''}</${tag}>`
+      tableInner += `<${tag} style="${style}">${i === 0 ? t('template.tableHeaderCell', { col: j + 1 }) : ''}</${tag}>`
     }
-    tableHtml += '</tr>'
+    tableInner += '</tr>'
   }
-  tableHtml += '</table><p><br></p>'
+  tableInner += '</table>'
+  const tableHtmlForCode = `${tableInner}<p><br></p>`
   
   if (editorMode.value === 'rich' && quillEditor.value) {
     const quill = quillEditor.value.getQuill()
-    const range = quill.getSelection()
-    const index = range ? range.index : quill.getLength() - 1
-    
-    quill.root.innerHTML = quill.root.innerHTML.slice(0, index) + tableHtml + quill.root.innerHTML.slice(index)
+    const range = quill.getSelection(true)
+    const index = range ? range.index : Math.max(0, quill.getLength() - 1)
+    quill.insertEmbed(index, 'table-embed', tableInner, Quill.sources.USER)
+    quill.insertText(index + 1, '\n', Quill.sources.USER)
+    quill.setSelection(index + 2, 0, Quill.sources.SILENT)
     quill.focus()
-    quill.setSelection(index + tableHtml.length, 0)
-    
-    form.content = quill.root.innerHTML
   } else {
-    form.content += tableHtml
+    form.content += tableHtmlForCode
   }
   
   ElMessage.success(t('template.tableInserted'))
@@ -288,6 +364,45 @@ const form = reactive({
 })
 
 const extractedVariables = ref<string[]>([])
+
+const variableByCode = computed(() => {
+  const map = new Map<string, TemplateVariableItem>()
+  for (const v of allVariables.value) {
+    map.set(v.code, v)
+  }
+  return map
+})
+
+/** 排序后的展示行：编码序 + 解析到的显示名（与变量库对齐） */
+const sortedExtractedEntries = computed(() => {
+  const codes = extractedVariables.value.slice().sort((a, b) => a.localeCompare(b))
+  return codes.map((code) => {
+    const item = variableByCode.value.get(code)
+    let displayName = ''
+    if (item) {
+      if (item.label) {
+        displayName = item.label
+      } else if (locale.value === 'en' && item.nameEn) {
+        displayName = item.nameEn
+      } else {
+        displayName = item.name || ''
+      }
+    }
+    return { code, displayName }
+  })
+})
+
+/** 折叠态标题：前若干个变量编码（彩色标签） */
+const extractedPreviewSlice = computed(() => {
+  const codes = sortedExtractedEntries.value.map((e) => e.code)
+  const max = 12
+  return {
+    codes: codes.slice(0, max),
+    overflow: Math.max(0, codes.length - max)
+  }
+})
+
+const extractedCollapseActive = ref<string[]>([])
 
 const extractVariables = (content: string) => {
   const pattern = /\[\[(\w+)\]\]/g
@@ -363,6 +478,20 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+.template-full-editor-banner {
+  margin-bottom: 16px;
+
+  .template-full-editor-banner__text {
+    margin-right: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .template-full-editor-banner__btn {
+    vertical-align: baseline;
+  }
+}
+
 .template-detail {
   .page-header {
     display: flex;
@@ -411,27 +540,86 @@ onMounted(() => {
   }
 }
 
-.quill-wrapper {
+.editor-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.editor-meta-row--code {
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.editor-hint-text {
+  flex: 1;
+  min-width: 200px;
+  color: var(--el-text-color-secondary);
+}
+
+.content-stats {
+  flex-shrink: 0;
+  color: var(--el-text-color-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.quill-editor-panel {
   border: 1px solid var(--border-color);
   border-radius: 4px;
   overflow: hidden;
   width: 100%;
+  background: var(--el-fill-color-blank);
+
+  :deep(.ql-toolbar.ql-snow) {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background: var(--el-bg-color-overlay, var(--el-fill-color-blank));
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  :deep(.ql-container.ql-snow) {
+    border: none;
+  }
+
+  :deep(.ql-table-embed) {
+    margin: 12px 0;
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  }
   
   :deep(.ql-container) {
     min-height: 500px;
-    max-height: 700px;
+    max-height: 720px;
     font-size: 14px;
     width: 100%;
+    line-height: 1.65;
   }
   
   :deep(.ql-editor) {
     min-height: 500px;
-    max-height: 700px;
+    max-height: 720px;
     width: 100%;
+    line-height: 1.65;
+    tab-size: 4;
   }
   
-  :deep(.ql-toolbar) {
-    width: 100%;
+  :deep(.ql-editor p),
+  :deep(.ql-editor li) {
+    line-height: 1.65;
   }
 }
 
@@ -451,21 +639,167 @@ onMounted(() => {
   }
 }
 
-.extracted-variables {
+.extracted-variables-form-item {
+  align-items: flex-start;
+
+  :deep(.el-form-item__content) {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+}
+
+.extracted-variables-layout {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.extracted-variables-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 0;
+}
+
+.extracted-variables-title {
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  font-weight: 500;
+}
+
+.extracted-variables-collapse {
+  width: 100%;
+  border: none;
+
+  :deep(.el-collapse-item__wrap) {
+    border: none;
+  }
+
+  :deep(.el-collapse-item__header) {
+    height: auto;
+    min-height: 40px;
+    line-height: 1.45;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--el-border-color-lighter);
+    background: var(--el-fill-color-blank);
+  }
+
+  :deep(.el-collapse-item__arrow) {
+    margin: 0 0 0 8px;
+  }
+
+  :deep(.el-collapse-item__content) {
+    padding-bottom: 0;
+  }
+}
+
+.extracted-collapse-title {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
-  
-  .var-tag {
-    font-family: 'Monaco', 'Menlo', monospace;
-  }
-  
-  .var-tip {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-left: 8px;
-  }
+  gap: 8px 12px;
+  width: 100%;
+  padding-right: 8px;
+}
+
+.extracted-preview-tags {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.extracted-preview-tag {
+  font-family: ui-monospace, 'Monaco', 'Menlo', monospace;
+  max-width: 100%;
+}
+
+.extracted-preview-more {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  flex-shrink: 0;
+}
+
+.extracted-expand-hint {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.extracted-variables-panel {
+  width: 100%;
+}
+
+.extracted-variables-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+
+.extracted-variables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.extracted-var-cell {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.extracted-var-cell:hover {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.extracted-var-index {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-radius: 6px;
+}
+
+.extracted-var-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.extracted-var-code {
+  font-family: ui-monospace, 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  word-break: break-all;
+}
+
+.extracted-var-name {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .table-insert-form {

@@ -26,7 +26,7 @@ Flyway迁移脚本位于 `backend/src/main/resources/db/migration/` 目录下。
 | V1.3.0 | V1.3.0__Add_name_en_to_template_variable.sql | 模板变量英文名 |
 | V1.4.0 | V1.4.0__Add_quick_code_id_to_contract_type_field.sql | 合同类型字段关联快速代码 |
 | V1.5.0 | V1.5.0__Add_contract_clause_library.sql | 条款库 |
-| V1.5.0 | V1.5.0__Add_contract_relation_for_supplement.sql | 主合同/补充协议关系 |
+| V1.5.1 | V1.5.1__Add_contract_relation_for_supplement.sql | 主合同/补充协议关系 |
 | V1.6.0 | V1.6.0__Add_diff_json_to_contract_change_log.sql | 变更记录 diff JSON |
 | V1.7.0 | V1.7.0__Deprecate_contract_counterparty_column.sql | 相对方字段演进 |
 | V1.8.0 | V1.8.0__Add_user_department.sql | 用户部门等 |
@@ -37,12 +37,30 @@ Flyway迁移脚本位于 `backend/src/main/resources/db/migration/` 目录下。
 | V1.12.0 | V1.12.0__Add_contract_version_diff_analysis.sql | 版本对比分析缓存 |
 | V1.13.0 | V1.13.0__Add_contract_snapshot_diff_analysis.sql | 快照对比分析缓存 |
 | V1.14.0 | V1.14.0__Ensure_diff_analysis_schema_compat.sql | 对比分析表/索引幂等补齐 |
+| V1.15.0 | V1.15.0__Add_performance_milestones_and_contract_indexes.sql | 履约里程碑与索引 |
+| V1.16.0 | V1.16.0__Add_contract_type_field_draft.sql | 合同类型字段草稿等 |
+| V1.19.0 | V1.19.0__Ensure_contract_type_field_draft_schema.sql | 幂等补齐 `contract_type_field_draft` 列（替代应用内 ALTER） |
 
 同步参考：`backend/src/main/resources/schema.sql`（开发/文档用全量结构说明）。
 
+### 已有线上库：统一 Flyway（生产 profile）
+
+生产环境使用 `--spring.profiles.active=prod` 时，`application-prod.yml` 会：
+
+- **启用 Flyway**，并对**当前空 Flyway 元数据表**的已有库执行 **`baseline-on-migrate`**：`baseline-version` 设为仓库当前最后一条迁移（与 `V1.16.0` 对齐），首次启动只写入 `flyway_schema_history` 的基线记录，**不会重跑** `V1`～`V1.16.0` 脚本。
+- **关闭 `spring.sql.init`**（`mode: never`），避免与 `schema.sql` / `data.sql` 双轨执行。
+
+上线前请确认：
+
+1. 线上库结构已与上述迁移（至 `1.16.0`）一致；若线上曾手工改表，先对齐再切 profile。
+2. 若线上**尚未**包含某条迁移的变更，应先把库补到该版本，或**临时调低** `baseline-version` 到「线上已真实具备」的最高版本，让 Flyway 执行更高版本脚本（需 DBA/运维评估）。
+3. 新变更只新增 **`V1.17.0__` 等更高版本** 的 SQL 文件。
+
+开发环境默认仍为 `flyway.enabled: false` + `spring.sql.init`，与历史习惯兼容；新环境若也要纯 Flyway，可再单独约定。
+
 ### 执行迁移
 
-启动后端应用时，Flyway会自动执行迁移脚本。
+开发默认不启用 Flyway 时，由 `spring.sql.init` 加载 `schema.sql` 等。启用 Flyway 且 `spring.sql.init.mode: never` 时，启动后端应用会由 Flyway 执行待执行迁移。
 
 也可以手动执行：
 ```bash

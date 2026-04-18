@@ -102,7 +102,7 @@ public class UserController {
             return result;
         } catch (Exception e) {
             // 表不存在时返回空列表
-            System.out.println("获取用户列表失败，返回空列表: " + e.getMessage());
+            log.warn("获取用户列表失败，返回空列表: {}", e.getMessage());
             return new ArrayList<>();
         }
     }

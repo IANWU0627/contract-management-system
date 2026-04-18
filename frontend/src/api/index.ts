@@ -17,8 +17,21 @@ function resolveApiMessage(payload: any, fallback: string) {
   return payload?.message || fallback
 }
 
+/** 开发默认走相对路径 /api（由 Vite 代理到后端）。若配置完整 URL 且未带 /api，自动补上，避免打到 /auth 而非 /api/auth。 */
+function resolveAxiosBaseURL(): string {
+  const env = import.meta.env.VITE_API_BASE_URL?.trim()
+  if (!env) return '/api'
+  if (env.startsWith('/')) return env
+  if (/^https?:\/\//i.test(env)) {
+    const base = env.replace(/\/$/, '')
+    if (base.endsWith('/api')) return base
+    return `${base}/api`
+  }
+  return env
+}
+
 const service: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: resolveAxiosBaseURL(),
   timeout: 30000
 })
 
@@ -51,15 +64,40 @@ service.interceptors.response.use(
     return Promise.reject(new Error(resolveApiMessage(res, t('error.requestFailed'))))
   },
   (error) => {
+    const status = error.response?.status
     const data = error.response?.data
-    const errorMessage = resolveApiMessage(data, error.message || t('error.networkError'))
-    if (error.response?.status === 401) {
+    const reqUrl = String(error.config?.url ?? '')
+
+    // 后端未启动或代理不可达（无 HTTP 状态码）
+    if (!error.response) {
+      const msg = String(error.message || '')
+      if (msg.includes('ECONNREFUSED') || msg.includes('Network Error')) {
+        ElMessage.error(t('error.backendUnreachable'))
+      } else {
+        ElMessage.error(t('error.networkError'))
+      }
+      return Promise.reject(error)
+    }
+
+    if (status === 401) {
       ElMessage.error(t('error.sessionExpired'))
       localStorage.removeItem('token')
       window.location.href = '/login'
-    } else {
-      ElMessage.error(resolveApiMessage(data, errorMessage))
+      return Promise.reject(error)
     }
+    // 未登录访问受保护接口时 Spring 常返回 403；当前会话拉取 /users/me 时与 401 同等处理
+    if (status === 403 && reqUrl.includes('/users/me')) {
+      ElMessage.error(t('error.sessionExpired'))
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+      return Promise.reject(error)
+    }
+    if (status === 502 || status === 503) {
+      ElMessage.error(t('error.backendUnreachable'))
+      return Promise.reject(error)
+    }
+    const errorMessage = resolveApiMessage(data, error.message || t('error.networkError'))
+    ElMessage.error(resolveApiMessage(data, errorMessage))
     return Promise.reject(error)
   }
 )

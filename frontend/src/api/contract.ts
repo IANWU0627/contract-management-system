@@ -1,5 +1,18 @@
 import { get, post, put, del, download } from './index'
 import type { ApiResponse, PageData } from './types'
+import quillSnowCss from '@vueup/vue-quill/dist/vue-quill.snow.css?raw'
+
+/** Matches preview (ContractFormContentSection) table/embed rules for html2canvas PDF capture */
+const PDF_QUILL_SUPPLEMENT_CSS = `
+.pdf-quill-capture.ql-snow .ql-table-embed { margin: 0.75em 0; }
+.pdf-quill-capture.ql-snow .ql-table-embed table,
+.pdf-quill-capture.ql-snow .ql-editor:not(.ql-blank) table { width: 100%; border-collapse: collapse; }
+.pdf-quill-capture.ql-snow .ql-table-embed td,
+.pdf-quill-capture.ql-snow .ql-table-embed th,
+.pdf-quill-capture.ql-snow .ql-editor:not(.ql-blank) td,
+.pdf-quill-capture.ql-snow .ql-editor:not(.ql-blank) th { border: 1px solid #ccc; padding: 6px 8px; }
+.pdf-quill-capture.ql-snow .ql-editor img { max-width: 100%; height: auto; }
+`
 
 export interface Contract {
   id?: number
@@ -232,7 +245,7 @@ export const exportContractsExcel = (params?: ContractQuery) => {
   document.body.removeChild(link)
 }
 
-// 生成PDF - 前端生成，保留格式
+// 生成PDF - 前端生成，保留 Quill Snow 版式（与表单预览一致）
 export const generateContractPdf = async (data: { content: string; contractNo?: string; watermark?: string }): Promise<Blob> => {
   const { content, contractNo = 'contract', watermark } = data
   
@@ -244,14 +257,16 @@ export const generateContractPdf = async (data: { content: string; contractNo?: 
   container.style.left = '-9999px'
   container.style.top = '0'
   container.style.width = '210mm'
+  container.style.boxSizing = 'border-box'
   container.style.backgroundColor = 'white'
   container.style.padding = '20px'
-  container.style.fontFamily = "'Microsoft YaHei', 'SimSun', 'Noto Sans SC', sans-serif"
-  container.style.fontSize = '14px'
-  container.style.lineHeight = '1.8'
-  container.style.color = '#333'
-  container.style.setProperty('-webkit-font-smoothing', 'antialiased')
-  container.style.setProperty('-moz-osx-font-smoothing', 'grayscale')
+
+  const styleQuill = document.createElement('style')
+  styleQuill.textContent = quillSnowCss
+  const styleExtra = document.createElement('style')
+  styleExtra.textContent = PDF_QUILL_SUPPLEMENT_CSS
+  container.appendChild(styleQuill)
+  container.appendChild(styleExtra)
   
   if (watermark) {
     const watermarkDiv = document.createElement('div')
@@ -273,11 +288,15 @@ export const generateContractPdf = async (data: { content: string; contractNo?: 
     container.appendChild(watermarkDiv)
   }
   
-  const contentDiv = document.createElement('div')
-  contentDiv.innerHTML = content
-  contentDiv.style.position = 'relative'
-  contentDiv.style.zIndex = '1'
-  container.appendChild(contentDiv)
+  const snowWrap = document.createElement('div')
+  snowWrap.className = 'ql-snow pdf-quill-capture'
+  snowWrap.style.position = 'relative'
+  snowWrap.style.zIndex = '1'
+  const editor = document.createElement('div')
+  editor.className = 'ql-editor'
+  editor.innerHTML = content
+  snowWrap.appendChild(editor)
+  container.appendChild(snowWrap)
   
   document.body.appendChild(container)
   
