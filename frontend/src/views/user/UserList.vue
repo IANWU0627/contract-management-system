@@ -129,6 +129,7 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance } from 'element-plus'
+import { pageList, pageTotal } from '@/api/types'
 import { getUserList, createUser, updateUser, deleteUser } from '@/api/user'
 import { getActiveRoles } from '@/api/role'
 import { Plus, Edit, Delete, Check, Close, ArrowDown, Search, Refresh } from '@element-plus/icons-vue'
@@ -191,18 +192,14 @@ const fetchData = async () => {
   loading.value = true
   try {
     const res = await getUserList(query)
-    if (res.data) {
-      users.value = res.data.list || []
-      total.value = res.data.total || 0
-    } else {
-      users.value = []
-      total.value = 0
-    }
-  } catch (error) {
+    users.value = pageList(res)
+    total.value = pageTotal(res)
+  } catch {
     users.value = []
     total.value = 0
+  } finally {
+    loading.value = false
   }
-  finally { loading.value = false }
 }
 
 const handleReset = () => {

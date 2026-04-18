@@ -44,7 +44,7 @@ public class ContractFolderController {
     public ApiResponse<ContractFolder> getFolder(@PathVariable Long id) {
         ContractFolder folder = folderMapper.selectById(id);
         if (folder == null) {
-            return ApiResponse.error("文件夹不存在");
+            return ApiResponse.error("文件夹不存在", "error.folder.notFound");
         }
         return ApiResponse.success(folder);
     }
@@ -70,7 +70,7 @@ public class ContractFolderController {
     public ApiResponse<ContractFolder> updateFolder(@PathVariable Long id, @RequestBody Map<String, Object> data) {
         ContractFolder folder = folderMapper.selectById(id);
         if (folder == null) {
-            return ApiResponse.error("文件夹不存在");
+            return ApiResponse.error("文件夹不存在", "error.folder.notFound");
         }
         
         if (data.containsKey("name")) {
@@ -103,7 +103,7 @@ public class ContractFolderController {
     public ApiResponse<Void> deleteFolder(@PathVariable Long id) {
         ContractFolder folder = folderMapper.selectById(id);
         if (folder == null) {
-            return ApiResponse.error("文件夹不存在");
+            return ApiResponse.error("文件夹不存在", "error.folder.notFound");
         }
         
         // 检查是否有子文件夹
@@ -111,7 +111,7 @@ public class ContractFolderController {
             new QueryWrapper<ContractFolder>().eq("parent_id", id)
         );
         if (childCount > 0) {
-            return ApiResponse.error("请先删除子文件夹");
+            return ApiResponse.error("请先删除子文件夹", "error.folder.hasChildren");
         }
         
         folderMapper.deleteById(id);

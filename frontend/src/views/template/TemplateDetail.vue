@@ -132,9 +132,15 @@ import type { FormInstance } from 'element-plus'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { createTemplate, updateTemplate, getTemplate } from '@/api/template'
-import { getTemplateVariables } from '@/api/templateVariable'
+import { getTemplateVariables, type TemplateVariableItem } from '@/api/templateVariable'
 import { getContractCategories } from '@/api/contractCategory'
 import { ArrowLeft, Refresh, Grid } from '@element-plus/icons-vue'
+
+interface ContractCategoryItem {
+  code: string
+  name: string
+  color?: string
+}
 
 const { t } = useI18n()
 
@@ -145,8 +151,8 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const loadingVariables = ref(false)
 const contentTextarea = ref<HTMLTextAreaElement>()
-const quillEditor = ref<any>(null)
-const categories = ref<any[]>([])
+const quillEditor = ref<InstanceType<typeof QuillEditor> | null>(null)
+const categories = ref<ContractCategoryItem[]>([])
 
 const editorMode = ref('rich')
 
@@ -168,7 +174,7 @@ const quillToolbarOptions = [
 const isEdit = computed(() => !!route.params.id)
 const templateId = computed(() => Number(route.params.id))
 
-const allVariables = ref<any[]>([])
+const allVariables = ref<TemplateVariableItem[]>([])
 const selectedCategory = ref('')
 const selectedVariable = ref('')
 
@@ -196,7 +202,7 @@ const loadVariables = async () => {
   loadingVariables.value = true
   try {
     const res = await getTemplateVariables({ status: 1 })
-    allVariables.value = res.data || []
+    allVariables.value = res.data.list
   } catch (error) {
     console.error('Failed to load variables', error)
     ElMessage.error(t('common.error'))
@@ -323,8 +329,9 @@ const handleSubmit = async () => {
         ElMessage.success(t('common.success'))
       }
       router.push('/templates')
-    } catch (error: any) {
-      ElMessage.error(error.message || t('common.error'))
+    } catch (error: unknown) {
+      const err = error as { message?: string }
+      ElMessage.error(err.message || t('common.error'))
     } finally {
       loading.value = false
     }

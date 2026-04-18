@@ -1,16 +1,58 @@
 import { get, post, put, del } from './index'
+import type { ApiResponse, PageData } from './types'
 
-export const getTemplateVariables = (params?: { category?: string; type?: string; status?: number; page?: number; pageSize?: number }) =>
-  get('/template-variables', { params })
+export interface TemplateVariableQuery {
+  category?: string
+  type?: string
+  status?: number
+  keyword?: string
+  page?: number
+  pageSize?: number
+}
 
-export const getTemplateVariable = (id: number) => get(`/template-variables/${id}`)
+export interface TemplateVariableItem {
+  id: number
+  code: string
+  name: string
+  nameEn?: string
+  label?: string
+  type: string
+  quickCodeCode?: string
+  category: string
+  defaultValue?: string
+  required?: boolean | number
+  description?: string
+  sortOrder?: number
+  status?: number
+}
 
-export const getVariableCategories = () => get('/template-variables/categories')
+export type TemplateVariablePageData = PageData<TemplateVariableItem>
 
-export const createTemplateVariable = (data: any) => post('/template-variables', data)
+export interface TemplateVariableBatchPayload {
+  items: Record<string, unknown>[]
+  conflictPolicy?: 'skip' | 'overwrite'
+}
 
-export const updateTemplateVariable = (id: number, data: any) => put(`/template-variables/${id}`, data)
+export const getTemplateVariables = (params?: TemplateVariableQuery) =>
+  get<ApiResponse<TemplateVariablePageData>>('/template-variables', { params })
+
+export const getTemplateVariable = (id: number) =>
+  get<ApiResponse<TemplateVariableItem>>(`/template-variables/${id}`)
+
+export const getVariableCategories = () =>
+  get<ApiResponse<Array<{ value: string; label: string }>>>('/template-variables/categories')
+
+export const createTemplateVariable = (data: Record<string, unknown>) =>
+  post<ApiResponse<TemplateVariableItem>>('/template-variables', data)
+
+export const updateTemplateVariable = (id: number, data: Record<string, unknown>) =>
+  put<ApiResponse<TemplateVariableItem>>(`/template-variables/${id}`, data)
 
 export const deleteTemplateVariable = (id: number) => del(`/template-variables/${id}`)
+
+export const getTemplateVariableImpact = (id: number) => get(`/template-variables/${id}/impact`)
+
+export const batchCreateTemplateVariables = (payload: TemplateVariableBatchPayload) =>
+  post('/template-variables/batch', payload)
 
 export const initDefaultVariables = () => post('/template-variables/init-defaults', {})

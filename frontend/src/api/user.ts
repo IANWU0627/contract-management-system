@@ -1,4 +1,12 @@
 import { get, post, put, del } from './index'
+import type { ApiResponse, PageData } from './types'
+
+export interface UserListQuery {
+  page?: number
+  pageSize?: number
+  role?: string
+  keyword?: string
+}
 
 export interface User {
   id?: number
@@ -18,9 +26,11 @@ export interface User {
   permissions?: string[]
 }
 
+export type UserListData = PageData<User>
+
 // 用户列表
-export const getUserList = (params?: { page?: number; pageSize?: number; role?: string; keyword?: string }) => 
-  get('/users', { params })
+export const getUserList = (params?: UserListQuery, options?: { signal?: AbortSignal }) =>
+  get<ApiResponse<UserListData>>('/users', { params, ...(options?.signal ? { signal: options.signal } : {}) })
 
 // 用户详情
 export const getUser = (id: number) => 

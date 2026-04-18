@@ -116,7 +116,7 @@
               <span>{{ $t('menu.systemManagement') }}</span>
             </template>
             <el-menu-item index="/users">
-              <el-icon><User /></el-icon>
+              <el-icon><UserIcon /></el-icon>
               <span>{{ $t('menu.users') }}</span>
             </el-menu-item>
             <el-menu-item index="/roles">
@@ -156,7 +156,7 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="profile">
-                <el-icon><User /></el-icon>
+                <el-icon><UserIcon /></el-icon>
                 {{ $t('menu.profile') }}
               </el-dropdown-item>
               <el-dropdown-item command="settings">
@@ -184,7 +184,7 @@
           <breadcrumb />
         </div>
         
-        <div class="navbar-right">
+        <div class="navbar-right" :class="{ 'theme-switching': disableToolbarTransition }">
           <!-- 工具按钮组 - 卡片式横向排列 -->
           <div class="tool-group">
             <!-- 搜索 -->
@@ -256,9 +256,9 @@
     <!-- 搜索弹窗 -->
     <el-dialog
       v-model="showSearch"
-      title=""
-      width="540px"
-      :show-close="false"
+      :title="t('common.search')"
+      width="680px"
+      :show-close="true"
       class="search-dialog"
       align-center
     >
@@ -278,11 +278,15 @@
           </div>
           <div class="search-input-row">
             <el-icon :size="18" class="search-icon" :class="{ searching: searching }"><Search /></el-icon>
-            <input 
+            <el-input
               v-model="searchKeyword"
-              type="text" 
-              :placeholder="searchPlaceholder" 
-              @keyup.enter="doSearch"
+              class="search-input"
+              :placeholder="searchPlaceholder"
+              clearable
+              @clear="clearSearch"
+              @keydown.up.prevent="focusPrevResult"
+              @keydown.down.prevent="focusNextResult"
+              @keyup.enter="handleSearchEnter"
               ref="searchInputRef"
             />
             <el-button 
@@ -325,7 +329,9 @@
               @click="searchFromHistory(item)"
             >
               <el-icon><Clock /></el-icon>
-              {{ item }}
+              <span class="history-type">{{ getHistoryTypeLabel(item.type) }}</span>
+              <span class="history-keyword">{{ item.keyword }}</span>
+              <el-icon class="history-remove" @click.stop="removeHistoryItem(idx)"><Close /></el-icon>
             </span>
           </div>
         </div>
@@ -333,23 +339,49 @@
         <div class="search-results" v-if="searchResults.length > 0">
           <div class="results-header">
             <span class="results-count">{{ t('common.totalCount', { count: searchResults.length, item: t('common.searchResults') }) }}</span>
+            <span v-if="searchCoverageSummary" class="results-note">
+              {{ searchCoverageSummary }}
+              <el-button
+                v-if="retryableFailedSources.length > 0"
+                type="primary"
+                link
+                class="retry-failed-btn"
+                @click="retryFailedSourcesSearch"
+              >
+                {{ t('common.retryFailedSources') }}
+              </el-button>
+              <el-tooltip v-if="searchSkipDetails.length > 0" placement="top" effect="dark">
+                <template #content>
+                  <div v-for="item in searchSkipDetails" :key="item.type">{{ item.label }}：{{ item.reason }}</div>
+                </template>
+                <span class="results-note-info">ⓘ</span>
+              </el-tooltip>
+            </span>
           </div>
-          <div 
-            v-for="item in searchResults" 
-            :key="item.id" 
-            class="search-item"
-            @click="goToResult(item)"
-          >
-            <div class="item-icon" :class="item.type">
-              <el-icon v-if="item.type === 'contract'" :size="18"><Document /></el-icon>
-              <el-icon v-else-if="item.type === 'template'" :size="18"><FolderOpened /></el-icon>
-              <el-icon v-else :size="18"><User /></el-icon>
+          <div v-for="group in groupedSearchResults" :key="group.type" class="search-group">
+            <div class="group-header">
+              <span class="group-title">{{ group.label }}</span>
+              <span class="group-count">{{ group.items.length }}</span>
             </div>
-            <div class="item-info">
-              <div class="item-title">{{ item.title }}</div>
-              <div class="item-meta">
-                <el-tag size="small" type="info" class="type-tag">{{ item.typeLabel }}</el-tag>
-                <span class="meta-text">{{ item.meta }}</span>
+            <div 
+              v-for="item in group.items" 
+              :key="item.id" 
+              class="search-item"
+              :class="{ active: focusedResultId === item.id }"
+              :ref="(el) => setSearchItemRef(item.id, el as HTMLElement | null)"
+              @click="goToResult(item)"
+            >
+              <div class="item-icon" :class="item.type">
+                <el-icon v-if="item.type === 'contract'" :size="18"><Document /></el-icon>
+                <el-icon v-else-if="item.type === 'template'" :size="18"><FolderOpened /></el-icon>
+                <el-icon v-else :size="18"><UserIcon /></el-icon>
+              </div>
+              <div class="item-info">
+                <div class="item-title" v-html="highlightMatch(item.title)"></div>
+                <div class="item-meta">
+                  <el-tag size="small" type="info" class="type-tag">{{ item.typeLabel }}</el-tag>
+                  <span class="meta-text" v-html="highlightMatch(item.meta)"></span>
+                </div>
               </div>
             </div>
           </div>
@@ -360,6 +392,24 @@
             <el-icon :size="56"><Search /></el-icon>
             <p class="empty-text">{{ t('common.none') }}</p>
             <p class="empty-hint">{{ t('common.tryDifferentKeyword') }}</p>
+            <p v-if="searchCoverageSummary" class="empty-note">
+              {{ searchCoverageSummary }}
+              <el-button
+                v-if="retryableFailedSources.length > 0"
+                type="primary"
+                link
+                class="retry-failed-btn"
+                @click="retryFailedSourcesSearch"
+              >
+                {{ t('common.retryFailedSources') }}
+              </el-button>
+              <el-tooltip v-if="searchSkipDetails.length > 0" placement="top" effect="dark">
+                <template #content>
+                  <div v-for="item in searchSkipDetails" :key="item.type">{{ item.label }}：{{ item.reason }}</div>
+                </template>
+                <span class="results-note-info">ⓘ</span>
+              </el-tooltip>
+            </p>
           </div>
         </div>
         
@@ -439,7 +489,7 @@
           </div>
         </div>
         
-        <div class="notification-list" @contextmenu.prevent="handleContextMenu">
+        <div class="notification-list" @contextmenu.prevent>
           <div 
             v-for="notif in filteredNotifications" 
             :key="notif.id" 
@@ -526,14 +576,46 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { webSocketService } from '@/services/websocket'
+import { pageList } from '@/api/types'
+import { getContractList } from '@/api/contract'
+import { getTemplateList } from '@/api/template'
+import { getUserList } from '@/api/user'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import MobileNav from '@/components/MobileNav.vue'
-import { 
-  User, UserFilled, Setting, Fold, Expand, Sunny, Moon,
-  Search, FullScreen, Close, ArrowUp,
-  Star, Collection, Timer, RefreshRight, Tools, Operation, Grid, Memo,
-  Guide, Tickets, Box, Management, DocumentCopy,
-  Connection, Loading, Document, FolderOpened, Clock, Bell, Monitor, MapLocation
+import {
+  User as UserIcon,
+  UserFilled,
+  Setting,
+  Fold,
+  Expand,
+  Sunny,
+  Moon,
+  Search,
+  FullScreen,
+  Close,
+  ArrowUp,
+  Star,
+  Collection,
+  Timer,
+  RefreshRight,
+  Tools,
+  Operation,
+  Grid,
+  Memo,
+  Guide,
+  Tickets,
+  Box,
+  Management,
+  DocumentCopy,
+  Document,
+  FolderOpened,
+  Clock,
+  Bell,
+  Monitor,
+  MapLocation,
+  DataAnalysis,
+  Checked,
+  TrendCharts
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -550,8 +632,6 @@ const themeTitle = computed(() => {
   return appStore.isDark ? t('settings.themeLight') : t('settings.themeDark')
 })
 const userInfo = computed(() => userStore.userInfo)
-const isAdmin = computed(() => userStore.isAdmin)
-const isLoggedIn = computed(() => userStore.isLoggedIn)
 
 const hasPermission = (permission: string): boolean => {
   return userStore.permissions.includes(permission)
@@ -561,26 +641,136 @@ const hasRole = (rolesToCheck: string[]): boolean => {
   return userStore.roles.some(role => rolesToCheck.includes(role))
 }
 
-// 待办数量（模拟）
-const pendingCount = ref(2)
-const expireCount = ref(1)
 const showNotifications = ref(false)
 const showSearch = ref(false)
 const searchKeyword = ref('')
-const searchResults = ref<any[]>([])
+const searchResults = ref<SearchResultItem[]>([])
 const searching = ref(false)
+const focusedResultId = ref<number | null>(null)
 const notifTab = ref('all')
 const searchType = ref('all')
-const searchInputRef = ref<HTMLInputElement>()
-const searchHistory = ref<string[]>([])
+const disableToolbarTransition = ref(false)
+const searchInputRef = ref<any>(null)
+type SearchHistoryType = 'all' | 'contract' | 'template' | 'user'
+type SearchSourceType = 'contract' | 'template' | 'user'
+interface SearchHistoryItem {
+  keyword: string
+  type: SearchHistoryType
+}
+interface SearchSkipDetail {
+  type: SearchSourceType
+  label: string
+  reason: string
+}
+type SearchSkipReasonCode = 'noPermission' | 'timeout' | 'sourceError' | 'sessionExpired'
+interface SearchResultItem {
+  id: number
+  bizId?: number
+  type: SearchSourceType
+  title: string
+  meta: string
+  typeLabel: string
+}
+type ContractListRes = Awaited<ReturnType<typeof getContractList>> | null
+type TemplateListRes = Awaited<ReturnType<typeof getTemplateList>> | null
+type UserListRes = Awaited<ReturnType<typeof getUserList>> | null
+const searchHistory = ref<SearchHistoryItem[]>([])
+let searchDebounceTimer: number | null = null
+const searchItemRefs = ref<Record<number, HTMLElement | null>>({})
+let activeSearchAbortController: AbortController | null = null
+let themeSwitchTimer: number | null = null
+const searchRuntimeSkippedReasons = ref<Partial<Record<SearchSourceType, SearchSkipReasonCode>>>({})
+const canSearchContract = computed(() => hasPermission('CONTRACT_MANAGE'))
+const canSearchTemplate = computed(() => hasPermission('TEMPLATE_MANAGE'))
+const canSearchUser = computed(() => hasPermission('USER_MANAGE'))
+const allowedSearchTypeValues = computed<SearchHistoryType[]>(() => {
+  const values: SearchHistoryType[] = ['all']
+  if (canSearchContract.value) values.push('contract')
+  if (canSearchTemplate.value) values.push('template')
+  if (canSearchUser.value) values.push('user')
+  return values
+})
 
 // 搜索类型配置
-const searchTypes = computed(() => [
-  { value: 'all', label: t('common.all'), icon: Search },
-  { value: 'contract', label: t('menu.contracts'), icon: Document },
-  { value: 'template', label: t('menu.templates'), icon: FolderOpened },
-  { value: 'user', label: t('menu.users'), icon: User }
-])
+const searchTypes = computed(() => {
+  const options = [{ value: 'all', label: t('common.all'), icon: Search }]
+  if (canSearchContract.value) {
+    options.push({ value: 'contract', label: t('menu.contracts'), icon: Document })
+  }
+  if (canSearchTemplate.value) {
+    options.push({ value: 'template', label: t('menu.templates'), icon: FolderOpened })
+  }
+  if (canSearchUser.value) {
+    options.push({ value: 'user', label: t('menu.usersShort'), icon: UserIcon })
+  }
+  return options
+})
+
+const groupedSearchResults = computed(() => {
+  const groups = [
+    { type: 'contract' as const, label: t('menu.contracts'), items: [] as SearchResultItem[] },
+    { type: 'template' as const, label: t('menu.templates'), items: [] as SearchResultItem[] },
+    { type: 'user' as const, label: t('menu.usersShort'), items: [] as SearchResultItem[] }
+  ]
+  for (const item of searchResults.value) {
+    const g = groups.find(group => group.type === item.type)
+    if (g) g.items.push(item)
+  }
+  return groups.filter(group => group.items.length > 0)
+})
+const getSearchSourceLabel = (type: SearchSourceType) => {
+  if (type === 'contract') return t('menu.contracts')
+  if (type === 'template') return t('menu.templates')
+  return t('menu.usersShort')
+}
+const resolveSearchFailureReasonCode = (error: unknown): SearchSkipReasonCode => {
+  const err = error as { response?: { status?: number }; code?: string; message?: string }
+  const status = err?.response?.status
+  const code = err?.code
+  const message = String(err?.message || '').toLowerCase()
+  if (status === 401) return 'sessionExpired'
+  if (status === 403) return 'noPermission'
+  if (code === 'ECONNABORTED' || message.includes('timeout')) return 'timeout'
+  return 'sourceError'
+}
+const resolveSearchFailureReasonText = (reasonCode: SearchSkipReasonCode) => {
+  if (reasonCode === 'sessionExpired') return t('error.sessionExpired')
+  if (reasonCode === 'noPermission') return t('common.searchSkippedNoPermission')
+  if (reasonCode === 'timeout') return t('common.searchSkippedTimeout')
+  return t('common.searchSkippedSourceError')
+}
+const searchSkipDetails = computed(() => {
+  if (searchType.value !== 'all') return [] as SearchSkipDetail[]
+  const details: SearchSkipDetail[] = []
+  if (!canSearchContract.value) {
+    details.push({ type: 'contract', label: t('menu.contracts'), reason: t('common.searchSkippedNoPermission') })
+  }
+  if (!canSearchTemplate.value) {
+    details.push({ type: 'template', label: t('menu.templates'), reason: t('common.searchSkippedNoPermission') })
+  }
+  if (!canSearchUser.value) {
+    details.push({ type: 'user', label: t('menu.usersShort'), reason: t('common.searchSkippedNoPermission') })
+  }
+  (Object.entries(searchRuntimeSkippedReasons.value) as Array<[SearchSourceType, SearchSkipReasonCode | undefined]>).forEach(([type, reason]) => {
+    if (!reason) return
+    if (!details.some(item => item.type === type)) {
+      details.push({ type, label: getSearchSourceLabel(type), reason: resolveSearchFailureReasonText(reason) })
+    }
+  })
+  return details
+})
+const retryableFailedSources = computed(() => {
+  const retryableCodes: SearchSkipReasonCode[] = ['timeout', 'sourceError']
+  return (Object.entries(searchRuntimeSkippedReasons.value) as Array<[SearchSourceType, SearchSkipReasonCode | undefined]>)
+    .filter(([, reason]) => !!reason && retryableCodes.includes(reason))
+    .map(([type]) => type)
+})
+const searchCoverageSummary = computed(() => {
+  if (searchType.value !== 'all') return ''
+  const total = 3
+  const searched = total - searchSkipDetails.value.length
+  return t('common.searchCoverageSummary', { searched, total })
+})
 
 // 搜索占位符
 const searchPlaceholder = computed(() => {
@@ -596,12 +786,43 @@ const searchPlaceholder = computed(() => {
 watch(showSearch, (newVal) => {
   if (newVal) {
     setTimeout(() => {
-      searchInputRef.value?.focus()
+      searchInputRef.value?.focus?.()
     }, 100)
   } else {
     searchKeyword.value = ''
     searchResults.value = []
+    focusedResultId.value = null
+    searchItemRefs.value = {}
   }
+})
+
+watch(searchType, () => {
+  if (searchKeyword.value.trim().length >= 2) {
+    triggerSearchDebounced()
+  } else {
+    searchResults.value = []
+    focusedResultId.value = null
+  }
+})
+
+watch(allowedSearchTypeValues, (values) => {
+  if (!values.includes(searchType.value as SearchHistoryType)) {
+    searchType.value = 'all'
+  }
+})
+
+watch(searchKeyword, (value) => {
+  const keyword = value.trim()
+  if (keyword.length < 2) {
+    searchResults.value = []
+    focusedResultId.value = null
+    if (searchDebounceTimer) {
+      window.clearTimeout(searchDebounceTimer)
+      searchDebounceTimer = null
+    }
+    return
+  }
+  triggerSearchDebounced()
 })
 
 const showNotificationPanel = () => { showNotifications.value = true }
@@ -617,7 +838,23 @@ const loadSearchHistory = () => {
   try {
     const saved = localStorage.getItem('contract-search-history')
     if (saved) {
-      searchHistory.value = JSON.parse(saved)
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed)) {
+        searchHistory.value = parsed
+          .map((item: any) => {
+            if (typeof item === 'string') {
+              return { keyword: item, type: 'all' as SearchHistoryType }
+            }
+            if (item && typeof item.keyword === 'string') {
+              const validType: SearchHistoryType = ['all', 'contract', 'template', 'user'].includes(item.type)
+                ? item.type
+                : 'all'
+              return { keyword: item.keyword, type: validType }
+            }
+            return null
+          })
+          .filter(Boolean) as SearchHistoryItem[]
+      }
     }
   } catch (e) {
     console.error('Failed to load search history:', e)
@@ -625,14 +862,14 @@ const loadSearchHistory = () => {
 }
 
 // 保存搜索历史
-const saveSearchHistory = (keyword: string) => {
+const saveSearchHistory = (keyword: string, type: SearchHistoryType) => {
   if (!keyword.trim()) return
   
-  // 移除已存在的相同关键词
-  searchHistory.value = searchHistory.value.filter(item => item !== keyword)
+  // 移除已存在的相同关键词+类型
+  searchHistory.value = searchHistory.value.filter(item => !(item.keyword === keyword && item.type === type))
   
   // 添加到开头
-  searchHistory.value.unshift(keyword)
+  searchHistory.value.unshift({ keyword, type })
   
   // 最多保存10条
   if (searchHistory.value.length > 10) {
@@ -651,7 +888,12 @@ const saveSearchHistory = (keyword: string) => {
 const clearSearch = () => {
   searchKeyword.value = ''
   searchResults.value = []
-  searchInputRef.value?.focus()
+  focusedResultId.value = null
+  searchInputRef.value?.focus?.()
+  if (searchDebounceTimer) {
+    window.clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
 }
 
 // 清除历史记录
@@ -665,34 +907,214 @@ const clearHistory = () => {
 }
 
 // 从历史记录搜索
-const searchFromHistory = (keyword: string) => {
-  searchKeyword.value = keyword
+const searchFromHistory = (item: SearchHistoryItem) => {
+  searchType.value = allowedSearchTypeValues.value.includes(item.type) ? item.type : 'all'
+  searchKeyword.value = item.keyword
   doSearch()
 }
 
-const doSearch = async () => {
-  if (!searchKeyword.value) return
+const removeHistoryItem = (idx: number) => {
+  searchHistory.value.splice(idx, 1)
+  try {
+    localStorage.setItem('contract-search-history', JSON.stringify(searchHistory.value))
+  } catch (e) {
+    console.error('Failed to remove search history item:', e)
+  }
+}
+
+const getHistoryTypeLabel = (type: SearchHistoryType) => {
+  if (type === 'contract') return t('menu.contracts')
+  if (type === 'template') return t('menu.templates')
+  if (type === 'user') return t('menu.usersShort')
+  return t('common.all')
+}
+
+const triggerSearchDebounced = () => {
+  if (searchDebounceTimer) {
+    window.clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = window.setTimeout(() => {
+    doSearch()
+  }, 350)
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const highlightMatch = (raw: string) => {
+  const text = String(raw ?? '')
+  const keyword = searchKeyword.value.trim()
+  const escaped = escapeHtml(text)
+  if (!keyword) return escaped
+  const regex = new RegExp(`(${escapeRegExp(keyword)})`, 'ig')
+  return escaped.replace(regex, '<mark>$1</mark>')
+}
+
+const focusPrevResult = () => {
+  if (!searchResults.value.length) return
+  const currentIndex = searchResults.value.findIndex(item => item.id === focusedResultId.value)
+  const prevIndex = currentIndex <= 0 ? searchResults.value.length - 1 : currentIndex - 1
+  focusedResultId.value = searchResults.value[prevIndex].id
+  scrollFocusedResultIntoView()
+}
+
+const focusNextResult = () => {
+  if (!searchResults.value.length) return
+  const currentIndex = searchResults.value.findIndex(item => item.id === focusedResultId.value)
+  const nextIndex = currentIndex < 0 || currentIndex >= searchResults.value.length - 1 ? 0 : currentIndex + 1
+  focusedResultId.value = searchResults.value[nextIndex].id
+  scrollFocusedResultIntoView()
+}
+
+const setSearchItemRef = (id: number, el: HTMLElement | null) => {
+  if (el) searchItemRefs.value[id] = el
+  else delete searchItemRefs.value[id]
+}
+
+const scrollFocusedResultIntoView = () => {
+  if (focusedResultId.value == null) return
+  const node = searchItemRefs.value[focusedResultId.value]
+  node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+}
+
+const handleSearchEnter = () => {
+  const focused = searchResults.value.find(item => item.id === focusedResultId.value)
+  if (focused) {
+    goToResult(focused)
+    return
+  }
+  doSearch()
+}
+
+const buildContractItems = (contractRes: Awaited<ReturnType<typeof getContractList>> | null) =>
+  pageList(contractRes).map((c): SearchResultItem => ({
+  id: Number(`1${c.id}`),
+  bizId: c.id,
+  type: 'contract',
+  title: c.title || c.contractNo || '-',
+  meta: `${t('contract.no')}: ${c.contractNo || '-'}`,
+  typeLabel: t('menu.contracts')
+}))
+const buildTemplateItems = (templateRes: Awaited<ReturnType<typeof getTemplateList>> | null) =>
+  pageList(templateRes).map((tpl): SearchResultItem => ({
+  id: Number(`2${tpl.id}`),
+  bizId: tpl.id,
+  type: 'template',
+  title: tpl.name || '-',
+  meta: `${t('template.category')}: ${tpl.category || '-'}`,
+  typeLabel: t('menu.templates')
+}))
+const buildUserItems = (userRes: Awaited<ReturnType<typeof getUserList>> | null) =>
+  pageList(userRes).map((u): SearchResultItem => ({
+  id: Number(`3${u.id}`),
+  bizId: u.id,
+  type: 'user',
+  title: u.nickname || u.username || '-',
+  meta: `${t('user.role')}: ${u.role || '-'}`,
+  typeLabel: t('menu.users')
+}))
+
+const executeSearchBySources = async (sources: SearchSourceType[], replaceAll: boolean) => {
+  const keyword = searchKeyword.value.trim()
+  if (!keyword || sources.length === 0) return
+
+  if (activeSearchAbortController) {
+    activeSearchAbortController.abort()
+  }
+  activeSearchAbortController = new AbortController()
   searching.value = true
-  
-  // 保存搜索历史
-  saveSearchHistory(searchKeyword.value)
-  
-  // 根据搜索类型过滤结果
-  const filterResults = (results: any[]) => {
-    if (searchType.value === 'all') return results
-    return results.filter(r => r.type === searchType.value)
+
+  const existingByType: Record<SearchSourceType, SearchResultItem[]> = {
+    contract: replaceAll ? [] : searchResults.value.filter(item => item.type === 'contract'),
+    template: replaceAll ? [] : searchResults.value.filter(item => item.type === 'template'),
+    user: replaceAll ? [] : searchResults.value.filter(item => item.type === 'user')
+  }
+
+  try {
+    const sourceSet = new Set(sources)
+    const [contractTask, templateTask, userTask] = (await Promise.allSettled([
+      sourceSet.has('contract')
+        ? getContractList({ keyword, page: 1, pageSize: 8 }, { signal: activeSearchAbortController.signal })
+        : Promise.resolve<ContractListRes>(null),
+      sourceSet.has('template')
+        ? getTemplateList({ keyword, page: 1, pageSize: 8 }, { signal: activeSearchAbortController.signal })
+        : Promise.resolve<TemplateListRes>(null),
+      sourceSet.has('user')
+        ? getUserList({ keyword, page: 1, pageSize: 8 }, { signal: activeSearchAbortController.signal })
+        : Promise.resolve<UserListRes>(null)
+    ])) as [
+      PromiseSettledResult<ContractListRes>,
+      PromiseSettledResult<TemplateListRes>,
+      PromiseSettledResult<UserListRes>
+    ]
+
+    const applySettled = <T>(task: PromiseSettledResult<T>, source: SearchSourceType, buildItems: (res: T) => SearchResultItem[]) => {
+      if (!sourceSet.has(source)) return
+      if (task.status === 'fulfilled') {
+        delete searchRuntimeSkippedReasons.value[source]
+        existingByType[source] = buildItems(task.value)
+        return
+      }
+      const error = task.reason as { name?: string; response?: { status?: number }; code?: string; message?: string }
+      if (error?.name === 'CanceledError' || error?.name === 'AbortError') return
+      searchRuntimeSkippedReasons.value[source] = resolveSearchFailureReasonCode(error)
+      if (replaceAll) existingByType[source] = []
+    }
+
+    applySettled<ContractListRes>(contractTask, 'contract', buildContractItems)
+    applySettled<TemplateListRes>(templateTask, 'template', buildTemplateItems)
+    applySettled<UserListRes>(userTask, 'user', buildUserItems)
+
+    searchResults.value = [...existingByType.contract, ...existingByType.template, ...existingByType.user]
+    focusedResultId.value = searchResults.value.length > 0 ? searchResults.value[0].id : null
+    setTimeout(() => scrollFocusedResultIntoView(), 0)
+  } catch (error: unknown) {
+    const err = error as { name?: string }
+    if (err?.name !== 'CanceledError' && err?.name !== 'AbortError') {
+      throw error
+    }
+  } finally {
+    activeSearchAbortController = null
+    searching.value = false
+  }
+}
+
+const doSearch = async () => {
+  const keyword = searchKeyword.value.trim()
+  if (!keyword || keyword.length < 2) return
+  searchRuntimeSkippedReasons.value = {}
+
+  if (searchType.value !== 'all' && !allowedSearchTypeValues.value.includes(searchType.value as SearchHistoryType)) {
+    searchType.value = 'all'
+  }
+
+  const shouldSearchContract = canSearchContract.value && (searchType.value === 'all' || searchType.value === 'contract')
+  const shouldSearchTemplate = canSearchTemplate.value && (searchType.value === 'all' || searchType.value === 'template')
+  const shouldSearchUser = canSearchUser.value && (searchType.value === 'all' || searchType.value === 'user')
+
+  if (!shouldSearchContract && !shouldSearchTemplate && !shouldSearchUser) {
+    searchResults.value = []
+    focusedResultId.value = null
+    return
   }
   
-  // 模拟搜索结果
-  setTimeout(() => {
-    const allResults = [
-      { id: 1, type: 'contract', title: t('contract.types.purchase') + '-Supplier A', meta: t('contract.no') + ': CT-2024-001', typeLabel: t('menu.contracts') },
-      { id: 2, type: 'template', title: t('contract.types.purchase') + ' Template', meta: t('template.category') + ': ' + t('contract.types.purchase'), typeLabel: t('menu.templates') },
-      { id: 3, type: 'user', title: 'Admin User', meta: t('user.role') + ': ' + t('user.roles.admin'), typeLabel: t('menu.users') },
-    ]
-    searchResults.value = filterResults(allResults)
-    searching.value = false
-  }, 500)
+  saveSearchHistory(keyword, searchType.value as SearchHistoryType)
+  const sources: SearchSourceType[] = []
+  if (shouldSearchContract) sources.push('contract')
+  if (shouldSearchTemplate) sources.push('template')
+  if (shouldSearchUser) sources.push('user')
+  await executeSearchBySources(sources, true)
+}
+
+const retryFailedSourcesSearch = async () => {
+  if (retryableFailedSources.value.length === 0) return
+  await executeSearchBySources(retryableFailedSources.value, false)
 }
 
 const quickSearch = (keyword: string) => {
@@ -700,12 +1122,12 @@ const quickSearch = (keyword: string) => {
   doSearch()
 }
 
-const goToResult = (item: any) => {
+const goToResult = (item: SearchResultItem) => {
   showSearch.value = false
   if (item.type === 'contract') {
-    router.push(`/contracts/${item.id}`)
+    router.push(`/contracts/${item.bizId ?? item.id}`)
   } else if (item.type === 'template') {
-    router.push(`/templates/${item.id}`)
+    router.push(`/templates/${item.bizId ?? item.id}`)
   } else if (item.type === 'user') {
     router.push('/users')
   }
@@ -759,12 +1181,6 @@ watch(() => webSocketService.notifications.value.length, () => {
   mergeWebSocketNotifications()
 })
 
-// 初始化默认通知（用于展示）
-onMounted(() => {
-  // 加载搜索历史
-  loadSearchHistory()
-  mergeWebSocketNotifications()
-})
 
 const unreadCount = computed(() => notifications.value.filter(n => n.unread).length)
 
@@ -867,8 +1283,6 @@ const toggleImportant = (notif: Notification | null) => {
   closeContextMenu()
 }
 
-const handleContextMenu = () => {}
-
 // 滑动删除
 const touchStartX = ref(0)
 const touchStartY = ref(0)
@@ -917,22 +1331,31 @@ const handleNotificationSettings = (command: string) => {
   }
 }
 
-// 启动时连接 WebSocket (graceful fallback)
+// 启动：搜索历史、通知、WebSocket（失败则静默）
 onMounted(() => {
+  loadSearchHistory()
+  mergeWebSocketNotifications()
   webSocketService.setSoundEnabled(notificationSoundEnabled.value)
-  // WebSocket connection will silently fail if server doesn't support it
-  // App will work normally without real-time notifications
   if (userStore.isLoggedIn && userStore.userInfo?.id) {
     try {
       webSocketService.connect(userStore.userInfo.id)
-    } catch (e) {
-      // Silently ignore WebSocket connection failures
+    } catch {
+      /* ignore */
     }
   }
 })
 
 onUnmounted(() => {
   webSocketService.disconnect()
+  activeSearchAbortController?.abort()
+  if (searchDebounceTimer) {
+    window.clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
+  if (themeSwitchTimer) {
+    window.clearTimeout(themeSwitchTimer)
+    themeSwitchTimer = null
+  }
 })
 
 // 访问过的页面标签
@@ -944,7 +1367,17 @@ const visitedViews = ref([
 const activeMenu = computed(() => route.path)
 
 const toggleSidebar = () => appStore.toggleSidebar()
-const toggleTheme = () => appStore.toggleTheme()
+const toggleTheme = () => {
+  disableToolbarTransition.value = true
+  if (themeSwitchTimer) {
+    window.clearTimeout(themeSwitchTimer)
+  }
+  appStore.toggleTheme()
+  themeSwitchTimer = window.setTimeout(() => {
+    disableToolbarTransition.value = false
+    themeSwitchTimer = null
+  }, 160)
+}
 
 const isFullscreen = ref(false)
 
@@ -958,11 +1391,6 @@ const toggleFullscreen = async () => {
       isFullscreen.value = false
     }
   } catch (e) { }
-}
-
-const handleLocaleChange = (lang: string) => {
-  locale.value = lang
-  appStore.setLocale(lang)
 }
 
 const handleUserCommand = (command: string) => {
@@ -1357,6 +1785,19 @@ watch(() => route.path, (newPath) => {
     display: flex;
     align-items: center;
     gap: 8px;
+
+    &.theme-switching {
+      .tool-group,
+      .tool-btn,
+      .tool-btn svg,
+      .ws-status,
+      .ws-status .ws-dot,
+      .ws-status .ws-text,
+      .locale-btn .locale-indicator {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
     
     /* 工具按钮组 - 卡片式 */
     .tool-group {
@@ -1426,9 +1867,10 @@ watch(() => route.path, (newPath) => {
 
     .locale-btn {
       gap: 4px;
-      width: auto;
-      min-width: 44px;
+      width: 64px;
+      min-width: 64px;
       padding: 0 8px;
+      justify-content: center;
 
       .locale-indicator {
         font-size: 10px;
@@ -1439,6 +1881,47 @@ watch(() => route.path, (newPath) => {
 
       &:hover .locale-indicator {
         color: var(--primary);
+      }
+    }
+
+    .ws-status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 36px;
+      min-width: 108px;
+      padding: 0 12px;
+      border-radius: 18px;
+      box-sizing: border-box;
+      background: rgba(148, 163, 184, 0.16);
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1;
+      transition: background-color 0.2s ease, color 0.2s ease;
+
+      .ws-dot {
+        width: 10px;
+        height: 10px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: #f87171;
+        transition: background-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .ws-text {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      &.connected {
+        background: rgba(34, 197, 94, 0.14);
+        color: #16a34a;
+
+        .ws-dot {
+          background: #22c55e;
+          box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);
+        }
       }
     }
     
@@ -1580,27 +2063,8 @@ watch(() => route.path, (newPath) => {
     }
     
     .ws-status {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 16px;
       background: rgba(255, 255, 255, 0.1);
-      font-size: 12px;
       color: var(--text-secondary);
-      transition: all 0.3s;
-      
-      .ws-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #f87171;
-        transition: background 0.3s;
-      }
-      
-      .ws-text {
-        font-weight: 500;
-      }
       
       &.connected {
         background: rgba(34, 197, 94, 0.15);
@@ -1818,14 +2282,14 @@ watch(() => route.path, (newPath) => {
   
   :deep(.el-dialog__header) {
     background: var(--primary-gradient);
-    padding: 20px 24px;
+    padding: 10px 16px;
     margin: 0;
-    border-bottom: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
     
     .el-dialog__title {
       color: white;
       font-weight: 600;
-      font-size: 16px;
+      font-size: 14px;
     }
     
     .el-dialog__headerbtn {
@@ -1903,17 +2367,23 @@ watch(() => route.path, (newPath) => {
         flex-shrink: 0;
       }
       
-      input {
+      :deep(.search-input) {
         flex: 1;
-        border: none;
-        background: transparent;
+      }
+
+      :deep(.search-input .el-input__wrapper) {
+        box-shadow: none !important;
+        background: transparent !important;
+        padding: 0;
+      }
+
+      :deep(.search-input .el-input__inner) {
         font-size: 15px;
-        outline: none;
         color: var(--text-primary);
-        
-        &::placeholder {
-          color: var(--text-placeholder);
-        }
+      }
+
+      :deep(.search-input .el-input__inner::placeholder) {
+        color: var(--text-placeholder);
       }
       
       .search-btn {
@@ -1982,6 +2452,32 @@ watch(() => route.path, (newPath) => {
           color: #fff;
           transform: translateY(-1px);
         }
+
+        .history-type {
+          padding: 2px 6px;
+          border-radius: 10px;
+          background: rgba(102, 126, 234, 0.15);
+          font-size: 11px;
+          line-height: 1;
+        }
+
+        .history-keyword {
+          max-width: 140px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .history-remove {
+          opacity: 0.75;
+          border-radius: 50%;
+          padding: 1px;
+
+          &:hover {
+            opacity: 1;
+            background: rgba(239, 68, 68, 0.18);
+          }
+        }
       }
     }
   }
@@ -1989,15 +2485,48 @@ watch(() => route.path, (newPath) => {
   .search-results {
     max-height: 400px;
     overflow-y: auto;
+
+    .search-group {
+      .group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        margin-top: 4px;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .group-count {
+        opacity: 0.75;
+      }
+    }
     
     .results-header {
       padding: 0 12px 8px;
       border-bottom: 1px solid var(--border-color);
       margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
       
       .results-count {
         font-size: 13px;
         color: var(--text-secondary);
+      }
+
+      .results-note {
+        font-size: 12px;
+        color: var(--text-placeholder);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .results-note-info {
+        cursor: help;
+        opacity: 0.8;
       }
     }
     
@@ -2013,6 +2542,11 @@ watch(() => route.path, (newPath) => {
       &:hover {
         background: var(--bg-hover);
         transform: translateX(4px);
+      }
+
+      &.active {
+        background: var(--bg-hover);
+        border: 1px solid var(--primary);
       }
       
       .item-icon {
@@ -2068,6 +2602,13 @@ watch(() => route.path, (newPath) => {
         }
       }
     }
+
+    :deep(mark) {
+      background: rgba(245, 158, 11, 0.25);
+      color: inherit;
+      border-radius: 4px;
+      padding: 0 2px;
+    }
   }
   
   .search-empty {
@@ -2091,6 +2632,15 @@ watch(() => route.path, (newPath) => {
       .empty-hint {
         font-size: 13px;
         color: var(--text-placeholder);
+      }
+
+      .empty-note {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--text-placeholder);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
       }
     }
   }

@@ -58,15 +58,32 @@
     </div>
     
     <div class="table-section">
+      <div class="table-toolbar">
+        <div class="table-summary">
+          <span class="summary-item">{{ t('common.total') }} {{ filteredHeaders.length }}</span>
+          <span class="summary-divider">|</span>
+          <span class="summary-item">{{ t('quickCode.itemCount') }} {{ totalItemCount }}</span>
+        </div>
+      </div>
       <el-table :data="filteredHeaders" v-loading="loading" style="width: 100%">
-        <el-table-column :label="$t('quickCode.name')" prop="name" min-width="150" show-overflow-tooltip />
         <el-table-column :label="$t('quickCode.code')" prop="code" width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag size="small" type="info">{{ row.code }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="$t('quickCode.description')" prop="description" min-width="200" show-overflow-tooltip />
-        <el-table-column :label="$t('quickCode.itemCount')" prop="itemCount" width="100" show-overflow-tooltip>
+        <el-table-column :label="nameColumnLabel" min-width="210" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="primary-text">{{ getHeaderName(row) }}</div>
+            <div class="secondary-text" v-if="getHeaderNameSub(row)">{{ getHeaderNameSub(row) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('quickCode.description')" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="primary-text">{{ getHeaderDescription(row) || '-' }}</div>
+            <div class="secondary-text" v-if="getHeaderDescriptionSub(row)">{{ getHeaderDescriptionSub(row) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('quickCode.itemCount')" prop="itemCount" width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag size="small" type="warning">{{ row.itemCount || 0 }}</el-tag>
           </template>
@@ -127,55 +144,71 @@
     <el-dialog 
       v-model="dialogVisible" 
       :title="isEdit ? $t('quickCode.edit') : $t('quickCode.add')" 
-      width="1120px"
+      width="1220px"
+      class="quick-code-edit-dialog"
       @closed="resetForm"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item :label="$t('quickCode.name')" prop="name">
-              <el-input v-model="form.name" :placeholder="$t('quickCode.placeholder.name')" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('quickCode.nameEn')" prop="nameEn">
-              <el-input v-model="form.nameEn" :placeholder="$t('quickCode.placeholder.nameEn')" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item :label="$t('quickCode.code')" prop="code" v-if="!isEdit">
-          <el-input v-model="form.code" :placeholder="$t('quickCode.placeholder.code')" />
-        </el-form-item>
-        <el-form-item :label="$t('quickCode.code')" v-else>
-          <el-input v-model="form.code" disabled />
-        </el-form-item>
-        
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item :label="$t('quickCode.description')">
-              <el-input v-model="form.description" type="textarea" :rows="2" :placeholder="$t('quickCode.placeholder.description')" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('quickCode.descriptionEn')">
-              <el-input v-model="form.descriptionEn" type="textarea" :rows="2" :placeholder="$t('quickCode.placeholder.descriptionEn')" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        
-        <!-- 选项管理 -->
-        <el-divider content-position="left">{{ $t('quickCode.items') }}</el-divider>
-        
-        <div class="items-section">
-          <div class="items-header">
-            <span class="items-title">{{ $t('quickCode.itemList') }} ({{ allItems.length }})</span>
-            <div class="items-actions">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="98px">
+        <div class="form-section">
+          <div class="form-section-header" @click="basicInfoCollapsed = !basicInfoCollapsed">
+            <div class="basic-info-title-wrap">
+              <div class="form-section-title">{{ t('quickCode.basicInfo') }}</div>
+              <span class="basic-info-hint">{{ t('quickCode.editHint') }}</span>
+            </div>
+            <el-icon class="collapse-icon" :class="{ collapsed: basicInfoCollapsed }"><ArrowDown /></el-icon>
+          </div>
+          <div v-show="!basicInfoCollapsed">
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <el-form-item :label="$t('quickCode.name')" prop="name">
+                <el-input v-model="form.name" :placeholder="$t('quickCode.placeholder.name')" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item :label="$t('quickCode.nameEn')" prop="nameEn">
+                <el-input v-model="form.nameEn" :placeholder="$t('quickCode.placeholder.nameEn')" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <el-form-item :label="$t('quickCode.code')" prop="code" v-if="!isEdit">
+                <el-input v-model="form.code" :placeholder="$t('quickCode.placeholder.code')" />
+              </el-form-item>
+              <el-form-item :label="$t('quickCode.code')" v-else>
+                <el-input v-model="form.code" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12" />
+          </el-row>
+          <el-row :gutter="16">
+            <el-col :span="24">
+              <el-form-item :label="$t('quickCode.description')">
+                <el-input v-model="form.description" type="textarea" :rows="2" :placeholder="$t('quickCode.placeholder.description')" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          </div>
+        </div>
+
+        <div class="form-section items-form-section">
+          <div class="items-summary-row form-section-header" @click="itemsSectionCollapsed = !itemsSectionCollapsed">
+            <div class="form-section-title">{{ $t('quickCode.items') }}</div>
+            <div class="items-inline-toolbar" @click.stop>
+              <span class="items-inline-stats">{{ t('quickCode.itemList') }} {{ allItems.length }}</span>
+              <el-tag size="small" type="success" effect="plain">{{ $t('common.enable') }} {{ enabledItemCount }}</el-tag>
+              <el-tag size="small" type="info" effect="plain">{{ $t('common.disable') }} {{ disabledItemCount }}</el-tag>
+              <el-segmented
+                v-model="itemStatusFilter"
+                :options="itemStatusFilterOptions"
+                size="small"
+              />
               <el-input
+                class="items-search-input"
                 v-model="itemSearchKeyword"
                 :placeholder="$t('quickCode.searchItems') + '...'"
                 clearable
                 size="small"
-                style="width: 180px"
                 @input="handleItemSearch"
               >
                 <template #prefix><el-icon><Search /></el-icon></template>
@@ -185,9 +218,20 @@
                 {{ $t('quickCode.addItem') }}
               </el-button>
             </div>
+            <el-icon class="collapse-icon" :class="{ collapsed: itemsSectionCollapsed }"><ArrowDown /></el-icon>
           </div>
-          
-          <el-table ref="itemsTableEl" :data="paginatedItems" border style="width: 100%; margin-top: 12px" max-height="400" class="items-table" size="small">
+          <div class="items-section" v-show="!itemsSectionCollapsed">
+          <el-table
+            ref="itemsTableEl"
+            :data="paginatedItems"
+            border
+            style="width: 100%; margin-top: 12px"
+            max-height="400"
+            class="items-table"
+            size="small"
+            table-layout="fixed"
+            scrollbar-always-on
+          >
             <el-table-column :label="$t('quickCode.sortOrder')" prop="sortOrder" width="64" align="center">
               <template #default="{ row }">
                 <span class="sort-index">{{ (row.sortOrder ?? 0) + 1 }}</span>
@@ -198,50 +242,56 @@
                 <span class="drag-handle" :title="$t('quickCode.sortOrder')">⋮⋮</span>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemCode')" prop="code" min-width="120">
+            <el-table-column :label="$t('quickCode.itemCode')" prop="code" width="130">
               <template #default="{ row }">
                 <el-input v-model="row.code" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.placeholder.code')" />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemMeaning')" prop="meaning" min-width="160">
+            <el-table-column :label="$t('quickCode.itemMeaning')" prop="meaning" width="170">
               <template #default="{ row }">
                 <el-input v-model="row.meaning" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.placeholder.meaningZh')" />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemMeaningEn')" prop="meaningEn" min-width="180">
+            <el-table-column :label="$t('quickCode.itemMeaningEn')" prop="meaningEn" width="180">
               <template #default="{ row }">
                 <el-input v-model="row.meaningEn" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.placeholder.meaningEn')" />
               </template>
             </el-table-column>
-            <el-table-column :label="$t('quickCode.itemTag')" prop="tag" min-width="90">
+            <el-table-column :label="$t('quickCode.itemTag')" prop="tag" width="110" class-name="item-tag-col">
               <template #default="{ row }">
-                <el-input v-model="row.tag" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.itemTag')" />
+                <div class="cell-input-wrap">
+                  <el-input v-model="row.tag" size="small" @change="handleItemChange(row)" :placeholder="$t('quickCode.itemTag')" />
+                </div>
               </template>
             </el-table-column>
-            <el-table-column :label="t('quickCode.itemValidFrom')" min-width="132">
+            <el-table-column :label="t('quickCode.itemValidFrom')" width="160" class-name="item-valid-from-col">
               <template #default="{ row }">
-                <el-date-picker
-                  v-model="row.validFrom"
-                  type="date"
-                  size="small"
-                  :placeholder="$t('quickCode.from')"
-                  format="YYYY-MM-DD"
-                  value-format="YYYY-MM-DD"
-                  @change="handleItemChange(row)"
-                />
+                <div class="date-cell">
+                  <el-date-picker
+                    v-model="row.validFrom"
+                    type="date"
+                    size="small"
+                    :placeholder="$t('quickCode.from')"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    @change="handleItemChange(row)"
+                  />
+                </div>
               </template>
             </el-table-column>
-            <el-table-column :label="t('quickCode.itemValidTo')" min-width="132">
+            <el-table-column :label="t('quickCode.itemValidTo')" width="160" class-name="item-valid-to-col">
               <template #default="{ row }">
-                <el-date-picker
-                  v-model="row.validTo"
-                  type="date"
-                  size="small"
-                  :placeholder="$t('quickCode.to')"
-                  format="YYYY-MM-DD"
-                  value-format="YYYY-MM-DD"
-                  @change="handleItemChange(row)"
-                />
+                <div class="date-cell">
+                  <el-date-picker
+                    v-model="row.validTo"
+                    type="date"
+                    size="small"
+                    :placeholder="$t('quickCode.to')"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    @change="handleItemChange(row)"
+                  />
+                </div>
               </template>
             </el-table-column>
             <el-table-column :label="$t('common.status')" width="72" align="center">
@@ -284,17 +334,18 @@
             </el-table-column>
           </el-table>
           
-          <div class="items-pagination" v-if="allItems.length > itemPageSize">
+          <div class="items-pagination" v-if="filteredItems.length > 0">
             <el-pagination
               v-model:current-page="itemPage"
               v-model:page-size="itemPageSize"
-              :total="allItems.length"
-              :page-sizes="[5, 10, 20]"
-              layout="total, prev, pager, next"
+              :total="filteredItems.length"
+              :page-sizes="[10, 20, 50, 100]"
+              layout="total, sizes, prev, pager, next, jumper"
               @size-change="handleItemSizeChange"
               @current-change="handleItemPageChange"
             />
           </div>
+        </div>
         </div>
       </el-form>
       <template #footer>
@@ -313,6 +364,7 @@ import Sortable from 'sortablejs'
 import { 
   getAllQuickCodes, 
   getQuickCode,
+  getQuickCodeImpact,
   createQuickCode, 
   updateQuickCode, 
   deleteQuickCode,
@@ -320,7 +372,7 @@ import {
 } from '@/api/quickCode'
 import { Plus, Edit, Delete, Check, Close, Search, Refresh, DocumentCopy, Download, Upload, Top, Bottom } from '@element-plus/icons-vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -328,6 +380,8 @@ const searchStatus = ref<number | null>(null)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+const basicInfoCollapsed = ref(false)
+const itemsSectionCollapsed = ref(false)
 const headers = ref<any[]>([])
 const total = ref(0)
 const formRef = ref()
@@ -338,29 +392,51 @@ let dragRelatedRow: HTMLElement | null = null
 // Items pagination
 const allItems = ref<any[]>([])
 const itemSearchKeyword = ref('')
+const itemStatusFilter = ref<'all' | 'enabled'>('all')
 const itemPage = ref(1)
-const itemPageSize = ref(5)
+const itemPageSize = ref(10)
+
+const itemStatusFilterOptions = computed(() => [
+  { label: t('common.all'), value: 'all' },
+  { label: t('common.enable'), value: 'enabled' }
+])
 
 const filteredItems = computed(() => {
-  if (!itemSearchKeyword.value) return allItems.value
+  let result = allItems.value
+  if (itemStatusFilter.value === 'enabled') {
+    result = result.filter(item => item.enabled !== false)
+  }
+  if (!itemSearchKeyword.value) return result
   const keyword = itemSearchKeyword.value.toLowerCase()
-  return allItems.value.filter(item =>
+  return result.filter(item =>
     item.code?.toLowerCase().includes(keyword) ||
     item.meaning?.toLowerCase().includes(keyword)
   )
 })
+
+const enabledItemCount = computed(() => allItems.value.filter(item => item.enabled !== false).length)
+const disabledItemCount = computed(() => allItems.value.length - enabledItemCount.value)
 
 const paginatedItems = computed(() => {
   const start = (itemPage.value - 1) * itemPageSize.value
   return filteredItems.value.slice(start, start + itemPageSize.value)
 })
 
+const syncItemPageWithinBounds = () => {
+  const maxPage = Math.max(1, Math.ceil(filteredItems.value.length / itemPageSize.value))
+  if (itemPage.value > maxPage) {
+    itemPage.value = maxPage
+  } else if (itemPage.value < 1) {
+    itemPage.value = 1
+  }
+}
+
 const handleItemSearch = () => {
-  itemPage.value = 1
+  syncItemPageWithinBounds()
 }
 
 const handleItemSizeChange = () => {
-  itemPage.value = 1
+  syncItemPageWithinBounds()
   nextTick(initRowDrag)
 }
 
@@ -390,14 +466,20 @@ watch(paginatedItems, () => {
   }
 })
 
+watch([filteredItems, itemPageSize], () => {
+  syncItemPageWithinBounds()
+})
+
 const filteredHeaders = computed(() => {
   let result = headers.value
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
     result = result.filter(h =>
       h.name?.toLowerCase().includes(keyword) ||
+      h.nameEn?.toLowerCase().includes(keyword) ||
       h.code?.toLowerCase().includes(keyword) ||
-      h.description?.toLowerCase().includes(keyword)
+      h.description?.toLowerCase().includes(keyword) ||
+      h.descriptionEn?.toLowerCase().includes(keyword)
     )
   }
   if (searchStatus.value !== null) {
@@ -405,6 +487,30 @@ const filteredHeaders = computed(() => {
   }
   return result
 })
+
+const totalItemCount = computed(() => {
+  return filteredHeaders.value.reduce((sum, item) => sum + (item.itemCount || 0), 0)
+})
+
+const nameColumnLabel = computed(() => {
+  return locale.value === 'en' ? t('quickCode.nameEn') : t('quickCode.name')
+})
+
+const getHeaderName = (row: any) => {
+  return locale.value === 'en' ? (row.nameEn || row.name || '-') : (row.name || row.nameEn || '-')
+}
+
+const getHeaderNameSub = (row: any) => {
+  return locale.value === 'en' ? row.name : row.nameEn
+}
+
+const getHeaderDescription = (row: any) => {
+  return locale.value === 'en' ? (row.descriptionEn || row.description || '') : (row.description || row.descriptionEn || '')
+}
+
+const getHeaderDescriptionSub = (row: any) => {
+  return locale.value === 'en' ? row.description : row.descriptionEn
+}
 
 const handleSearch = () => {
   query.page = 1
@@ -441,6 +547,7 @@ const handleCopy = async (row: any) => {
       _isNew: true
     }))
     itemSearchKeyword.value = ''
+    itemStatusFilter.value = 'all'
     itemPage.value = 1
     dialogVisible.value = true
   } catch (error) {
@@ -550,7 +657,10 @@ const handleCreate = () => {
   form.descriptionEn = ''
   allItems.value = []
   itemSearchKeyword.value = ''
+  itemStatusFilter.value = 'all'
   itemPage.value = 1
+  basicInfoCollapsed.value = false
+  itemsSectionCollapsed.value = false
   dialogVisible.value = true
 }
 
@@ -564,7 +674,10 @@ const handleEdit = async (row: any) => {
   form.descriptionEn = row.descriptionEn || ''
   allItems.value = []
   itemSearchKeyword.value = ''
+  itemStatusFilter.value = 'all'
   itemPage.value = 1
+  basicInfoCollapsed.value = false
+  itemsSectionCollapsed.value = false
   
   try {
     const res = await getQuickCode(row.id)
@@ -725,6 +838,13 @@ const handleSubmit = async () => {
 
 const handleDelete = async (row: any) => {
   try {
+    const impactRes = await getQuickCodeImpact(row.id)
+    const impact = impactRes.data
+    if (impact?.inUse) {
+      ElMessage.warning(formatImpactBlockMessage(impact))
+      return
+    }
+
     await ElMessageBox.confirm(t('quickCode.confirmDelete'), t('common.warning'), { type: 'warning' })
     await deleteQuickCode(row.id)
     ElMessage.success(t('common.success'))
@@ -755,6 +875,14 @@ const handleAction = (command: string, row: any) => {
 
 const handleToggle = async (row: any) => {
   try {
+    if (row.status === 1) {
+      const impactRes = await getQuickCodeImpact(row.id)
+      const impact = impactRes.data
+      if (impact?.inUse) {
+        ElMessage.warning(formatImpactBlockMessage(impact))
+        return
+      }
+    }
     await toggleQuickCode(row.id)
     ElMessage.success(t('common.success'))
     fetchData()
@@ -766,6 +894,21 @@ const handleToggle = async (row: any) => {
 const resetForm = () => {
   formRef.value?.resetFields()
   allItems.value = []
+  itemStatusFilter.value = 'all'
+  basicInfoCollapsed.value = false
+  itemsSectionCollapsed.value = false
+}
+
+const formatImpactBlockMessage = (impact: any) => {
+  const typeText = Array.isArray(impact?.referencedContractTypes) && impact.referencedContractTypes.length > 0
+    ? impact.referencedContractTypes.join(', ')
+    : '-'
+  return t('quickCode.error.inUseBlocked', {
+    code: impact?.code || '',
+    fieldCount: impact?.referencedFieldCount || 0,
+    typeCount: impact?.referencedContractTypeCount || 0,
+    types: typeText
+  })
 }
 
 onMounted(() => {
@@ -851,6 +994,31 @@ onBeforeUnmount(() => {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     overflow: hidden;
+
+    .table-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      background: var(--bg-card);
+    }
+
+    .table-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 13px;
+
+      .summary-item {
+        font-weight: 500;
+      }
+
+      .summary-divider {
+        opacity: 0.5;
+      }
+    }
     
     .el-table {
       --el-table-border-color: #f0f0f0;
@@ -869,6 +1037,19 @@ onBeforeUnmount(() => {
         color: #595959;
       }
     }
+
+    .primary-text {
+      color: var(--text-primary);
+      font-weight: 500;
+      line-height: 1.3;
+    }
+
+    .secondary-text {
+      margin-top: 2px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.3;
+    }
     
     .pagination-wrap {
       display: flex;
@@ -879,53 +1060,79 @@ onBeforeUnmount(() => {
   }
 }
 
+:deep(.quick-code-edit-dialog .el-dialog__body) {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  max-height: calc(100vh - 170px);
+  overflow: auto;
+}
+
+:deep(.quick-code-edit-dialog .el-dialog__footer) {
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+  padding-bottom: 8px;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-card);
+  z-index: 2;
+}
+
+:deep(.quick-code-edit-dialog .el-dialog) {
+  margin-top: 6vh !important;
+  margin-bottom: 6vh !important;
+}
+
 .items-section {
   background: var(--bg-color);
-  padding: 16px;
+  padding: 6px 10px;
   border-radius: 8px;
-  
-  .items-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    font-weight: 500;
-    color: var(--text-primary);
-    
-    .items-title {
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--text-primary);
-    }
-    
-    .items-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-  }
+  max-height: min(50vh, 520px);
+  overflow: auto;
   
   .items-pagination {
     display: flex;
     justify-content: flex-end;
-    padding-top: 8px;
-    margin-top: 12px;
+    padding-top: 4px;
+    margin-top: 6px;
     border-top: 1px solid var(--border-color);
+    position: static;
+    background: transparent;
   }
-  
-  .date-picker-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    
-    :deep(.el-date-editor) {
+
+  .date-cell {
+    width: 100%;
+    display: block;
+
+    :deep(.el-date-editor.el-input) {
       width: 100%;
+      display: block;
+      margin: 0;
+    }
+
+    :deep(.el-input__wrapper) {
+      box-sizing: border-box;
+      min-height: 30px;
+      padding: 4px 10px !important;
+      align-items: center;
     }
   }
-  
-  .date-separator {
-    color: var(--text-secondary);
-    font-size: 14px;
+
+  .cell-input-wrap {
+    width: 100%;
+    display: block;
+
+    :deep(.el-input) {
+      width: 100%;
+      display: block;
+      margin: 0;
+    }
+
+    :deep(.el-input__wrapper) {
+      box-sizing: border-box;
+      min-height: 30px;
+      padding: 4px 10px;
+      align-items: center;
+    }
   }
   
   .sort-buttons {
@@ -950,6 +1157,19 @@ onBeforeUnmount(() => {
   }
   
   .items-table {
+    :deep(td.item-tag-col),
+    :deep(td.item-valid-from-col),
+    :deep(td.item-valid-to-col) {
+      vertical-align: top;
+    }
+
+    :deep(td.item-tag-col .cell),
+    :deep(td.item-valid-from-col .cell),
+    :deep(td.item-valid-to-col .cell) {
+      display: block;
+      padding: 5px 10px;
+    }
+
     :deep(tr.sortable-ghost-row > td) {
       background: rgba(99, 102, 241, 0.12) !important;
     }
@@ -1007,13 +1227,9 @@ onBeforeUnmount(() => {
     }
     
     :deep(.el-table__cell) {
-      padding: 7px 0;
+      padding: 5px 0;
     }
 
-    :deep(.el-date-editor.el-input) {
-      width: 100%;
-    }
-    
     :deep(.el-switch) {
       --el-switch-on-color: var(--el-color-primary);
     }
@@ -1032,4 +1248,90 @@ onBeforeUnmount(() => {
     }
   }
 }
+
+@media (max-height: 860px) {
+  .items-section {
+    max-height: 42vh;
+  }
+}
+
+.form-section {
+  padding: 8px 10px 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-color);
+  margin-bottom: 8px;
+
+  .form-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0;
+  }
+}
+
+.items-form-section {
+  margin-bottom: 0;
+}
+
+.items-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.basic-info-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.basic-info-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.items-inline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 1;
+  min-width: 460px;
+}
+
+.items-inline-stats {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.items-inline-toolbar .items-search-input {
+  min-width: 240px;
+  max-width: 420px;
+  flex: 1;
+}
+
+.form-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.collapse-icon {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+  color: var(--text-secondary);
+
+  &.collapsed {
+    transform: rotate(-90deg);
+  }
+}
+
 </style>

@@ -1,6 +1,21 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
+import { t } from '@/locales/index'
+
+function resolveApiMessage(payload: any, fallback: string) {
+  const key = payload?.messageKey as string | undefined
+  if (key) {
+    const raw = payload?.data
+    const params =
+      raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    const translated = t(key, params as Record<string, unknown>)
+    if (translated !== key) return translated as string
+  }
+  return payload?.message || fallback
+}
 
 const service: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -32,17 +47,18 @@ service.interceptors.response.use(
     if (res.code === 200 || res.success) {
       return res
     }
-    ElMessage.error(res.message || '请求失败')
-    return Promise.reject(new Error(res.message || '请求失败'))
+    ElMessage.error(resolveApiMessage(res, t('error.requestFailed')))
+    return Promise.reject(new Error(resolveApiMessage(res, t('error.requestFailed'))))
   },
   (error) => {
-    const errorMessage = error.response?.data?.message || error.message || '网络错误'
+    const data = error.response?.data
+    const errorMessage = resolveApiMessage(data, error.message || t('error.networkError'))
     if (error.response?.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
+      ElMessage.error(t('error.sessionExpired'))
       localStorage.removeItem('token')
       window.location.href = '/login'
     } else {
-      ElMessage.error(errorMessage)
+      ElMessage.error(resolveApiMessage(data, errorMessage))
     }
     return Promise.reject(error)
   }

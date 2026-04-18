@@ -267,7 +267,7 @@ public class TemplateVariableService {
         try {
             return objectMapper.readValue(variablesJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
         } catch (Exception e) {
-            return new HashMap<>();
+            throw new IllegalArgumentException("模板变量定义格式错误", e);
         }
     }
     

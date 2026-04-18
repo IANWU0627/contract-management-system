@@ -2,8 +2,10 @@ package com.contracthub.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.contracthub.dto.ApiResponse;
+import com.contracthub.entity.ContractTypeField;
 import com.contracthub.entity.QuickCodeHeader;
 import com.contracthub.entity.QuickCodeItem;
+import com.contracthub.mapper.ContractTypeFieldMapper;
 import com.contracthub.mapper.QuickCodeHeaderMapper;
 import com.contracthub.mapper.QuickCodeItemMapper;
 import org.springframework.cache.annotation.CacheEvict;
@@ -24,10 +26,15 @@ public class QuickCodeController {
     
     private final QuickCodeHeaderMapper headerMapper;
     private final QuickCodeItemMapper itemMapper;
-    
-    public QuickCodeController(QuickCodeHeaderMapper headerMapper, QuickCodeItemMapper itemMapper) {
+    private final ContractTypeFieldMapper contractTypeFieldMapper;
+
+    public QuickCodeController(
+            QuickCodeHeaderMapper headerMapper,
+            QuickCodeItemMapper itemMapper,
+            ContractTypeFieldMapper contractTypeFieldMapper) {
         this.headerMapper = headerMapper;
         this.itemMapper = itemMapper;
+        this.contractTypeFieldMapper = contractTypeFieldMapper;
     }
     
     /**
@@ -114,7 +121,7 @@ public class QuickCodeController {
     public ApiResponse<Map<String, Object>> get(@PathVariable Long id) {
         QuickCodeHeader header = headerMapper.selectById(id);
         if (header == null) {
-            return ApiResponse.error("快速代码不存在");
+            return ApiResponse.error("快速代码不存在", "error.quickCode.notFound");
         }
         
         Map<String, Object> result = new HashMap<>();
@@ -166,7 +173,7 @@ public class QuickCodeController {
         QuickCodeHeader header = headerMapper.selectOne(headerWrapper);
         
         if (header == null) {
-            return ApiResponse.error("快速代码不存在");
+            return ApiResponse.error("快速代码不存在", "error.quickCode.notFound");
         }
         
         List<QuickCodeItem> items = itemMapper.selectEnabledByHeaderId(header.getId());
@@ -205,13 +212,13 @@ public class QuickCodeController {
         QueryWrapper<QuickCodeHeader> wrapper = new QueryWrapper<>();
         wrapper.eq("code", code);
         if (headerMapper.selectCount(wrapper) > 0) {
-            return ApiResponse.error("编码已存在");
+            return ApiResponse.error("编码已存在", "error.quickCode.codeExists");
         }
         
         wrapper = new QueryWrapper<>();
         wrapper.eq("name", name);
         if (headerMapper.selectCount(wrapper) > 0) {
-            return ApiResponse.error("名称已存在");
+            return ApiResponse.error("名称已存在", "error.quickCode.nameExists");
         }
         
         QuickCodeHeader header = new QuickCodeHeader();
@@ -234,7 +241,10 @@ public class QuickCodeController {
             for (Map<String, Object> itemData : items) {
                 String itemCode = (String) itemData.get("code");
                 if (itemCodes.contains(itemCode)) {
-                    return ApiResponse.error("选项代码【" + itemCode + "】重复");
+                    return ApiResponse.error(
+                            "选项代码【" + itemCode + "】重复",
+                            "error.quickCode.itemDuplicate",
+                            Collections.singletonMap("code", itemCode != null ? itemCode : ""));
                 }
                 itemCodes.add(itemCode);
             }
@@ -270,10 +280,10 @@ public class QuickCodeController {
     @PutMapping("/{id}")
     @CacheEvict(value = "quickCodes", allEntries = true)
     @PreAuthorize("hasAuthority('QUICK_CODE_MANAGE')")
-    public ApiResponse<Void> update(@PathVariable Long id, @RequestBody Map<String, Object> data) {
+    public ApiResponse<?> update(@PathVariable Long id, @RequestBody Map<String, Object> data) {
         QuickCodeHeader header = headerMapper.selectById(id);
         if (header == null) {
-            return ApiResponse.error("快速代码不存在");
+            return ApiResponse.error("快速代码不存在", "error.quickCode.notFound");
         }
         
         if (data.containsKey("name")) {
@@ -283,7 +293,7 @@ public class QuickCodeController {
                 wrapper.eq("name", newName);
                 wrapper.ne("id", id);
                 if (headerMapper.selectCount(wrapper) > 0) {
-                    return ApiResponse.error("名称已存在");
+                    return ApiResponse.error("名称已存在", "error.quickCode.nameExists");
                 }
             }
             header.setName(newName);
@@ -298,7 +308,18 @@ public class QuickCodeController {
             header.setDescriptionEn((String) data.get("descriptionEn"));
         }
         if (data.containsKey("status")) {
-            header.setStatus((Integer) data.get("status"));
+            Integer nextStatus = (Integer) data.get("status");
+            if (nextStatus != null && nextStatus == 0) {
+                Map<String, Object> impact = buildQuickCodeImpact(header);
+                if (((Number) impact.get("referencedFieldCount")).intValue() > 0) {
+                    return ApiResponse.error(
+                            400,
+                            "快速代码仍被字段配置引用，无法停用",
+                            "error.quickCode.inUseCannotDisable",
+                            impact);
+                }
+            }
+            header.setStatus(nextStatus);
         }
         
         header.setUpdatedAt(LocalDateTime.now());
@@ -320,7 +341,10 @@ public class QuickCodeController {
             for (Map<String, Object> itemData : newItems) {
                 String itemCode = (String) itemData.get("code");
                 if (newItemCodes.contains(itemCode)) {
-                    return ApiResponse.error("选项代码【" + itemCode + "】重复");
+                    return ApiResponse.error(
+                            "选项代码【" + itemCode + "】重复",
+                            "error.quickCode.itemDuplicate",
+                            Collections.singletonMap("code", itemCode != null ? itemCode : ""));
                 }
                 newItemCodes.add(itemCode);
                 
@@ -378,10 +402,19 @@ public class QuickCodeController {
     @DeleteMapping("/{id}")
     @CacheEvict(value = "quickCodes", allEntries = true)
     @PreAuthorize("hasAuthority('QUICK_CODE_MANAGE')")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResponse<?> delete(@PathVariable Long id) {
         QuickCodeHeader header = headerMapper.selectById(id);
         if (header == null) {
-            return ApiResponse.error("快速代码不存在");
+            return ApiResponse.error("快速代码不存在", "error.quickCode.notFound");
+        }
+
+        Map<String, Object> impact = buildQuickCodeImpact(header);
+        if (((Number) impact.get("referencedFieldCount")).intValue() > 0) {
+            return ApiResponse.error(
+                    400,
+                    "快速代码仍被字段配置引用，无法删除",
+                    "error.quickCode.inUseCannotDelete",
+                    impact);
         }
         
         QueryWrapper<QuickCodeItem> wrapper = new QueryWrapper<>();
@@ -399,17 +432,42 @@ public class QuickCodeController {
     @PutMapping("/{id}/toggle")
     @CacheEvict(value = "quickCodes", allEntries = true)
     @PreAuthorize("hasAuthority('QUICK_CODE_MANAGE')")
-    public ApiResponse<Void> toggle(@PathVariable Long id) {
+    public ApiResponse<?> toggle(@PathVariable Long id) {
         QuickCodeHeader header = headerMapper.selectById(id);
         if (header == null) {
-            return ApiResponse.error("快速代码不存在");
+            return ApiResponse.error("快速代码不存在", "error.quickCode.notFound");
         }
-        
-        header.setStatus(header.getStatus() == 1 ? 0 : 1);
+
+        int nextStatus = header.getStatus() == 1 ? 0 : 1;
+        if (nextStatus == 0) {
+            Map<String, Object> impact = buildQuickCodeImpact(header);
+            if (((Number) impact.get("referencedFieldCount")).intValue() > 0) {
+                return ApiResponse.error(
+                        400,
+                        "快速代码仍被字段配置引用，无法停用",
+                        "error.quickCode.inUseCannotDisable",
+                        impact);
+            }
+        }
+
+        header.setStatus(nextStatus);
         header.setUpdatedAt(LocalDateTime.now());
         headerMapper.updateById(header);
         
         return ApiResponse.success(null);
+    }
+
+    /**
+     * 获取快速代码引用影响面
+     */
+    @GetMapping("/{id}/impact")
+    @PreAuthorize("hasAuthority('QUICK_CODE_MANAGE')")
+    public ApiResponse<Map<String, Object>> getImpact(@PathVariable Long id) {
+        QuickCodeHeader header = headerMapper.selectById(id);
+        if (header == null) {
+            return ApiResponse.error("快速代码不存在", "error.quickCode.notFound");
+        }
+        return ApiResponse.success(buildQuickCodeImpact(header));
     }
     
     /**
@@ -421,7 +479,7 @@ public class QuickCodeController {
     public ApiResponse<Map<String, Object>> addItem(@PathVariable Long id, @RequestBody Map<String, Object> data) {
         QuickCodeHeader header = headerMapper.selectById(id);
         if (header == null) {
-            return ApiResponse.error("快速代码不存在");
+            return ApiResponse.error("快速代码不存在", "error.quickCode.notFound");
         }
         
         QuickCodeItem item = new QuickCodeItem();
@@ -456,7 +514,7 @@ public class QuickCodeController {
     public ApiResponse<Void> updateItem(@PathVariable Long itemId, @RequestBody Map<String, Object> data) {
         QuickCodeItem item = itemMapper.selectById(itemId);
         if (item == null) {
-            return ApiResponse.error("选项不存在");
+            return ApiResponse.error("选项不存在", "error.quickCode.optionNotFound");
         }
         
         if (data.containsKey("code")) item.setCode((String) data.get("code"));
@@ -483,5 +541,34 @@ public class QuickCodeController {
     public ApiResponse<Void> deleteItem(@PathVariable Long itemId) {
         itemMapper.deleteById(itemId);
         return ApiResponse.success(null);
+    }
+
+    private Map<String, Object> buildQuickCodeImpact(QuickCodeHeader header) {
+        QueryWrapper<ContractTypeField> wrapper = new QueryWrapper<>();
+        wrapper.eq("quick_code_id", header.getCode());
+        wrapper.in("field_type", Arrays.asList("select", "multiselect"));
+        List<ContractTypeField> referencedFields = contractTypeFieldMapper.selectList(wrapper);
+
+        Set<String> referencedContractTypes = new LinkedHashSet<>();
+        List<Map<String, String>> fieldRefs = new ArrayList<>();
+        for (ContractTypeField field : referencedFields) {
+            referencedContractTypes.add(field.getContractType());
+            Map<String, String> item = new HashMap<>();
+            item.put("contractType", field.getContractType());
+            item.put("fieldKey", field.getFieldKey());
+            item.put("fieldLabel", field.getFieldLabel());
+            fieldRefs.add(item);
+        }
+
+        Map<String, Object> impact = new HashMap<>();
+        impact.put("id", header.getId());
+        impact.put("code", header.getCode());
+        impact.put("name", header.getName());
+        impact.put("referencedFieldCount", referencedFields.size());
+        impact.put("referencedContractTypeCount", referencedContractTypes.size());
+        impact.put("referencedContractTypes", new ArrayList<>(referencedContractTypes));
+        impact.put("referencedFields", fieldRefs);
+        impact.put("inUse", !referencedFields.isEmpty());
+        return impact;
     }
 }

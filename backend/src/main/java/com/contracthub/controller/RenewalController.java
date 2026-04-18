@@ -46,7 +46,7 @@ public class RenewalController {
         
         Contract contract = contractMapper.selectById(contractId);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         
         ContractRenewal renewal = new ContractRenewal();
@@ -79,7 +79,7 @@ public class RenewalController {
     public ApiResponse<Void> approveRenewal(@PathVariable Long contractId, @PathVariable Long id) {
         ContractRenewal renewal = renewalMapper.selectById(id);
         if (renewal == null || !renewal.getContractId().equals(contractId)) {
-            return ApiResponse.error("续约记录不存在");
+            return ApiResponse.error("续约记录不存在", "error.renewal.notFound");
         }
         
         Contract contract = contractMapper.selectById(contractId);
@@ -105,7 +105,7 @@ public class RenewalController {
     public ApiResponse<Void> rejectRenewal(@PathVariable Long contractId, @PathVariable Long id, @RequestBody Map<String, Object> data) {
         ContractRenewal renewal = renewalMapper.selectById(id);
         if (renewal == null || !renewal.getContractId().equals(contractId)) {
-            return ApiResponse.error("续约记录不存在");
+            return ApiResponse.error("续约记录不存在", "error.renewal.notFound");
         }
         
         renewal.setStatus("REJECTED");

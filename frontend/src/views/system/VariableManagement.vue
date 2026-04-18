@@ -10,6 +10,10 @@
           <el-icon><Refresh /></el-icon>
           {{ t('variable.initDefaults') }}
         </el-button>
+        <el-button @click="openBatchImportDialog">
+          <el-icon><Plus /></el-icon>
+          {{ t('variable.batchImport') }}
+        </el-button>
         <el-button type="primary" @click="handleAdd">
           <el-icon><Plus /></el-icon>
           {{ t('common.add') }}
@@ -25,18 +29,18 @@
             v-model="searchKeyword"
             :placeholder="t('variable.searchPlaceholder')"
             clearable
-            @input="loadVariables"
+            @input="handleSearchInput"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
         </div>
         <div class="filter-item" style="width: 160px;">
-          <el-select v-model="filterCategory" :placeholder="t('variable.category')" clearable @change="loadVariables">
+          <el-select v-model="filterCategory" :placeholder="t('variable.category')" clearable @change="handleFilterChange">
             <el-option v-for="cat in categories" :key="cat.value" :label="cat.label" :value="cat.value" />
           </el-select>
         </div>
         <div class="filter-item" style="width: 120px;">
-          <el-select v-model="filterType" :placeholder="t('variable.type')" clearable @change="loadVariables">
+          <el-select v-model="filterType" :placeholder="t('variable.type')" clearable @change="handleFilterChange">
             <el-option label="text" value="text" />
             <el-option label="number" value="number" />
             <el-option label="date" value="date" />
@@ -57,7 +61,7 @@
     </div>
 
     <el-card shadow="hover">
-        <el-table :data="paginatedVariables" v-loading="loading" stripe>
+        <el-table :data="variables" v-loading="loading" stripe>
         <el-table-column prop="code" :label="t('variable.code')" width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <code class="var-code">{{ row.code }}</code>
@@ -114,6 +118,8 @@
           :total="total"
           :page-sizes="[10, 20, 50, 100]"
           layout="total, sizes, prev, pager, next, jumper"
+          @current-change="handlePageChange"
+          @size-change="handlePageSizeChange"
         />
       </div>
     </el-card>
@@ -176,11 +182,44 @@
         <el-button type="primary" @click="handleSubmit" :loading="submitLoading">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="batchImportVisible" :title="t('variable.batchImportTitle')" width="760px">
+      <el-form label-width="120px">
+        <el-form-item :label="t('variable.batchImportMode')">
+          <el-segmented v-model="batchImportConflictPolicy" :options="batchImportModeOptions" />
+        </el-form-item>
+        <el-form-item>
+          <el-button text type="primary" @click="fillBatchImportTemplate">
+            {{ t('variable.batchImportFillTemplate') }}
+          </el-button>
+        </el-form-item>
+        <el-form-item :label="t('variable.batchImportPayload')">
+          <el-input
+            v-model="batchImportText"
+            type="textarea"
+            :rows="14"
+            :placeholder="t('variable.batchImportPlaceholder')"
+          />
+        </el-form-item>
+      </el-form>
+      <div v-if="batchImportResult" class="batch-import-result">
+        <el-tag type="success">{{ t('variable.batchImportCreated') }}: {{ batchImportResult.created?.length || 0 }}</el-tag>
+        <el-tag type="warning">{{ t('variable.batchImportUpdated') }}: {{ batchImportResult.updated?.length || 0 }}</el-tag>
+        <el-tag type="info">{{ t('variable.batchImportSkipped') }}: {{ batchImportResult.skipped?.length || 0 }}</el-tag>
+        <el-tag type="danger">{{ t('variable.batchImportFailed') }}: {{ batchImportResult.failed?.length || 0 }}</el-tag>
+      </div>
+      <template #footer>
+        <el-button @click="batchImportVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="batchImportLoading" @click="handleBatchImportSubmit">
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -190,31 +229,62 @@ import {
   createTemplateVariable,
   updateTemplateVariable,
   deleteTemplateVariable,
+  getTemplateVariableImpact,
+  batchCreateTemplateVariables,
   getVariableCategories,
-  initDefaultVariables
+  initDefaultVariables,
+  type TemplateVariableItem
 } from '@/api/templateVariable'
-import { getQuickCodes, getQuickCodeByCode } from '@/api/quickCode'
+import { getQuickCodes } from '@/api/quickCode'
+
+interface QuickCodeItem {
+  code: string
+  name: string
+  status?: number
+}
+
+interface VariableCategoryItem {
+  value: string
+  label: string
+}
+
+interface BatchImportResult {
+  created?: Array<{ id?: number; code?: string }>
+  updated?: Array<{ id?: number; code?: string }>
+  skipped?: Array<{ code?: string; reason?: string }>
+  failed?: Array<{ code?: string; reason?: string }>
+}
 
 const { t, locale } = useI18n()
 
 const loading = ref(false)
-const quickCodes = ref<any[]>([])
+const quickCodes = ref<QuickCodeItem[]>([])
 const submitLoading = ref(false)
 const initLoading = ref(false)
 const dialogVisible = ref(false)
+const batchImportVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref<FormInstance>()
 
-const variables = ref<any[]>([])
-const categories = ref<any[]>([])
-const variableCategoryQuickCodeCode = 'TEMPLATE_VARIABLE_CATEGORY'
+const variables = ref<TemplateVariableItem[]>([])
+const categories = ref<VariableCategoryItem[]>([])
 
 const filterCategory = ref('')
 const filterType = ref('')
 const searchKeyword = ref('')
 const currentPage = ref(1)
-const pageSize = ref(8)
+const pageSize = ref(10)
 const total = ref(0)
+const batchImportLoading = ref(false)
+const batchImportConflictPolicy = ref<'skip' | 'overwrite'>('skip')
+const batchImportText = ref('')
+const batchImportResult = ref<BatchImportResult | null>(null)
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const batchImportModeOptions = computed(() => [
+  { label: t('variable.batchImportModeSkip'), value: 'skip' },
+  { label: t('variable.batchImportModeOverwrite'), value: 'overwrite' }
+])
 
 const form = ref({
   code: '',
@@ -235,26 +305,6 @@ const rules = {
 }
 
 const dialogTitle = computed(() => isEdit.value ? t('common.edit') : t('common.add'))
-
-const filteredVariables = computed(() => {
-  return variables.value.filter(v => {
-    if (filterCategory.value && v.category !== filterCategory.value) return false
-    if (filterType.value && v.type !== filterType.value) return false
-    if (searchKeyword.value) {
-      const kw = searchKeyword.value.toLowerCase()
-      return v.code.toLowerCase().includes(kw) || 
-             v.name.toLowerCase().includes(kw) || 
-             v.label.toLowerCase().includes(kw)
-    }
-    return true
-  })
-})
-
-const paginatedVariables = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filteredVariables.value.slice(start, end)
-})
 
 const getCategoryLabel = (category: string) => {
   const cat = categories.value.find(c => c.value === category)
@@ -284,42 +334,43 @@ const getCategoryTagType = (category: string) => {
 const loadQuickCodes = async () => {
   try {
     const res = await getQuickCodes()
-    quickCodes.value = res.data?.filter((qc: any) => qc.status === 1) || []
-    
-    // 加载模板变量分类的快码配置
-    try {
-      const catRes = await getQuickCodeByCode(variableCategoryQuickCodeCode)
-      if (catRes.data) {
-        categories.value = catRes.data
-          .map((item: any) => ({
-            value: item.code,
-            label: locale.value === 'en' && item.meaningEn ? item.meaningEn : (item.meaning || item.code)
-          }))
-      }
-    } catch (catErr) {
-      console.warn('Failed to load variable categories, using defaults', catErr)
-      // 如果加载失败，使用默认分类
-      categories.value = [
-        { value: 'system', label: locale.value === 'en' ? 'System' : '系统变量' },
-        { value: 'party', label: locale.value === 'en' ? 'Counterparty' : '相对方信息' },
-        { value: 'purchase', label: locale.value === 'en' ? 'Purchase' : '采购合同' },
-        { value: 'service', label: locale.value === 'en' ? 'Service' : '服务合同' },
-        { value: 'lease', label: locale.value === 'en' ? 'Lease' : '租赁合同' },
-        { value: 'employment', label: locale.value === 'en' ? 'Employment' : '劳动合同' },
-        { value: 'custom', label: locale.value === 'en' ? 'Custom' : '自定义变量' }
-      ]
-    }
+    quickCodes.value = (res.data as QuickCodeItem[] | undefined)?.filter((qc) => qc.status === 1) || []
   } catch (error) {
     console.error('Failed to load quick codes:', error)
+    quickCodes.value = []
   }
+}
+
+const loadCategories = async () => {
+  const res = await getVariableCategories()
+  const backendCategories = res.data
+  categories.value = backendCategories.map((item) => {
+    const value = item.value || item.label
+    const i18nKey = `variable.categories.${value}`
+    const translated = t(i18nKey)
+    return {
+      value,
+      label: translated !== i18nKey ? translated : value
+    }
+  })
 }
 
 const loadVariables = async () => {
   loading.value = true
   try {
-    const res = await getTemplateVariables({ status: 1 })
-    variables.value = res.data || []
-    total.value = filteredVariables.value.length
+    const res = await getTemplateVariables({
+      status: 1,
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      category: filterCategory.value || undefined,
+      type: filterType.value || undefined,
+      keyword: searchKeyword.value?.trim() || undefined
+    })
+    const payload = res.data
+    variables.value = payload.list
+    total.value = payload.total
+    currentPage.value = payload.page
+    pageSize.value = payload.pageSize
   } catch (error) {
     ElMessage.error(t('common.error'))
   } finally {
@@ -346,7 +397,7 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (row: any) => {
+const handleEdit = (row: TemplateVariableItem) => {
   isEdit.value = true
   form.value = {
     code: row.code,
@@ -376,9 +427,10 @@ const handleSubmit = async () => {
         nameEn: form.value.nameEn,
         label: form.value.label || form.value.name,
         type: form.value.type,
+        quickCodeCode: form.value.quickCodeCode || null,
         category: form.value.category,
         defaultValue: form.value.defaultValue,
-        required: form.value.required ? 1 : 0,
+        required: form.value.required,
         description: form.value.description
       }
       
@@ -394,16 +446,27 @@ const handleSubmit = async () => {
       ElMessage.success(t('common.success'))
       dialogVisible.value = false
       loadVariables()
-    } catch (error: any) {
-      ElMessage.error(error.message || t('common.error'))
+    } catch (error: unknown) {
+      const err = error as { message?: string }
+      ElMessage.error(err.message || t('common.error'))
     } finally {
       submitLoading.value = false
     }
   })
 }
 
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: TemplateVariableItem) => {
   try {
+    const impactRes = await getTemplateVariableImpact(row.id)
+    const impact = impactRes.data || {}
+    const templateCount = Number(impact.templateCount || 0)
+    if (templateCount > 0) {
+      ElMessage.warning(t('error.templateVariable.inUseCannotDelete', {
+        code: row.code,
+        templateCount
+      }))
+      return
+    }
     await ElMessageBox.confirm(
       t('variable.deleteConfirm', { name: row.name }),
       t('common.warning'),
@@ -412,14 +475,15 @@ const handleDelete = async (row: any) => {
     await deleteTemplateVariable(row.id)
     ElMessage.success(t('common.success'))
     loadVariables()
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as { message?: string }
     if (error !== 'cancel') {
-      ElMessage.error(error.message || t('common.error'))
+      ElMessage.error(err.message || t('common.error'))
     }
   }
 }
 
-const handleAction = (command: string, row: any) => {
+const handleAction = (command: string, row: TemplateVariableItem) => {
   switch (command) {
     case 'edit':
       handleEdit(row)
@@ -431,9 +495,48 @@ const handleAction = (command: string, row: any) => {
 }
 
 const handleReset = () => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
   searchKeyword.value = ''
   filterCategory.value = ''
   filterType.value = ''
+  currentPage.value = 1
+  loadVariables()
+}
+
+const handleSearchInput = () => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+  }
+  searchDebounceTimer = setTimeout(() => {
+    if (currentPage.value !== 1) {
+      currentPage.value = 1
+      return
+    }
+    loadVariables()
+  }, 300)
+}
+
+const handleFilterChange = () => {
+  if (currentPage.value !== 1) {
+    currentPage.value = 1
+    return
+  }
+  loadVariables()
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  loadVariables()
+}
+
+const handlePageSizeChange = (size: number) => {
+  pageSize.value = size
+  if (currentPage.value !== 1) {
+    currentPage.value = 1
+  }
   loadVariables()
 }
 
@@ -443,26 +546,131 @@ const handleInitDefaults = async () => {
     await initDefaultVariables()
     ElMessage.success(t('variable.initSuccess'))
     loadVariables()
-  } catch (error: any) {
-    ElMessage.error(error.message || t('common.error'))
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    ElMessage.error(err.message || t('common.error'))
   } finally {
     initLoading.value = false
   }
 }
 
+const openBatchImportDialog = () => {
+  batchImportVisible.value = true
+  batchImportConflictPolicy.value = 'skip'
+  batchImportResult.value = null
+  if (!batchImportText.value.trim()) {
+    batchImportText.value = JSON.stringify(
+      [
+        {
+          code: 'demoField',
+          name: '示例字段',
+          nameEn: 'Demo Field',
+          label: '示例字段',
+          type: 'text',
+          category: 'custom',
+          required: false,
+          description: 'batch import example'
+        }
+      ],
+      null,
+      2
+    )
+  }
+}
+
+const handleBatchImportSubmit = async () => {
+  const raw = batchImportText.value.trim()
+  if (!raw) {
+    ElMessage.warning(t('variable.batchImportEmpty'))
+    return
+  }
+  let parsedItems: Record<string, unknown>[] = []
+  try {
+    if (raw.startsWith('[')) {
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) {
+        ElMessage.warning(t('variable.batchImportInvalid'))
+        return
+      }
+      parsedItems = parsed
+    } else {
+      // Auto-detect JSON Lines input: one JSON object per line.
+      const lines = raw
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+      parsedItems = lines.map(line => JSON.parse(line))
+    }
+  } catch (_err) {
+    ElMessage.error(t('variable.batchImportInvalid'))
+    return
+  }
+
+  batchImportLoading.value = true
+  try {
+    const res = await batchCreateTemplateVariables({
+      items: parsedItems,
+      conflictPolicy: batchImportConflictPolicy.value
+    })
+    batchImportResult.value = res.data || null
+    ElMessage.success(t('common.success'))
+    currentPage.value = 1
+    await loadVariables()
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    ElMessage.error(err.message || t('common.error'))
+  } finally {
+    batchImportLoading.value = false
+  }
+}
+
+const fillBatchImportTemplate = () => {
+  batchImportText.value = JSON.stringify(
+    [
+      {
+        code: 'paymentTerm',
+        name: '付款条件',
+        nameEn: 'Payment Term',
+        label: '付款条件',
+        type: 'text',
+        category: 'custom',
+        defaultValue: '',
+        required: false,
+        description: '用于标记合同中的付款条件'
+      },
+      {
+        code: 'warrantyMonths',
+        name: '质保期(月)',
+        nameEn: 'Warranty Months',
+        label: '质保期(月)',
+        type: 'number',
+        category: 'custom',
+        defaultValue: '12',
+        required: false,
+        description: '默认质保月份'
+      }
+    ],
+    null,
+    2
+  )
+}
+
 onMounted(() => {
   loadVariables()
   loadQuickCodes()
+  loadCategories()
 })
 
-watch(filteredVariables, () => {
-  total.value = filteredVariables.value.length
-  currentPage.value = 1
+onBeforeUnmount(() => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
 })
 
 // 监听语言切换，重新加载分类
 watch(locale, () => {
-  loadQuickCodes()
+  loadCategories()
 })
 </script>
 
@@ -538,6 +746,13 @@ watch(locale, () => {
     display: flex;
     justify-content: flex-end;
     margin-top: 16px;
+  }
+
+  .batch-import-result {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
   }
   
   .var-code {

@@ -6,6 +6,8 @@ import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.ContractReminder;
 import com.contracthub.mapper.ContractReminderMapper;
 import com.contracthub.service.ReminderSchedulerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
@@ -15,6 +17,8 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/reminders")
 public class ReminderController {
+
+    private static final Logger log = LoggerFactory.getLogger(ReminderController.class);
     
     private final ContractReminderMapper contractReminderMapper;
     private final ReminderSchedulerService schedulerService;
@@ -65,12 +69,8 @@ public class ReminderController {
             result.put("unreadCount", totalUnread);
             return ApiResponse.success(result);
         } catch (Exception e) {
-            System.out.println("获取提醒列表失败，返回空列表: " + e.getMessage());
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", new ArrayList<>());
-            result.put("total", 0);
-            result.put("unreadCount", 0);
-            return ApiResponse.success(result);
+            log.error("获取我的提醒列表失败", e);
+            return ApiResponse.error("获取提醒列表失败", "error.reminder.listFailed");
         }
     }
     
@@ -107,11 +107,8 @@ public class ReminderController {
             result.put("pageSize", resultPage.getSize());
             return ApiResponse.success(result);
         } catch (Exception e) {
-            System.out.println("获取提醒列表失败，返回空列表: " + e.getMessage());
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", new ArrayList<>());
-            result.put("total", 0);
-            return ApiResponse.success(result);
+            log.error("获取提醒列表失败", e);
+            return ApiResponse.error("获取提醒列表失败", "error.reminder.listFailed");
         }
     }
     
@@ -120,13 +117,15 @@ public class ReminderController {
     public ApiResponse<String> markRead(@PathVariable Long id) {
         try {
             ContractReminder reminder = contractReminderMapper.selectById(id);
-            if (reminder != null) {
-                reminder.setIsRead(true);
-                contractReminderMapper.updateById(reminder);
+            if (reminder == null) {
+                return ApiResponse.error("提醒不存在", "error.reminder.notFound");
             }
+            reminder.setIsRead(true);
+            contractReminderMapper.updateById(reminder);
             return ApiResponse.success("已标记为已读");
         } catch (Exception e) {
-            return ApiResponse.error("标记已读失败");
+            log.error("标记提醒已读失败: id={}", id, e);
+            return ApiResponse.error("标记已读失败", "error.reminder.markReadFailed");
         }
     }
     
@@ -136,12 +135,12 @@ public class ReminderController {
         try {
             int result = contractReminderMapper.deleteById(id);
             if (result == 0) {
-                return ApiResponse.error("提醒不存在");
+                return ApiResponse.error("提醒不存在", "error.reminder.notFound");
             }
             return ApiResponse.success("删除成功");
         } catch (Exception e) {
-            System.out.println("删除提醒失败: " + e.getMessage());
-            return ApiResponse.error("删除提醒失败");
+            log.warn("删除提醒失败: {}", e.getMessage());
+            return ApiResponse.error("删除提醒失败", "error.reminder.deleteFailed");
         }
     }
     
@@ -155,14 +154,11 @@ public class ReminderController {
             reminder.setContractTitle((String) reminderMap.get("contractTitle"));
             
             String expireDateStr = (String) reminderMap.get("expireDate");
-            if (expireDateStr != null) {
-                try {
-                    LocalDateTime expireDate = LocalDateTime.parse(expireDateStr + " 00:00:00", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                    reminder.setExpireDate(expireDate);
-                } catch (Exception e) {
-                    reminder.setExpireDate(LocalDateTime.now());
-                }
+            if (expireDateStr == null || expireDateStr.isBlank()) {
+                return ApiResponse.error("到期日期不能为空", "error.reminder.expireDateRequired");
             }
+            LocalDateTime expireDate = LocalDateTime.parse(expireDateStr + " 00:00:00", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            reminder.setExpireDate(expireDate);
             
             reminder.setRemindDays((Integer) reminderMap.getOrDefault("remindDays", 0));
             reminder.setReminderType((Integer) reminderMap.getOrDefault("reminderType", 0));
@@ -183,8 +179,8 @@ public class ReminderController {
             
             return ApiResponse.success(result);
         } catch (Exception e) {
-            System.out.println("创建提醒失败: " + e.getMessage());
-            return ApiResponse.error("创建提醒失败");
+            log.error("创建提醒失败", e);
+            return ApiResponse.error("创建提醒失败", "error.reminder.createFailed");
         }
     }
     
@@ -198,8 +194,8 @@ public class ReminderController {
             long count = contractReminderMapper.selectCount(wrapper);
             return ApiResponse.success("检查完成，发现 " + count + " 条提醒");
         } catch (Exception e) {
-            System.out.println("检查提醒失败: " + e.getMessage());
-            return ApiResponse.success("检查完成，发现 0 条提醒");
+            log.error("触发提醒检查失败", e);
+            return ApiResponse.error("检查提醒失败", "error.reminder.checkFailed");
         }
     }
 }

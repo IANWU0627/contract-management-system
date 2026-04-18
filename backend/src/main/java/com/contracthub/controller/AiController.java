@@ -48,7 +48,7 @@ public class AiController {
             String apiKey = config.get("apiKey");
             String model = config.get("model");
             if (apiUrl == null || apiUrl.isBlank()) {
-                return ApiResponse.error("apiUrl 不能为空");
+                return ApiResponse.error("apiUrl 不能为空", "error.ai.apiUrlRequired");
             }
 
             HttpHeaders headers = new HttpHeaders();
@@ -68,10 +68,10 @@ public class AiController {
             if (response.getStatusCode().is2xxSuccessful()) {
                 return ApiResponse.success(Map.of("success", true, "message", "Connection successful"));
             } else {
-                return ApiResponse.error("Connection failed: " + response.getStatusCode());
+                return ApiResponse.error("Connection failed: " + response.getStatusCode(), "error.ai.connectionFailed");
             }
         } catch (Exception e) {
-            return ApiResponse.error("Connection failed: " + e.getMessage());
+            return ApiResponse.error("Connection failed: " + e.getMessage(), "error.ai.connectionFailed");
         }
     }
 
@@ -99,10 +99,10 @@ public class AiController {
                 }
                 return ApiResponse.success(formattedModels);
             } else {
-                return ApiResponse.error("Failed to fetch models: " + response.getStatusCode());
+                return ApiResponse.error("Failed to fetch models: " + response.getStatusCode(), "error.ai.modelsFetchFailed");
             }
         } catch (Exception e) {
-            return ApiResponse.error("Failed to fetch models: " + e.getMessage());
+            return ApiResponse.error("Failed to fetch models: " + e.getMessage(), "error.ai.modelsFetchFailed");
         }
     }
 
@@ -112,7 +112,7 @@ public class AiController {
         try {
             Contract contract = contractService.getContractById(id);
             if (contract == null) {
-                return ApiResponse.error("合同不存在");
+                return ApiResponse.error("合同不存在", "error.ai.contractNotFound");
             }
 
             Map<String, String> cfg = config != null ? config : Map.of();
@@ -162,9 +162,9 @@ public class AiController {
                 }
             }
 
-            return ApiResponse.error("AI 分析失败");
+            return ApiResponse.error("AI 分析失败", "error.ai.analysisFailed");
         } catch (Exception e) {
-            return ApiResponse.error("AI 分析失败: " + e.getMessage());
+            return ApiResponse.error("AI 分析失败: " + e.getMessage(), "error.ai.analysisFailed");
         }
     }
 

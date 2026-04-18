@@ -1,4 +1,5 @@
 import { get, post, put, del } from './index'
+import type { ApiResponse } from './types'
 
 export interface Attachment {
   id?: number
@@ -9,10 +10,11 @@ export interface Attachment {
   fileType?: string
   description?: string
   fileCategory?: 'contract' | 'support'
+  uploadTime?: string
 }
 
 export const getAttachmentsByContractId = (contractId: number) =>
-  get<Attachment[]>(`/contract-attachments/contract/${contractId}`)
+  get<ApiResponse<Attachment[]>>(`/contract-attachments/contract/${contractId}`)
 
 export const createAttachment = (data: Attachment) =>
   post<Attachment>('/contract-attachments', data)

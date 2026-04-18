@@ -1,4 +1,5 @@
 import { get, post, put, del } from './index'
+import type { ApiResponse, PageData } from './types'
 
 export interface Template {
   id?: number
@@ -13,12 +14,17 @@ export interface Template {
   updatedAt?: string
 }
 
-export const getTemplateList = (params?: { 
-  page?: number; 
-  pageSize?: number; 
-  category?: string;
-  keyword?: string;
-}) => get('/templates', { params })
+export interface TemplateListQuery {
+  page?: number
+  pageSize?: number
+  category?: string
+  keyword?: string
+}
+
+export type TemplateListData = PageData<Template>
+
+export const getTemplateList = (params?: TemplateListQuery, options?: { signal?: AbortSignal }) =>
+  get<ApiResponse<TemplateListData>>('/templates', { params, ...(options?.signal ? { signal: options.signal } : {}) })
 
 export const getTemplate = (id: number) => get(`/templates/${id}`)
 
@@ -70,7 +76,7 @@ export const getAvailableVariables = (contractType?: string) =>
   get('/templates/variables/list', contractType ? { params: { contractType } } : {})
 
 export const extractTemplateVariables = (content: string) =>
-  get('/templates/variables/extract', { params: { content } })
+  get<ApiResponse<string[]>>('/templates/variables/extract', { params: { content } })
 
-export const replaceTemplateVariables = (content: string, values: Record<string, any>) =>
-  post('/templates/replace', { content, values })
+export const replaceTemplateVariables = (content: string, values: Record<string, unknown>) =>
+  post<ApiResponse<string>>('/templates/replace', { content, values })

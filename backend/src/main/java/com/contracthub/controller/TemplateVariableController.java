@@ -1,14 +1,19 @@
 package com.contracthub.controller;
 
 import com.contracthub.dto.ApiResponse;
+import com.contracthub.dto.TemplateVariableCreateRequest;
+import com.contracthub.dto.TemplateVariableUpdateRequest;
+import com.contracthub.entity.ContractTemplate;
 import com.contracthub.entity.TemplateVariable;
+import com.contracthub.mapper.ContractTemplateMapper;
 import com.contracthub.mapper.TemplateVariableMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/template-variables")
@@ -16,16 +21,21 @@ import java.util.HashMap;
 public class TemplateVariableController {
     
     private final TemplateVariableMapper variableMapper;
+    private final ContractTemplateMapper templateMapper;
     
-    public TemplateVariableController(TemplateVariableMapper variableMapper) {
+    public TemplateVariableController(TemplateVariableMapper variableMapper, ContractTemplateMapper templateMapper) {
         this.variableMapper = variableMapper;
+        this.templateMapper = templateMapper;
     }
     
     @GetMapping
-    public ApiResponse<List<TemplateVariable>> getAllVariables(
+    public ApiResponse<Map<String, Object>> getAllVariables(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) Integer status) {
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize) {
         
         QueryWrapper<TemplateVariable> queryWrapper = new QueryWrapper<>();
         queryWrapper.orderByAsc("category", "sort_order", "id");
@@ -41,9 +51,25 @@ public class TemplateVariableController {
         } else {
             queryWrapper.eq("status", 1);
         }
-        
-        List<TemplateVariable> variables = variableMapper.selectList(queryWrapper);
-        return ApiResponse.success(variables);
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String kw = keyword.trim();
+            queryWrapper.and(w -> w
+                    .like("code", kw)
+                    .or().like("name", kw)
+                    .or().like("name_en", kw)
+                    .or().like("label", kw));
+        }
+
+        Page<TemplateVariable> pageQuery = new Page<>(Math.max(page, 1), Math.max(pageSize, 1));
+        Page<TemplateVariable> resultPage = variableMapper.selectPage(pageQuery, queryWrapper);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("list", resultPage.getRecords());
+        result.put("total", resultPage.getTotal());
+        result.put("page", resultPage.getCurrent());
+        result.put("pageSize", resultPage.getSize());
+        return ApiResponse.success(result);
     }
     
     @GetMapping("/categories")
@@ -58,7 +84,7 @@ public class TemplateVariableController {
             .map(v -> {
                 Map<String, Object> cat = new HashMap<>();
                 cat.put("value", v.getCategory());
-                cat.put("label", getCategoryLabel(v.getCategory()));
+                cat.put("label", v.getCategory());
                 return cat;
             })
             .distinct()
@@ -67,50 +93,42 @@ public class TemplateVariableController {
         return ApiResponse.success(categories);
     }
     
-    private String getCategoryLabel(String category) {
-        Map<String, String> labels = new HashMap<>();
-        labels.put("system", "系统变量");
-        labels.put("contract", "合同信息");
-        labels.put("party", "相对方信息");
-        labels.put("purchase", "采购合同");
-        labels.put("service", "服务合同");
-        labels.put("lease", "租赁合同");
-        labels.put("employment", "劳动合同");
-        labels.put("custom", "自定义变量");
-        return labels.getOrDefault(category, category);
-    }
-    
     @GetMapping("/{id}")
-    public ApiResponse<TemplateVariable> getVariable(@PathVariable Long id) {
+    public ApiResponse<?> getVariable(@PathVariable Long id) {
         TemplateVariable variable = variableMapper.selectById(id);
         if (variable == null) {
-            return ApiResponse.error("变量不存在");
+            return ApiResponse.error("变量不存在", "error.templateVariable.notFound");
         }
         return ApiResponse.success(variable);
     }
     
     @PostMapping
-    public ApiResponse<TemplateVariable> createVariable(@RequestBody Map<String, Object> data) {
-        if (data.get("code") == null || data.get("name") == null) {
-            return ApiResponse.error("变量编码和名称不能为空");
-        }
+    public ApiResponse<?> createVariable(@Valid @RequestBody TemplateVariableCreateRequest data) {
+        String code = data.getCode() == null ? "" : data.getCode().trim();
+        String name = data.getName() == null ? "" : data.getName().trim();
         
         QueryWrapper<TemplateVariable> codeCheck = new QueryWrapper<>();
-        codeCheck.eq("code", data.get("code"));
+        codeCheck.eq("code", code);
         if (variableMapper.selectCount(codeCheck) > 0) {
-            return ApiResponse.error("变量编码已存在");
+            return ApiResponse.error(
+                    400,
+                    "变量编码已存在",
+                    "error.templateVariable.codeExists",
+                    Map.of("value", code));
         }
         
         TemplateVariable variable = new TemplateVariable();
-        variable.setCode((String) data.get("code"));
-        variable.setName((String) data.get("name"));
-        variable.setLabel((String) data.getOrDefault("label", data.get("name")));
-        variable.setType((String) data.getOrDefault("type", "text"));
-        variable.setCategory((String) data.getOrDefault("category", "custom"));
-        variable.setDefaultValue((String) data.getOrDefault("defaultValue", ""));
-        variable.setDescription((String) data.getOrDefault("description", ""));
-        variable.setRequired(data.get("required") != null ? 1 : 0);
-        variable.setSortOrder(data.get("sortOrder") != null ? ((Number) data.get("sortOrder")).intValue() : 0);
+        variable.setCode(code);
+        variable.setName(name);
+        variable.setNameEn(trimToNull(data.getNameEn()));
+        variable.setLabel(trimToNull(data.getLabel()) != null ? data.getLabel().trim() : name);
+        variable.setType(data.getType() == null ? "text" : data.getType().trim());
+        variable.setQuickCodeCode(trimToNull(data.getQuickCodeCode()));
+        variable.setCategory(data.getCategory() == null ? "custom" : data.getCategory().trim());
+        variable.setDefaultValue(data.getDefaultValue() == null ? "" : data.getDefaultValue());
+        variable.setDescription(data.getDescription() == null ? "" : data.getDescription());
+        variable.setRequired(Boolean.TRUE.equals(data.getRequired()) ? 1 : 0);
+        variable.setSortOrder(data.getSortOrder() == null ? 0 : data.getSortOrder());
         variable.setStatus(1);
         
         variableMapper.insert(variable);
@@ -118,41 +136,52 @@ public class TemplateVariableController {
     }
     
     @PutMapping("/{id}")
-    public ApiResponse<TemplateVariable> updateVariable(@PathVariable Long id, @RequestBody Map<String, Object> data) {
+    public ApiResponse<?> updateVariable(@PathVariable Long id, @Valid @RequestBody TemplateVariableUpdateRequest data) {
         TemplateVariable variable = variableMapper.selectById(id);
         if (variable == null) {
-            return ApiResponse.error("变量不存在");
+            return ApiResponse.error("变量不存在", "error.templateVariable.notFound");
         }
         
-        if (data.containsKey("name")) {
-            variable.setName((String) data.get("name"));
+        if (data.getName() != null) {
+            String name = data.getName().trim();
+            if (name.isEmpty()) {
+                return ApiResponse.error(
+                        400,
+                        "变量名称不能为空",
+                        "error.templateVariable.fieldRequired",
+                        Map.of("field", "name"));
+            }
+            variable.setName(name);
         }
-        if (data.containsKey("nameEn")) {
-            variable.setNameEn((String) data.get("nameEn"));
+        if (data.getNameEn() != null) {
+            variable.setNameEn(trimToNull(data.getNameEn()));
         }
-        if (data.containsKey("label")) {
-            variable.setLabel((String) data.get("label"));
+        if (data.getLabel() != null) {
+            variable.setLabel(data.getLabel().trim());
         }
-        if (data.containsKey("type")) {
-            variable.setType((String) data.get("type"));
+        if (data.getType() != null) {
+            variable.setType(data.getType().trim());
         }
-        if (data.containsKey("category")) {
-            variable.setCategory((String) data.get("category"));
+        if (data.getQuickCodeCode() != null) {
+            variable.setQuickCodeCode(trimToNull(data.getQuickCodeCode()));
         }
-        if (data.containsKey("defaultValue")) {
-            variable.setDefaultValue((String) data.get("defaultValue"));
+        if (data.getCategory() != null) {
+            variable.setCategory(data.getCategory().trim());
         }
-        if (data.containsKey("description")) {
-            variable.setDescription((String) data.get("description"));
+        if (data.getDefaultValue() != null) {
+            variable.setDefaultValue(data.getDefaultValue());
         }
-        if (data.containsKey("required")) {
-            variable.setRequired((Integer) data.get("required"));
+        if (data.getDescription() != null) {
+            variable.setDescription(data.getDescription());
         }
-        if (data.containsKey("sortOrder")) {
-            variable.setSortOrder((Integer) data.get("sortOrder"));
+        if (data.getRequired() != null) {
+            variable.setRequired(Boolean.TRUE.equals(data.getRequired()) ? 1 : 0);
         }
-        if (data.containsKey("status")) {
-            variable.setStatus((Integer) data.get("status"));
+        if (data.getSortOrder() != null) {
+            variable.setSortOrder(data.getSortOrder());
+        }
+        if (data.getStatus() != null) {
+            variable.setStatus(data.getStatus());
         }
         
         variableMapper.updateById(variable);
@@ -160,38 +189,105 @@ public class TemplateVariableController {
     }
     
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteVariable(@PathVariable Long id) {
-        int result = variableMapper.deleteById(id);
-        if (result == 0) {
-            return ApiResponse.error("变量不存在");
+    public ApiResponse<?> deleteVariable(@PathVariable Long id) {
+        TemplateVariable variable = variableMapper.selectById(id);
+        if (variable == null) {
+            return ApiResponse.error("变量不存在", "error.templateVariable.notFound");
         }
+        Map<String, Object> impact = buildVariableImpact(variable.getCode());
+        if ((Integer) impact.getOrDefault("templateCount", 0) > 0) {
+            return ApiResponse.error(
+                    400,
+                    "变量仍被模板引用，无法删除",
+                    "error.templateVariable.inUseCannotDelete",
+                    impact);
+        }
+        variableMapper.deleteById(id);
         return ApiResponse.success(null);
     }
     
+    @GetMapping("/{id}/impact")
+    public ApiResponse<?> getVariableImpact(@PathVariable Long id) {
+        TemplateVariable variable = variableMapper.selectById(id);
+        if (variable == null) {
+            return ApiResponse.error("变量不存在", "error.templateVariable.notFound");
+        }
+        return ApiResponse.success(buildVariableImpact(variable.getCode()));
+    }
+
     @PostMapping("/batch")
-    public ApiResponse<List<TemplateVariable>> batchCreate(@RequestBody List<Map<String, Object>> dataList) {
-        List<TemplateVariable> created = new ArrayList<>();
-        for (Map<String, Object> data : dataList) {
-            if (data.get("code") == null || data.get("name") == null) {
+    public ApiResponse<Map<String, Object>> batchCreate(@RequestBody Map<String, Object> payload) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> items = (List<Map<String, Object>>) payload.get("items");
+        String conflictPolicy = String.valueOf(payload.getOrDefault("conflictPolicy", "skip")).toLowerCase(Locale.ROOT);
+        if (items == null || items.isEmpty()) {
+            return ApiResponse.error(400, "导入数据为空", "error.templateVariable.batchEmpty");
+        }
+
+        Set<String> seenCodes = new HashSet<>();
+        List<Map<String, Object>> created = new ArrayList<>();
+        List<Map<String, Object>> updated = new ArrayList<>();
+        List<Map<String, Object>> skipped = new ArrayList<>();
+        List<Map<String, Object>> failed = new ArrayList<>();
+
+        for (Map<String, Object> item : items) {
+            String code = trimToNull(parseString(item.get("code")));
+            String name = trimToNull(parseString(item.get("name")));
+            if (code == null || name == null) {
+                failed.add(Map.of(
+                        "code", code == null ? "" : code,
+                        "reason", "missing_required"));
                 continue;
             }
-            
-            TemplateVariable variable = new TemplateVariable();
-            variable.setCode((String) data.get("code"));
-            variable.setName((String) data.get("name"));
-            variable.setLabel((String) data.getOrDefault("label", data.get("name")));
-            variable.setType((String) data.getOrDefault("type", "text"));
-            variable.setCategory((String) data.getOrDefault("category", "custom"));
-            variable.setDefaultValue((String) data.getOrDefault("defaultValue", ""));
-            variable.setDescription((String) data.getOrDefault("description", ""));
-            variable.setRequired(0);
-            variable.setSortOrder(0);
-            variable.setStatus(1);
-            
-            variableMapper.insert(variable);
-            created.add(variable);
+            if (!seenCodes.add(code)) {
+                skipped.add(Map.of("code", code, "reason", "duplicate_in_request"));
+                continue;
+            }
+
+            QueryWrapper<TemplateVariable> query = new QueryWrapper<>();
+            query.eq("code", code);
+            TemplateVariable existing = variableMapper.selectOne(query);
+            if (existing != null && !"overwrite".equals(conflictPolicy)) {
+                skipped.add(Map.of("code", code, "reason", "exists"));
+                continue;
+            }
+
+            try {
+                TemplateVariable target = existing == null ? new TemplateVariable() : existing;
+                target.setCode(code);
+                target.setName(name);
+                target.setNameEn(trimToNull(parseString(item.get("nameEn"))));
+                target.setLabel(trimToNull(parseString(item.get("label"))) != null ? parseString(item.get("label")).trim() : name);
+                target.setType(defaultString(trimToNull(parseString(item.get("type"))), "text"));
+                target.setQuickCodeCode(trimToNull(parseString(item.get("quickCodeCode"))));
+                target.setCategory(defaultString(trimToNull(parseString(item.get("category"))), "custom"));
+                target.setDefaultValue(defaultString(parseString(item.get("defaultValue")), ""));
+                target.setDescription(defaultString(parseString(item.get("description")), ""));
+                target.setRequired(Boolean.TRUE.equals(parseBoolean(item.get("required"))) ? 1 : 0);
+                target.setSortOrder(parseInteger(item.get("sortOrder")) == null ? 0 : parseInteger(item.get("sortOrder")));
+                target.setStatus(parseInteger(item.get("status")) == null ? 1 : parseInteger(item.get("status")));
+
+                if (existing == null) {
+                    variableMapper.insert(target);
+                    created.add(Map.of("id", target.getId(), "code", code));
+                } else {
+                    variableMapper.updateById(target);
+                    updated.add(Map.of("id", target.getId(), "code", code));
+                }
+            } catch (Exception e) {
+                failed.add(Map.of(
+                        "code", code,
+                        "reason", defaultString(e.getMessage(), "save_failed")));
+            }
         }
-        return ApiResponse.success(created);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("created", created);
+        result.put("updated", updated);
+        result.put("skipped", skipped);
+        result.put("failed", failed);
+        result.put("total", items.size());
+        return ApiResponse.success(result);
     }
     
     @PostMapping("/init-defaults")
@@ -245,8 +341,67 @@ public class TemplateVariableController {
         defaults.add(createVar("salary", "薪资", "月薪", "number", "employment", "每月的工资"));
         defaults.add(createVar("probationPeriod", "试用期", "试用期", "number", "employment", "试用期的月数"));
         
-        batchCreate(defaults);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("items", defaults);
+        payload.put("conflictPolicy", "skip");
+        batchCreate(payload);
         return ApiResponse.success("已初始化 " + defaults.size() + " 个默认变量");
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Map<String, Object> buildVariableImpact(String code) {
+        String contentNeedle = "[[" + code + "]]";
+        String variablesNeedle = "\"" + code + "\"";
+        QueryWrapper<ContractTemplate> wrapper = new QueryWrapper<>();
+        wrapper.select("id", "name", "category", "updated_at")
+                .and(w -> w.like("content", contentNeedle).or().like("variables", variablesNeedle));
+        List<ContractTemplate> templates = templateMapper.selectList(wrapper);
+        List<Map<String, Object>> templateRefs = templates.stream().map(t -> {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", t.getId());
+            row.put("name", t.getName());
+            row.put("category", t.getCategory());
+            row.put("updatedAt", t.getUpdatedAt());
+            return row;
+        }).collect(Collectors.toList());
+
+        Map<String, Object> impact = new HashMap<>();
+        impact.put("code", code);
+        impact.put("templateCount", templateRefs.size());
+        impact.put("templates", templateRefs);
+        return impact;
+    }
+
+    private String parseString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Integer parseInteger(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) return number.intValue();
+        try {
+            return Integer.valueOf(String.valueOf(value));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Boolean parseBoolean(Object value) {
+        if (value == null) return null;
+        if (value instanceof Boolean bool) return bool;
+        String text = String.valueOf(value).trim().toLowerCase(Locale.ROOT);
+        if ("1".equals(text) || "true".equals(text) || "yes".equals(text)) return true;
+        if ("0".equals(text) || "false".equals(text) || "no".equals(text)) return false;
+        return null;
+    }
+
+    private String defaultString(String value, String fallback) {
+        return value == null ? fallback : value;
     }
     
     private Map<String, Object> createVar(String code, String name, String label, String type, String category, String desc) {

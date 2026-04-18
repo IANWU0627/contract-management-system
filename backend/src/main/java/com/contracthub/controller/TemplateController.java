@@ -25,13 +25,9 @@ public class TemplateController {
     public TemplateController(ContractTemplateMapper templateMapper, TemplateVariableService variableService) {
         this.templateMapper = templateMapper;
         this.variableService = variableService;
-        
-        try {
-            if (templateMapper.selectCount(null) == 0) {
-                initDefaultTemplates();
-            }
-        } catch (Exception e) {
-            // 表不存在时跳过初始化
+
+        if (templateMapper.selectCount(null) == 0) {
+            initDefaultTemplates();
         }
     }
     
@@ -134,6 +130,7 @@ public class TemplateController {
     }
     
     @GetMapping
+    @PreAuthorize("hasAuthority('TEMPLATE_MANAGE')")
     public ApiResponse<Map<String, Object>> list(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword,
@@ -175,6 +172,7 @@ public class TemplateController {
     }
     
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEMPLATE_MANAGE')")
     public ApiResponse<Map<String, Object>> get(@PathVariable Long id) {
         ContractTemplate template = templateMapper.selectById(id);
         if (template == null) {
@@ -254,7 +252,7 @@ public class TemplateController {
         try {
             return objectMapper.writeValueAsString(varMap);
         } catch (Exception e) {
-            return "{}";
+            throw new IllegalStateException("模板变量序列化失败", e);
         }
     }
     
@@ -267,7 +265,7 @@ public class TemplateController {
             }
             return objectMapper.writeValueAsString(merged);
         } catch (Exception e) {
-            return extractedVars;
+            throw new IllegalArgumentException("模板变量JSON格式错误", e);
         }
     }
     
@@ -390,7 +388,7 @@ public class TemplateController {
             Map<String, String> parsed = objectMapper.readValue(variablesJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
             variables.putAll(parsed);
         } catch (Exception e) {
-            // ignore
+            throw new IllegalArgumentException("模板变量定义解析失败", e);
         }
         
         return variables;

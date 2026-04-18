@@ -97,7 +97,7 @@ public class RoleController {
     public ApiResponse<Map<String, Object>> getRoleDetail(@PathVariable Long id) {
         Role role = roleMapper.selectById(id);
         if (role == null) {
-            return ApiResponse.error("角色不存在");
+            return ApiResponse.error("角色不存在", "error.role.notFound");
         }
         
         List<Long> permissionIds = rolePermissionMapper.selectPermissionIdsByRoleId(id);
@@ -120,16 +120,16 @@ public class RoleController {
         
         // 必填校验
         if (name == null || name.trim().isEmpty()) {
-            return ApiResponse.error("角色名称不能为空");
+            return ApiResponse.error("角色名称不能为空", "error.role.nameRequired");
         }
         if (code == null || code.trim().isEmpty()) {
-            return ApiResponse.error("角色编码不能为空");
+            return ApiResponse.error("角色编码不能为空", "error.role.codeRequired");
         }
         
         // 编码重复校验
         Role existingByCode = roleMapper.selectByCode(code.trim());
         if (existingByCode != null) {
-            return ApiResponse.error("角色编码已存在");
+            return ApiResponse.error("角色编码已存在", "error.role.codeExists");
         }
         
         Role role = new Role();
@@ -164,7 +164,7 @@ public class RoleController {
     public ApiResponse<Map<String, Object>> updateRole(@PathVariable Long id, @RequestBody Map<String, Object> roleData) {
         Role role = roleMapper.selectById(id);
         if (role == null) {
-            return ApiResponse.error("角色不存在");
+            return ApiResponse.error("角色不存在", "error.role.notFound");
         }
         
         String name = (String) roleData.get("name");
@@ -172,17 +172,17 @@ public class RoleController {
         
         // 必填校验
         if (name != null && name.trim().isEmpty()) {
-            return ApiResponse.error("角色名称不能为空");
+            return ApiResponse.error("角色名称不能为空", "error.role.nameRequired");
         }
         if (code != null && code.trim().isEmpty()) {
-            return ApiResponse.error("角色编码不能为空");
+            return ApiResponse.error("角色编码不能为空", "error.role.codeRequired");
         }
         
         // 编码重复校验（排除自身）
         if (code != null && !code.trim().equalsIgnoreCase(role.getCode())) {
             Role existingByCode = roleMapper.selectByCode(code.trim());
             if (existingByCode != null && !existingByCode.getId().equals(id)) {
-                return ApiResponse.error("角色编码已存在");
+                return ApiResponse.error("角色编码已存在", "error.role.codeExists");
             }
         }
         
@@ -230,12 +230,12 @@ public class RoleController {
     public ApiResponse<Void> deleteRole(@PathVariable Long id) {
         Role role = roleMapper.selectById(id);
         if (role == null) {
-            return ApiResponse.error("角色不存在");
+            return ApiResponse.error("角色不存在", "error.role.notFound");
         }
         
         // 检查是否有用户使用此角色
         if (userMapper.countByRoleId(id) > 0) {
-            return ApiResponse.error("该角色下存在用户，无法删除");
+            return ApiResponse.error("该角色下存在用户，无法删除", "error.role.hasUsers");
         }
         
         // 删除角色权限关联
@@ -252,11 +252,11 @@ public class RoleController {
     public ApiResponse<Void> toggleRole(@PathVariable Long id) {
         Role role = roleMapper.selectById(id);
         if (role == null) {
-            return ApiResponse.error("角色不存在");
+            return ApiResponse.error("角色不存在", "error.role.notFound");
         }
         
         if ("ADMIN".equals(role.getCode())) {
-            return ApiResponse.error("系统管理员角色无法禁用");
+            return ApiResponse.error("系统管理员角色无法禁用", "error.role.adminProtected");
         }
         
         role.setStatus(role.getStatus() == 1 ? 0 : 1);

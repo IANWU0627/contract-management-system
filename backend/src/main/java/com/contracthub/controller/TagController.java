@@ -102,7 +102,7 @@ public class TagController {
         wrapper.eq("name", name);
         ContractTag existing = tagMapper.selectOne(wrapper);
         if (existing != null) {
-            return ApiResponse.error("标签已存在");
+            return ApiResponse.error("标签已存在", "error.tag.exists");
         }
         
         ContractTag tag = new ContractTag();
@@ -129,7 +129,7 @@ public class TagController {
     public ApiResponse<Void> updateTag(@PathVariable Long id, @RequestBody Map<String, Object> tagData) {
         ContractTag tag = tagMapper.selectById(id);
         if (tag == null) {
-            return ApiResponse.error("标签不存在");
+            return ApiResponse.error("标签不存在", "error.tag.notFound");
         }
         
         Long userId = SecurityUtils.getCurrentUserId();
@@ -137,7 +137,7 @@ public class TagController {
         
         // 只有创建者或管理员可以修改
         if (!isPublic && tag.getCreatorId() != null && !tag.getCreatorId().equals(userId)) {
-            return ApiResponse.error("您没有权限修改此标签");
+            return ApiResponse.error("您没有权限修改此标签", "error.tag.noEditPermission");
         }
         
         if (tagData.containsKey("name")) {
@@ -158,7 +158,7 @@ public class TagController {
     public ApiResponse<Void> deleteTag(@PathVariable Long id) {
         ContractTag tag = tagMapper.selectById(id);
         if (tag == null) {
-            return ApiResponse.error("标签不存在");
+            return ApiResponse.error("标签不存在", "error.tag.notFound");
         }
         
         Long userId = SecurityUtils.getCurrentUserId();
@@ -166,7 +166,7 @@ public class TagController {
         
         // 只有创建者可以删除私有标签
         if (!isPublic && tag.getCreatorId() != null && !tag.getCreatorId().equals(userId)) {
-            return ApiResponse.error("您没有权限删除此标签");
+            return ApiResponse.error("您没有权限删除此标签", "error.tag.noDeletePermission");
         }
         
         tagMapper.deleteTagRelationsByTagId(id);
@@ -202,13 +202,13 @@ public class TagController {
     public ApiResponse<Void> addTagToContract(@PathVariable Long contractId, @RequestBody Map<String, Object> tagData) {
         Contract contract = contractMapper.selectById(contractId);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         
         Long tagId = ((Number) tagData.get("tagId")).longValue();
         ContractTag tag = tagMapper.selectById(tagId);
         if (tag == null) {
-            return ApiResponse.error("标签不存在");
+            return ApiResponse.error("标签不存在", "error.tag.notFound");
         }
         
         tagMapper.insertTagRelation(contractId, tagId);
@@ -225,7 +225,7 @@ public class TagController {
     public ApiResponse<Void> updateContractTags(@PathVariable Long contractId, @RequestBody Map<String, Object> data) {
         Contract contract = contractMapper.selectById(contractId);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         
         tagMapper.deleteTagRelationsByContractId(contractId);

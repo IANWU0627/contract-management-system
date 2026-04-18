@@ -168,7 +168,7 @@
             </h3>
             <div class="payment-info">
               <el-tag>{{ getPaymentMethodLabel(contract.paymentMethod) }}</el-tag>
-              <span v-if="contract.paymentDays">{{ $t('contract.paymentDays') }}：{{ contract.paymentDays }}天</span>
+              <span v-if="contract.paymentDays">{{ $t('contract.paymentDays') }}：{{ contract.paymentDays }}{{ $t('contract.unitDays') }}</span>
               <span v-if="contract.paymentPercent">{{ $t('contract.paymentPercent') }}：{{ contract.paymentPercent }}%</span>
             </div>
             <p v-if="contract.paymentNote" class="payment-note">{{ contract.paymentNote }}</p>
@@ -416,20 +416,24 @@
 
         <el-card shadow="hover" class="history-card">
           <template #header>
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <span>审批摘要卡片</span>
-              <el-button size="small" :loading="approvalSummaryLoading" @click="loadApprovalSummary(true)">重新生成</el-button>
+            <div class="approval-summary-card-header">
+              <span>{{ $t('contract.approvalSummary.title') }}</span>
+              <el-button size="small" :loading="approvalSummaryLoading" @click="loadApprovalSummary(true)">
+                {{ $t('contract.approvalSummary.regenerate') }}
+              </el-button>
             </div>
           </template>
-          <el-empty v-if="!approvalSummary.summary" description="暂无摘要，点击重新生成" />
+          <el-empty v-if="!approvalSummary.summary" :description="$t('contract.approvalSummary.emptyHint')" />
           <template v-else>
             <p style="margin: 0 0 8px; line-height: 1.6;">{{ approvalSummary.summary }}</p>
-            <el-tag size="small" type="success" v-if="approvalSummary.score !== null">风险评分：{{ approvalSummary.score }}</el-tag>
+            <el-tag size="small" type="success" v-if="approvalSummary.score !== null">
+              {{ $t('contract.approvalSummary.riskScore', { score: approvalSummary.score }) }}
+            </el-tag>
             <el-descriptions :column="1" border size="small" style="margin-top: 12px;" v-if="approvalSummary.keyTerms && Object.keys(approvalSummary.keyTerms).length">
-              <el-descriptions-item label="甲方">{{ approvalSummary.keyTerms.partyA || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="乙方">{{ approvalSummary.keyTerms.partyB || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="金额">{{ approvalSummary.keyTerms.amount || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="期限">{{ approvalSummary.keyTerms.duration || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('contract.approvalSummary.keyPartyA')">{{ approvalSummary.keyTerms.partyA || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('contract.approvalSummary.keyPartyB')">{{ approvalSummary.keyTerms.partyB || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('contract.approvalSummary.keyAmount')">{{ approvalSummary.keyTerms.amount || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('contract.approvalSummary.keyDuration')">{{ approvalSummary.keyTerms.duration || '-' }}</el-descriptions-item>
             </el-descriptions>
             <div style="margin-top: 12px;" v-if="Array.isArray(approvalSummary.risks) && approvalSummary.risks.length">
               <el-tag
@@ -438,10 +442,54 @@
                 :type="risk.level === 'high' ? 'danger' : (risk.level === 'medium' ? 'warning' : 'info')"
                 style="margin: 0 6px 6px 0;"
               >
-                {{ risk.level || 'low' }}: {{ risk.content || '-' }}
+                {{ formatApprovalRiskLevel(risk.level) }}: {{ risk.content || '-' }}
               </el-tag>
             </div>
           </template>
+        </el-card>
+
+        <el-card shadow="hover" class="history-card">
+          <template #header>
+            <div class="milestone-card-header">
+              <span>{{ $t('contract.performanceMilestones') }}</span>
+              <div class="milestone-card-actions">
+                <el-button
+                  size="small"
+                  :loading="extractMilestonesLoading"
+                  @click="handleExtractMilestones"
+                >
+                  {{ $t('contract.extractMilestonesFromBody') }}
+                </el-button>
+                <el-button
+                  size="small"
+                  :loading="performanceMilestonesLoading"
+                  @click="loadPerformanceMilestones"
+                >
+                  {{ $t('ai.refresh') }}
+                </el-button>
+              </div>
+            </div>
+          </template>
+          <el-table
+            v-if="performanceMilestones.length"
+            :data="performanceMilestones"
+            size="small"
+            stripe
+            max-height="280"
+          >
+            <el-table-column prop="title" :label="$t('contract.milestoneTitle')" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="dueDate" :label="$t('contract.milestoneDueDate')" width="112" />
+            <el-table-column prop="offsetDays" :label="$t('contract.milestoneOffsetDays')" width="96" />
+            <el-table-column prop="anchorNote" :label="$t('contract.milestoneAnchor')" width="100" show-overflow-tooltip />
+            <el-table-column prop="status" :label="$t('contract.milestoneStatus')" width="88">
+              <template #default="{ row }">
+                <span>{{ row.status === 'PENDING' ? $t('contract.milestonePending') : row.status }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="source" :label="$t('contract.milestoneSource')" width="96" show-overflow-tooltip />
+            <el-table-column prop="lastRemindedAt" :label="$t('contract.milestoneLastReminded')" width="156" show-overflow-tooltip />
+          </el-table>
+          <el-empty v-else :description="$t('common.none')" />
         </el-card>
         
         <!-- 审批历史 -->
@@ -515,7 +563,9 @@ import {
   getApprovalHistory,
   copyContract,
   getApprovalSummary,
-  generateApprovalSummary
+  generateApprovalSummary,
+  getPerformanceMilestones,
+  extractPerformanceMilestones
 } from '@/api/contract'
 import { addFavorite, removeFavorite, checkFavorite } from '@/api/favorite'
 import { getTags, addTagToContract, removeTagFromContract, getTagsByContract } from '@/api/tag'
@@ -572,6 +622,10 @@ const approvalSummary = ref<any>({
 })
 const approvalSummaryLoading = ref(false)
 
+const performanceMilestones = ref<any[]>([])
+const performanceMilestonesLoading = ref(false)
+const extractMilestonesLoading = ref(false)
+
 const actionLoading = ref(false)
 const approvalHistory = ref<any[]>([])
 const isFavorited = ref(false)
@@ -617,6 +671,19 @@ const formatType = (type: string) => {
     OTHER: t('contract.types.other')
   }
   return map[type] || type
+}
+
+const formatApprovalRiskLevel = (level?: string) => {
+  if (level == null || level === '') {
+    return t('contract.approvalSummary.riskLevels.low')
+  }
+  const raw = String(level).trim()
+  const l = raw.toLowerCase()
+  if (l === 'high' || raw === '高') return t('contract.approvalSummary.riskLevels.high')
+  if (l === 'medium' || raw === '中') return t('contract.approvalSummary.riskLevels.medium')
+  if (l === 'low' || raw === '低') return t('contract.approvalSummary.riskLevels.low')
+  if (raw === '轻微' || l === 'minor') return t('contract.approvalSummary.riskLevels.minor')
+  return raw
 }
 
 const formatStatus = (status: string) => {
@@ -888,10 +955,38 @@ const fetchContract = async () => {
       loadApprovalSummary(false),
       loadContractFolder(),
       loadCounterparties(),
-      loadAttachments()
+      loadAttachments(),
+      loadPerformanceMilestones()
     ])
   } catch (error) {
     ElMessage.error(t('contract.error.fetch'))
+  }
+}
+
+const loadPerformanceMilestones = async () => {
+  performanceMilestonesLoading.value = true
+  try {
+    const res: any = await getPerformanceMilestones(contractId.value)
+    const rows = res?.data
+    performanceMilestones.value = Array.isArray(rows) ? rows : []
+  } catch (_e) {
+    performanceMilestones.value = []
+  } finally {
+    performanceMilestonesLoading.value = false
+  }
+}
+
+const handleExtractMilestones = async () => {
+  extractMilestonesLoading.value = true
+  try {
+    const res: any = await extractPerformanceMilestones(contractId.value)
+    const n = res?.data?.inserted ?? 0
+    ElMessage.success(t('contract.milestonesExtracted', { count: n }))
+    await loadPerformanceMilestones()
+  } catch (_e) {
+    /* interceptor */
+  } finally {
+    extractMilestonesLoading.value = false
   }
 }
 
@@ -916,7 +1011,7 @@ const loadApprovalSummary = async (forceGenerate = false) => {
     }
   } catch (_error) {
     if (forceGenerate) {
-      ElMessage.error('审批摘要生成失败')
+      ElMessage.error(t('contract.approvalSummary.generateFailed'))
     }
   } finally {
     approvalSummaryLoading.value = false
@@ -926,8 +1021,8 @@ const loadApprovalSummary = async (forceGenerate = false) => {
 const loadCounterparties = async () => {
   try {
     const res = await getCounterpartiesByContractId(contractId.value)
-    const rows = Array.isArray(res) ? res : (res as any)?.data || []
-    counterparties.value = rows.map((item: any) => ({
+    const rows = res.data ?? []
+    counterparties.value = rows.map((item) => ({
       ...item,
       contactPerson: item.contactPerson || item.contact || '',
       contactPhone: item.contactPhone || item.phone || '',
@@ -941,7 +1036,7 @@ const loadCounterparties = async () => {
 const loadAttachments = async () => {
   try {
     const res = await getAttachmentsByContractId(contractId.value)
-    attachments.value = Array.isArray(res) ? res : (res as any)?.data || []
+    attachments.value = res.data ?? []
   } catch (error) {
     attachments.value = []
   }
@@ -1667,6 +1762,30 @@ onMounted(async () => {
   
   .history-card {
     margin-top: 20px;
+
+    .approval-summary-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .milestone-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .milestone-card-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     
     .author {
       color: var(--text-secondary);

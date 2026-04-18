@@ -101,6 +101,26 @@ export const getContractTypeFieldConfig = (contractType: string, page = 1, pageS
   return promise
 }
 
+export const getContractTypeFieldDraftConfig = (contractType: string) => {
+  clearFieldConfigCache()
+  return get(`/contract-type-fields/draft/${contractType}`)
+}
+
+export const saveContractTypeFieldDraft = (contractType: string, fields: Partial<ContractTypeField>[]) => {
+  clearFieldConfigCache()
+  return put(`/contract-type-fields/draft/${contractType}`, { fields })
+}
+
+export const discardContractTypeFieldDraft = (contractType: string) => {
+  clearFieldConfigCache()
+  return del(`/contract-type-fields/draft/${contractType}`)
+}
+
+export const publishContractTypeFieldDraft = (contractType: string) => {
+  clearFieldConfigCache()
+  return post(`/contract-type-fields/publish/${contractType}`)
+}
+
 export const getContractTypeFormFields = (contractType: string) => {
   const cacheKey = `form:${contractType}`
   const cached = fieldConfigCache.get(cacheKey)

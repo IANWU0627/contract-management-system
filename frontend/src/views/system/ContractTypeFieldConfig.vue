@@ -59,7 +59,22 @@
             {{ $t('typeFieldConfig.fieldConfig') }}
           </h2>
           <div class="field-count">
+            <el-tag type="warning" effect="plain" style="margin-right: 8px;">
+              {{ $t('typeFieldConfig.draftMode') }} v{{ draftPublishVersion }}
+            </el-tag>
+            <el-tag v-if="hasLocalChanges" type="danger" effect="plain" style="margin-right: 8px;">
+              {{ $t('typeFieldConfig.unsavedChanges') }}
+            </el-tag>
             <el-tag type="info">{{ totalFields }} {{ $t('typeFieldConfig.fields') }}</el-tag>
+            <el-button size="small" type="primary" style="margin-left: 8px;" :disabled="!hasLocalChanges" @click="handleSaveDraft">
+              {{ $t('typeFieldConfig.saveDraft') }}
+            </el-button>
+            <el-button size="small" type="success" style="margin-left: 8px;" @click="handlePublishDraft">
+              {{ $t('typeFieldConfig.publishDraft') }}
+            </el-button>
+            <el-button size="small" @click="handleDiscardDraft">
+              {{ $t('typeFieldConfig.discardDraft') }}
+            </el-button>
           </div>
         </div>
         
@@ -101,11 +116,29 @@
                 <el-icon><Collection /></el-icon>
                 {{ $t('typeFieldConfig.presetFields') }}
               </el-button>
+              <el-button size="small" :disabled="selectedFieldIds.length === 0" @click="handleBatchSetRequired(true)">
+                {{ $t('typeFieldConfig.batchSetRequired') }}
+              </el-button>
+              <el-button size="small" :disabled="selectedFieldIds.length === 0" @click="handleBatchSetShowInList(true)">
+                {{ $t('typeFieldConfig.batchShowInList') }}
+              </el-button>
+              <el-button size="small" :disabled="selectedFieldIds.length === 0" @click="handleBatchSetShowInForm(true)">
+                {{ $t('typeFieldConfig.batchShowInForm') }}
+              </el-button>
+              <el-button size="small" type="danger" :disabled="selectedFieldIds.length === 0" @click="handleBatchDelete">
+                {{ $t('typeFieldConfig.batchDelete') }}
+              </el-button>
             </div>
           </div>
           
           <!-- 字段配置表格 -->
-          <el-table :data="paginatedFields" style="width: 100%" row-key="id" v-loading="loading" stripe>
+          <el-table ref="fieldsTableRef" :data="paginatedFields" style="width: 100%" row-key="id" v-loading="loading" stripe @selection-change="handleSelectionChange">
+            <el-table-column type="selection" width="44" />
+            <el-table-column :label="$t('typeFieldConfig.dragSort')" width="64" align="center">
+              <template #default>
+                <span class="drag-handle">⋮⋮</span>
+              </template>
+            </el-table-column>
             <el-table-column :label="$t('typeFieldConfig.fieldKey')" min-width="160" show-overflow-tooltip>
               <template #default="{ row }">
                 <code class="field-key-code">{{ row.fieldKey }}</code>
@@ -162,7 +195,7 @@
                     :type="$index === 0 ? 'info' : 'primary'" 
                     circle 
                     @click="handleMoveField($index, -1)" 
-                    :disabled="$index === 0"
+                    :disabled="$index === 0 || !!searchKeyword"
                   >
                     <el-icon><SortUp /></el-icon>
                   </el-button>
@@ -171,7 +204,7 @@
                     :type="$index === filteredFieldsForSearch.length - 1 ? 'info' : 'primary'" 
                     circle 
                     @click="handleMoveField($index, 1)" 
-                    :disabled="$index === filteredFieldsForSearch.length - 1"
+                    :disabled="$index === filteredFieldsForSearch.length - 1 || !!searchKeyword"
                   >
                     <el-icon><SortDown /></el-icon>
                   </el-button>
@@ -224,9 +257,17 @@
                 </el-select>
               </el-form-item>
               <el-form-item v-if="fieldForm.fieldType === 'select' || fieldForm.fieldType === 'multiselect'" :label="$t('typeFieldConfig.quickCode')">
-                <el-select v-model="fieldForm.quickCodeId" style="width: 100%" :placeholder="$t('quickCode.select')" clearable filterable>
+                <el-select
+                  v-model="fieldForm.quickCodeId"
+                  style="width: 100%"
+                  :placeholder="$t('quickCode.select')"
+                  clearable
+                  filterable
+                  :filter-method="handleQuickCodeFilter"
+                  @visible-change="handleQuickCodeDropdownVisible"
+                >
                   <el-option
-                    v-for="qc in quickCodes"
+                    v-for="qc in quickCodeOptionsToRender"
                     :key="qc.id"
                     :label="locale === 'en' && qc.nameEn ? qc.nameEn : qc.name"
                     :value="qc.code"
@@ -271,19 +312,25 @@
                 <template #prefix><el-icon><Search /></el-icon></template>
               </el-input>
             </div>
-            <div class="preset-list">
+            <div class="preset-list" ref="presetListRef" @scroll.passive="handlePresetListScroll">
               <el-tag 
-                v-for="preset in filteredPresetFields" 
+                v-for="preset in visiblePresetFields" 
                 :key="preset.fieldKey"
                 class="preset-tag"
                 :type="addedFieldKeysSet.has(preset.fieldKey) ? 'info' : ''"
                 :disable-transitions="true"
-                @click="!addedFieldKeysSet.has(preset.fieldKey) && addPresetField(preset)"
+                @click="!addedFieldKeysSet.has(preset.fieldKey) && !addingPresetFieldMap[preset.fieldKey] && addPresetField(preset)"
               >
                 {{ locale === 'en' ? preset.fieldLabelEn : preset.fieldLabel }} ({{ preset.fieldKey }})
                 <el-icon v-if="addedFieldKeysSet.has(preset.fieldKey)"><Check /></el-icon>
+                <el-icon v-else-if="addingPresetFieldMap[preset.fieldKey]"><Loading /></el-icon>
               </el-tag>
               <el-empty v-if="filteredPresetFields.length === 0" :description="$t('common.none')" :image-size="60" />
+            </div>
+            <div v-if="showPresetFields && filteredPresetFields.length > presetDisplayLimit" class="preset-more-row">
+              <el-button link type="primary" @click="expandPresetList">
+                {{ t('common.more') }} ({{ filteredPresetFields.length - presetDisplayLimit }})
+              </el-button>
             </div>
           </div>
           
@@ -325,22 +372,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import Sortable from 'sortablejs'
 import { 
   getContractTypeFields, 
-  getContractTypeFieldConfig,
-  createContractTypeField,
-  updateContractTypeField,
-  deleteContractTypeField,
-  batchCreateContractTypeFields,
-  deleteContractTypeFieldsByType,
+  getContractTypeFieldDraftConfig,
+  saveContractTypeFieldDraft,
+  discardContractTypeFieldDraft,
+  publishContractTypeFieldDraft,
   getFieldCounts
 } from '@/api/contractTypeField'
 import { getContractCategories } from '@/api/contractCategory'
-import { getQuickCodes, getQuickCodeByCode } from '@/api/quickCode'
-import { Plus, Delete, ArrowLeft, Check, Search, Download, Upload, Setting, Refresh, Collection, Close, Edit, SortUp, SortDown, ArrowDown } from '@element-plus/icons-vue'
+import { getQuickCodes } from '@/api/quickCode'
+import { Plus, Delete, ArrowLeft, Check, Search, Download, Upload, Setting, Refresh, Collection, Close, Edit, SortUp, SortDown, ArrowDown, Loading } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
 
@@ -355,15 +401,28 @@ const typeForm = reactive({ value: '' })
 const fieldCountMap = ref<Record<string, number>>({})
 const fieldsCache = ref<Record<string, any[]>>({})
 const totalFields = ref(0)
+const hasLocalChanges = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(5)
 const searchKeyword = ref('')
 const showPresetFields = ref(false)
 const presetSearch = ref('')
 const presetFilterType = ref('all')
+const presetDisplayLimit = ref(40)
+const addingPresetFieldMap = reactive<Record<string, boolean>>({})
+const presetListRef = ref<HTMLElement | null>(null)
+let presetRefreshTimer: number | null = null
+let presetSuccessToastTimer: number | null = null
+const presetSuccessCount = ref(0)
+const draftPublishVersion = ref(0)
+let localTempFieldId = -1
+const selectedFieldIds = ref<number[]>([])
+const fieldsTableRef = ref<any>(null)
+let fieldSortable: Sortable | null = null
 
 const showFieldDialog = ref(false)
 const isEditMode = ref(false)
+const LAST_SELECTED_TYPE_KEY = 'contract_type_field_last_selected_type'
 const fieldForm = reactive({
   id: null as number | null,
   fieldKey: '',
@@ -375,6 +434,7 @@ const fieldForm = reactive({
   showInList: true,
   showInForm: true
 })
+const QUICK_CODE_RECENT_KEY = 'contract_type_field_recent_quick_codes'
 
 const addedFieldKeysSet = computed(() => new Set(allFields.value.map(f => f.fieldKey)))
 
@@ -394,8 +454,17 @@ const filteredFieldsForSearch = computed(() => {
 
 watch(filteredFieldsForSearch, (val) => {
   totalFields.value = val.length
-  const start = (currentPage.value - 1) * pageSize.value
-  fields.value = val.slice(start, start + pageSize.value)
+  applyFieldPagination()
+  nextTick(initFieldRowDrag)
+})
+
+watch([presetFilterType, presetSearch, showPresetFields], () => {
+  if (showPresetFields.value) {
+    presetDisplayLimit.value = 40
+    if (presetListRef.value) {
+      presetListRef.value.scrollTop = 0
+    }
+  }
 })
 
 const getTypeLabel = (type: string) => {
@@ -422,6 +491,8 @@ const openAddDialog = () => {
   fieldForm.required = false
   fieldForm.showInList = true
   fieldForm.showInForm = true
+  quickCodeSearchKeyword.value = ''
+  quickCodeDropdownOpen.value = false
   showFieldDialog.value = true
 }
 
@@ -436,6 +507,8 @@ const openEditDialog = (row: any) => {
   fieldForm.required = row.required
   fieldForm.showInList = row.showInList
   fieldForm.showInForm = row.showInForm
+  quickCodeSearchKeyword.value = ''
+  quickCodeDropdownOpen.value = false
   showFieldDialog.value = true
 }
 
@@ -445,7 +518,7 @@ const handleSaveField = async () => {
     return
   }
   
-  if (fieldForm.fieldType === 'select' && !fieldForm.quickCodeId) {
+  if ((fieldForm.fieldType === 'select' || fieldForm.fieldType === 'multiselect') && !fieldForm.quickCodeId) {
     ElMessage.warning(t('typeFieldConfig.selectQuickCodeRequired'))
     return
   }
@@ -457,9 +530,26 @@ const handleSaveField = async () => {
   
   saving.value = true
   try {
-    if (isEditMode.value) {
-      await updateContractTypeField(fieldForm.id!, {
-        contractType: currentType.value || undefined,
+    if (isEditMode.value && fieldForm.id != null) {
+      const idx = allFields.value.findIndex(f => f.id === fieldForm.id)
+      if (idx >= 0) {
+        allFields.value[idx] = {
+          ...allFields.value[idx],
+          fieldLabel: fieldForm.fieldLabel,
+          fieldLabelEn: fieldForm.fieldLabelEn,
+          fieldType: fieldForm.fieldType,
+          quickCodeId: (fieldForm.fieldType === 'select' || fieldForm.fieldType === 'multiselect')
+            ? fieldForm.quickCodeId
+            : null,
+          required: fieldForm.required,
+          showInList: fieldForm.showInList,
+          showInForm: fieldForm.showInForm
+        }
+      }
+    } else {
+      allFields.value.push({
+        id: localTempFieldId--,
+        contractType: currentType.value,
         fieldKey: fieldForm.fieldKey,
         fieldLabel: fieldForm.fieldLabel,
         fieldLabelEn: fieldForm.fieldLabelEn,
@@ -469,24 +559,17 @@ const handleSaveField = async () => {
           : null,
         required: fieldForm.required,
         showInList: fieldForm.showInList,
-        showInForm: fieldForm.showInForm
-      })
-    } else {
-      await createContractTypeField({
-        contractType: currentType.value,
-        fieldKey: fieldForm.fieldKey,
-        fieldLabel: fieldForm.fieldLabel,
-        fieldLabelEn: fieldForm.fieldLabelEn,
-        fieldType: fieldForm.fieldType,
-        quickCodeId: fieldForm.quickCodeId,
-        required: fieldForm.required,
-        showInList: fieldForm.showInList,
-        showInForm: fieldForm.showInForm
+        showInForm: fieldForm.showInForm,
+        fieldOrder: allFields.value.length
       })
     }
-    ElMessage.success(t('common.success'))
+    hasLocalChanges.value = true
+    if ((fieldForm.fieldType === 'select' || fieldForm.fieldType === 'multiselect') && fieldForm.quickCodeId) {
+      recordRecentQuickCode(fieldForm.quickCodeId)
+    }
     showFieldDialog.value = false
-    await loadFields()
+    totalFields.value = allFields.value.length
+    applyFieldPagination()
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))
   } finally {
@@ -582,22 +665,91 @@ const presetFields = [
 ]
 
 const quickCodes = ref<any[]>([])
-const quickCodeItemsCache = ref<Record<string, any[]>>({})
+const quickCodeSearchKeyword = ref('')
+const recentQuickCodeCodes = ref<string[]>([])
+const quickCodeDropdownOpen = ref(false)
 
-const loadAllQuickCodeItems = async () => {
+const loadQuickCodes = async () => {
   try {
     const res = await getQuickCodes()
     quickCodes.value = res.data || []
-    for (const qc of quickCodes.value) {
-      try {
-        const itemsRes = await getQuickCodeByCode(qc.code)
-        quickCodeItemsCache.value[qc.code] = itemsRes.data || []
-      } catch (e) {
-        quickCodeItemsCache.value[qc.code] = []
-      }
-    }
   } catch (error) {
     console.error('Failed to load quick codes:', error)
+  }
+}
+
+const loadRecentQuickCodes = () => {
+  try {
+    const raw = localStorage.getItem(QUICK_CODE_RECENT_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      recentQuickCodeCodes.value = parsed.filter((item) => typeof item === 'string').slice(0, 8)
+    }
+  } catch (e) {
+    recentQuickCodeCodes.value = []
+  }
+}
+
+const recordRecentQuickCode = (code: string) => {
+  const next = [code, ...recentQuickCodeCodes.value.filter(item => item !== code)].slice(0, 8)
+  recentQuickCodeCodes.value = next
+  try {
+    localStorage.setItem(QUICK_CODE_RECENT_KEY, JSON.stringify(next))
+  } catch (e) {
+    // ignore localStorage failures
+  }
+}
+
+const getQuickCodeName = (qc: any) => {
+  return (locale.value === 'en' && qc.nameEn ? qc.nameEn : qc.name) || ''
+}
+
+const sortedQuickCodes = computed(() => {
+  const keyword = quickCodeSearchKeyword.value.trim().toLowerCase()
+  const recentMap = new Map<string, number>()
+  recentQuickCodeCodes.value.forEach((code, idx) => recentMap.set(code, idx))
+  const ranked = [...quickCodes.value].map((qc, idx) => {
+    const code = String(qc.code || '')
+    const name = getQuickCodeName(qc)
+    const codeLower = code.toLowerCase()
+    const nameLower = name.toLowerCase()
+    let score = 0
+    if (keyword) {
+      if (codeLower.startsWith(keyword)) score += 400
+      else if (codeLower.includes(keyword)) score += 250
+      if (nameLower.startsWith(keyword)) score += 300
+      else if (nameLower.includes(keyword)) score += 180
+    }
+    if (recentMap.has(code)) {
+      score += 120 - (recentMap.get(code) || 0) * 10
+    }
+    return { qc, score, idx }
+  })
+  ranked.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    return a.idx - b.idx
+  })
+  return ranked.map(item => item.qc)
+})
+
+const quickCodeOptionsToRender = computed(() => {
+  if (quickCodeDropdownOpen.value) return sortedQuickCodes.value
+  const limited = sortedQuickCodes.value.slice(0, 40)
+  if (!fieldForm.quickCodeId) return limited
+  if (limited.some(item => item.code === fieldForm.quickCodeId)) return limited
+  const selected = sortedQuickCodes.value.find(item => item.code === fieldForm.quickCodeId)
+  return selected ? [selected, ...limited] : limited
+})
+
+const handleQuickCodeFilter = (value: string) => {
+  quickCodeSearchKeyword.value = value || ''
+}
+
+const handleQuickCodeDropdownVisible = (visible: boolean) => {
+  quickCodeDropdownOpen.value = visible
+  if (!visible) {
+    quickCodeSearchKeyword.value = ''
   }
 }
 
@@ -682,18 +834,58 @@ const filteredPresetFields = computed(() => {
   })
 })
 
+const visiblePresetFields = computed(() => {
+  return filteredPresetFields.value.slice(0, presetDisplayLimit.value)
+})
+
+const expandPresetList = () => {
+  presetDisplayLimit.value = Math.min(filteredPresetFields.value.length, presetDisplayLimit.value + 40)
+}
+
+const handlePresetListScroll = () => {
+  const node = presetListRef.value
+  if (!node) return
+  const distanceToBottom = node.scrollHeight - node.scrollTop - node.clientHeight
+  if (distanceToBottom <= 24 && visiblePresetFields.value.length < filteredPresetFields.value.length) {
+    expandPresetList()
+  }
+}
+
+const normalizeDraftField = (field: any, idx: number) => ({
+  id: typeof field.id === 'number' && field.id > 0 ? field.id : null,
+  contractType: currentType.value,
+  fieldKey: field.fieldKey,
+  fieldLabel: field.fieldLabel,
+  fieldLabelEn: field.fieldLabelEn || '',
+  fieldType: field.fieldType,
+  quickCodeId: (field.fieldType === 'select' || field.fieldType === 'multiselect')
+    ? (field.quickCodeId || null)
+    : null,
+  required: !!field.required,
+  showInList: field.showInList !== false,
+  showInForm: field.showInForm !== false,
+  fieldOrder: idx,
+  placeholder: field.placeholder || null,
+  placeholderEn: field.placeholderEn || null,
+  defaultValue: field.defaultValue || null,
+  options: field.options || null,
+  minValue: field.minValue ?? null,
+  maxValue: field.maxValue ?? null
+})
+
 const selectType = async (type: string) => {
   currentType.value = type
+  localStorage.setItem(LAST_SELECTED_TYPE_KEY, type)
   presetFilterType.value = type
   presetSearch.value = ''
   showPresetFields.value = false
   searchKeyword.value = ''
   currentPage.value = 1
   
-  if (fieldsCache.value[type]) {
+  if (fieldsCache.value[type] && (fieldsCache.value[type].length > 0 || getFieldCount(type) === 0)) {
     allFields.value = fieldsCache.value[type]
     totalFields.value = allFields.value.length
-    fields.value = allFields.value.slice(0, pageSize.value)
+    applyFieldPagination()
     return
   }
   await loadFields()
@@ -703,11 +895,15 @@ const loadFields = async () => {
   if (!currentType.value) return
   loading.value = true
   try {
-    const res = await getContractTypeFieldConfig(currentType.value, 1, 1000)
+    const res = await getContractTypeFieldDraftConfig(currentType.value)
     allFields.value = res.data?.fields || []
+    hasLocalChanges.value = false
+    selectedFieldIds.value = []
+    draftPublishVersion.value = res.data?.publishVersion || 0
     totalFields.value = allFields.value.length
     fieldsCache.value[currentType.value] = allFields.value
-    fields.value = allFields.value.slice(0, pageSize.value)
+    applyFieldPagination()
+    nextTick(initFieldRowDrag)
     fieldCountMap.value[currentType.value] = totalFields.value
   } catch (error) {
     ElMessage.error(t('common.error'))
@@ -718,15 +914,13 @@ const loadFields = async () => {
 
 const handlePageChange = (page: number) => {
   currentPage.value = page
-  const start = (page - 1) * pageSize.value
-  fields.value = filteredFieldsForSearch.value.slice(start, start + pageSize.value)
+  applyFieldPagination()
 }
 
 const handleSizeChange = (size: number) => {
   pageSize.value = size
   currentPage.value = 1
-  const start = 0
-  fields.value = filteredFieldsForSearch.value.slice(start, start + size)
+  applyFieldPagination()
 }
 
 const handleSearch = () => {
@@ -736,6 +930,38 @@ const handleSearch = () => {
 const handleReset = () => {
   searchKeyword.value = ''
   currentPage.value = 1
+}
+
+const applyFieldPagination = () => {
+  const start = (currentPage.value - 1) * pageSize.value
+  fields.value = filteredFieldsForSearch.value.slice(start, start + pageSize.value)
+  nextTick(initFieldRowDrag)
+}
+
+const scheduleApplyFieldPagination = () => {
+  if (presetRefreshTimer) {
+    window.clearTimeout(presetRefreshTimer)
+  }
+  presetRefreshTimer = window.setTimeout(() => {
+    applyFieldPagination()
+    presetRefreshTimer = null
+  }, 120)
+}
+
+const schedulePresetSuccessToast = () => {
+  presetSuccessCount.value += 1
+  if (presetSuccessToastTimer) {
+    window.clearTimeout(presetSuccessToastTimer)
+  }
+  presetSuccessToastTimer = window.setTimeout(() => {
+    if (presetSuccessCount.value <= 1) {
+      ElMessage.success(t('common.success'))
+    } else {
+      ElMessage.success(`${t('common.success')} (${presetSuccessCount.value})`)
+    }
+    presetSuccessCount.value = 0
+    presetSuccessToastTimer = null
+  }, 200)
 }
 
 const handleAction = (command: string, row: any) => {
@@ -752,9 +978,8 @@ const handleAction = (command: string, row: any) => {
 const handleDelete = async (id: number) => {
   try {
     await ElMessageBox.confirm(t('common.confirmDelete'), t('common.warning'), { type: 'warning' })
-    await deleteContractTypeField(id)
-    ElMessage.success(t('common.success'))
     allFields.value = allFields.value.filter(f => f.id !== id)
+    hasLocalChanges.value = true
     if (fieldsCache.value[currentType.value!]) {
       fieldsCache.value[currentType.value!] = fieldsCache.value[currentType.value!].filter(f => f.id !== id)
     }
@@ -774,19 +999,32 @@ const addPresetField = async (preset: any) => {
     ElMessage.warning(t('typeFieldConfig.fieldExists'))
     return
   }
+  if (addingPresetFieldMap[preset.fieldKey]) return
+  addingPresetFieldMap[preset.fieldKey] = true
   
   try {
-    await createContractTypeField({
+    const createdField = {
+      id: localTempFieldId--,
       contractType: currentType.value,
       ...preset,
       required: false,
       showInList: true,
-      showInForm: true
-    })
-    ElMessage.success(t('common.success'))
-    await loadFields()
+      showInForm: true,
+      fieldOrder: allFields.value.length
+    }
+    allFields.value = [...allFields.value, createdField]
+    hasLocalChanges.value = true
+    totalFields.value = allFields.value.length
+    if (currentType.value) {
+      fieldsCache.value[currentType.value] = [...allFields.value]
+      fieldCountMap.value[currentType.value] = totalFields.value
+    }
+    scheduleApplyFieldPagination()
+    schedulePresetSuccessToast()
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))
+  } finally {
+    addingPresetFieldMap[preset.fieldKey] = false
   }
 }
 
@@ -855,10 +1093,19 @@ const handleFileChange = async (event: Event) => {
     await ElMessageBox.confirm(t('typeFieldConfig.confirmImport'), t('common.warning'), { type: 'warning' })
     
     loading.value = true
-    for (const [contractType, flds] of Object.entries(importData)) {
-      await deleteContractTypeFieldsByType(contractType)
-      await batchCreateContractTypeFields(contractType, flds as any[])
+    if (!currentType.value) {
+      ElMessage.warning(t('typeFieldConfig.selectTypeWarning'))
+      loading.value = false
+      return
     }
+    const importFields = (importData[currentType.value] || importData.fields || []) as any[]
+    allFields.value = importFields.map((f: any, idx: number) => ({
+      ...f,
+      id: f.id ?? (localTempFieldId--),
+      contractType: currentType.value,
+      fieldOrder: typeof f.fieldOrder === 'number' ? f.fieldOrder : idx
+    }))
+    hasLocalChanges.value = true
     
     ElMessage.success(t('typeFieldConfig.importSuccess'))
     
@@ -886,45 +1133,97 @@ const refreshFieldCounts = async () => {
   }
 }
 
+const persistDraft = async (showMessage = true) => {
+  if (!currentType.value) return
+  const payload = allFields.value.map((field, idx) => normalizeDraftField(field, idx))
+  await saveContractTypeFieldDraft(currentType.value, payload)
+  hasLocalChanges.value = false
+  fieldsCache.value[currentType.value] = [...allFields.value]
+  if (showMessage) {
+    ElMessage.success(t('common.success'))
+  }
+}
+
+const handleSaveDraft = async () => {
+  try {
+    await persistDraft(true)
+  } catch (error: any) {
+    ElMessage.error(error.message || t('common.error'))
+  }
+}
+
+const handlePublishDraft = async () => {
+  if (!currentType.value) return
+  try {
+    if (hasLocalChanges.value) {
+      await persistDraft(false)
+    }
+    await ElMessageBox.confirm(t('typeFieldConfig.confirmPublishDraft'), t('common.warning'), { type: 'warning' })
+    const res = await publishContractTypeFieldDraft(currentType.value)
+    draftPublishVersion.value = res.data?.publishVersion || draftPublishVersion.value + 1
+    await refreshFieldCounts()
+    ElMessage.success(t('typeFieldConfig.publishSuccess'))
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+}
+
+const handleDiscardDraft = async () => {
+  if (!currentType.value) return
+  try {
+    await ElMessageBox.confirm(t('typeFieldConfig.confirmDiscardDraft'), t('common.warning'), { type: 'warning' })
+    await discardContractTypeFieldDraft(currentType.value)
+    await loadFields()
+    hasLocalChanges.value = false
+    ElMessage.success(t('typeFieldConfig.discardSuccess'))
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+}
+
 const handleInitializeDefaults = async () => {
   try {
     await ElMessageBox.confirm(t('typeFieldConfig.confirmInit'), t('common.warning'), { type: 'warning' })
     
-    loading.value = true
-    const types = contractTypes.value
-    for (const type of types) {
-      await deleteContractTypeFieldsByType(type.value)
-      
-      const typeFields = presetFields.filter((_, idx) => {
-        const cats = Object.entries(presetFieldCategories)
-        for (const [cat, keys] of cats) {
-          if (cat !== 'common' && keys.includes(presetFields[idx].fieldKey)) {
-            return cat.toUpperCase() === type.value
-          }
-        }
-        return false
-      })
-      
-      const commonFields = presetFields.filter((_, idx) => {
-        const cats = Object.entries(presetFieldCategories)
-        for (const [cat, keys] of cats) {
-          if (cat === 'common' && keys.includes(presetFields[idx].fieldKey)) {
-            return true
-          }
-        }
-        return false
-      })
-      
-      const allFieldsToAdd = [...typeFields, ...commonFields]
-      if (allFieldsToAdd.length > 0) {
-        await batchCreateContractTypeFields(type.value, allFieldsToAdd)
-      }
+    if (!currentType.value) {
+      ElMessage.warning(t('typeFieldConfig.selectTypeWarning'))
+      return
     }
-    
+    loading.value = true
+    const typeFields = presetFields.filter((_, idx) => {
+      const cats = Object.entries(presetFieldCategories)
+      for (const [cat, keys] of cats) {
+        if (cat !== 'COMMON' && keys.includes(presetFields[idx].fieldKey)) {
+          return cat.toUpperCase() === currentType.value
+        }
+      }
+      return false
+    })
+    const commonFields = presetFields.filter((_, idx) => {
+      const cats = Object.entries(presetFieldCategories)
+      for (const [cat, keys] of cats) {
+        if (cat === 'COMMON' && keys.includes(presetFields[idx].fieldKey)) {
+          return true
+        }
+      }
+      return false
+    })
+    allFields.value = [...typeFields, ...commonFields].map((item, idx) => ({
+      ...item,
+      id: localTempFieldId--,
+      contractType: currentType.value,
+      required: false,
+      showInList: true,
+      showInForm: true,
+      fieldOrder: idx
+    }))
+    hasLocalChanges.value = true
     ElMessage.success(t('common.success'))
-    fieldsCache.value = {}
-    if (currentType.value) await loadFields()
-    await refreshFieldCounts()
+    applyFieldPagination()
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error(t('common.error'))
@@ -953,6 +1252,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
 }
 
 const handleMoveField = async (index: number, direction: number) => {
+  if (searchKeyword.value) {
+    ElMessage.warning(t('typeFieldConfig.reorderSearchBlocked'))
+    return
+  }
   const realIndex = (currentPage.value - 1) * pageSize.value + index
   const newIndex = realIndex + direction
   
@@ -968,22 +1271,7 @@ const handleMoveField = async (index: number, direction: number) => {
   })
   
   try {
-    const changedRows = [allFields.value[realIndex], allFields.value[newIndex]]
-    await Promise.all(
-      changedRows.map(field =>
-        updateContractTypeField(field.id!, {
-          contractType: currentType.value || undefined,
-          fieldKey: field.fieldKey,
-          fieldOrder: field.fieldOrder
-        })
-      )
-    )
-    ElMessage.success(t('common.success'))
-    
-    if (fieldsCache.value[currentType.value!]) {
-      fieldsCache.value[currentType.value!] = [...allFields.value]
-    }
-    
+    hasLocalChanges.value = true
     const start = (currentPage.value - 1) * pageSize.value
     fields.value = filteredFieldsForSearch.value.slice(start, start + pageSize.value)
   } catch (error: any) {
@@ -994,24 +1282,124 @@ const handleMoveField = async (index: number, direction: number) => {
   }
 }
 
+const handleSelectionChange = (rows: any[]) => {
+  selectedFieldIds.value = rows.map(row => Number(row.id)).filter(id => !Number.isNaN(id))
+}
+
+const updateSelectedFields = (updater: (row: any) => any) => {
+  const selected = new Set(selectedFieldIds.value)
+  if (selected.size === 0) return
+  allFields.value = allFields.value.map(row => {
+    if (!selected.has(Number(row.id))) return row
+    return updater({ ...row })
+  })
+  hasLocalChanges.value = true
+  applyFieldPagination()
+}
+
+const handleBatchSetRequired = (required: boolean) => {
+  updateSelectedFields(row => ({ ...row, required }))
+}
+
+const handleBatchSetShowInList = (showInList: boolean) => {
+  updateSelectedFields(row => ({ ...row, showInList }))
+}
+
+const handleBatchSetShowInForm = (showInForm: boolean) => {
+  updateSelectedFields(row => ({ ...row, showInForm }))
+}
+
+const handleBatchDelete = async () => {
+  if (selectedFieldIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(t('typeFieldConfig.confirmBatchDelete', { count: selectedFieldIds.value.length }), t('common.warning'), { type: 'warning' })
+    const selected = new Set(selectedFieldIds.value)
+    allFields.value = allFields.value.filter(row => !selected.has(Number(row.id)))
+    selectedFieldIds.value = []
+    hasLocalChanges.value = true
+    totalFields.value = allFields.value.length
+    applyFieldPagination()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+}
+
+const initFieldRowDrag = () => {
+  if (!fieldsTableRef.value || searchKeyword.value) {
+    fieldSortable?.destroy()
+    fieldSortable = null
+    return
+  }
+  const tableRoot = fieldsTableRef.value.$el || fieldsTableRef.value
+  const tbody = tableRoot?.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
+  if (!tbody) return
+  fieldSortable?.destroy()
+  fieldSortable = Sortable.create(tbody, {
+    handle: '.drag-handle',
+    animation: 150,
+    onEnd(evt) {
+      const from = evt.oldIndex ?? -1
+      const to = evt.newIndex ?? -1
+      if (from < 0 || to < 0 || from === to) return
+      const pageOffset = (currentPage.value - 1) * pageSize.value
+      const fromIndex = pageOffset + from
+      const toIndex = pageOffset + to
+      const moved = allFields.value.splice(fromIndex, 1)[0]
+      if (!moved) return
+      allFields.value.splice(toIndex, 0, moved)
+      allFields.value.forEach((field, idx) => {
+        field.fieldOrder = idx
+      })
+      hasLocalChanges.value = true
+      applyFieldPagination()
+    }
+  })
+}
+
 onMounted(async () => {
   try {
+    loadRecentQuickCodes()
     const [countsRes, catsRes] = await Promise.all([
       getFieldCounts(),
       getContractCategories()
     ])
     fieldCountMap.value = countsRes.data || {}
     categories.value = catsRes.data || []
-    await loadAllQuickCodeItems()
+    await loadQuickCodes()
+
+    const typeValues = contractTypes.value.map(item => item.value)
+    const lastType = localStorage.getItem(LAST_SELECTED_TYPE_KEY)
+    let initialType: string | null = null
+    if (lastType && typeValues.includes(lastType)) {
+      initialType = lastType
+    } else {
+      initialType = typeValues.find(type => getFieldCount(type) > 0) || typeValues[0] || null
+    }
+    if (initialType) {
+      await selectType(initialType)
+    }
   } catch (error) {
-    console.warn('Failed to fetch initial data, using default values')
-    fieldCountMap.value = {}
+    ElMessage.error(t('common.error'))
   }
   
   document.addEventListener('keydown', handleKeyDown)
+  nextTick(initFieldRowDrag)
 })
 
 onUnmounted(() => {
+  if (presetRefreshTimer) {
+    window.clearTimeout(presetRefreshTimer)
+    presetRefreshTimer = null
+  }
+  if (presetSuccessToastTimer) {
+    window.clearTimeout(presetSuccessToastTimer)
+    presetSuccessToastTimer = null
+  }
+  presetSuccessCount.value = 0
+  fieldSortable?.destroy()
+  fieldSortable = null
   document.removeEventListener('keydown', handleKeyDown)
 })
 </script>
@@ -1263,6 +1651,10 @@ onUnmounted(() => {
         gap: 8px;
         flex-wrap: wrap;
       }
+
+      :deep(.el-button.is-disabled) {
+        opacity: 0.65;
+      }
     }
     
     .pagination-section {
@@ -1379,5 +1771,16 @@ onUnmounted(() => {
       transition: transform 0.2s;
     }
   }
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-secondary);
+  font-size: 14px;
+  letter-spacing: -1px;
+  user-select: none;
 }
 </style>

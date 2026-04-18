@@ -18,6 +18,7 @@ import com.contracthub.service.NotificationService;
 import com.contracthub.service.UserConfigService;
 import com.contracthub.service.ContractDataScopeService;
 import com.contracthub.service.ContractAiAssistantService;
+import com.contracthub.service.ContractPerformanceMilestoneService;
 import com.contracthub.util.SecurityUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -63,6 +64,7 @@ public class ContractController {
     private final UserConfigService userConfigService;
     private final ContractDataScopeService contractDataScopeService;
     private final ContractAiAssistantService contractAiAssistantService;
+    private final ContractPerformanceMilestoneService performanceMilestoneService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -75,6 +77,7 @@ public class ContractController {
                               UserConfigService userConfigService,
                               ContractDataScopeService contractDataScopeService,
                               ContractAiAssistantService contractAiAssistantService,
+                              ContractPerformanceMilestoneService performanceMilestoneService,
                               RestTemplate restTemplate) {
         this.contractMapper = contractMapper;
         this.commentMapper = commentMapper;
@@ -88,6 +91,7 @@ public class ContractController {
         this.userConfigService = userConfigService;
         this.contractDataScopeService = contractDataScopeService;
         this.contractAiAssistantService = contractAiAssistantService;
+        this.performanceMilestoneService = performanceMilestoneService;
         this.restTemplate = restTemplate;
     }
     
@@ -168,7 +172,7 @@ public class ContractController {
     public ApiResponse<Map<String, Object>> get(@PathVariable Long id) {
         Contract contract = contractService.getContractById(id);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         
         Map<String, Object> result = contractService.buildContractDetailResponse(contract);
@@ -240,12 +244,35 @@ public class ContractController {
         }
     }
 
+    @GetMapping("/{id}/performance-milestones")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<List<Map<String, Object>>> listPerformanceMilestones(@PathVariable Long id) {
+        Contract contract = contractService.getContractById(id);
+        if (contract == null) {
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
+        }
+        return ApiResponse.success(performanceMilestoneService.listAsMaps(id));
+    }
+
+    @PostMapping("/{id}/performance-milestones/extract")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    public ApiResponse<Map<String, Object>> extractPerformanceMilestones(@PathVariable Long id) {
+        Contract contract = contractService.getContractById(id);
+        if (contract == null) {
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
+        }
+        int n = performanceMilestoneService.extractFromPayload(id);
+        Map<String, Object> data = new HashMap<>();
+        data.put("inserted", n);
+        return ApiResponse.success(data);
+    }
+
     @GetMapping("/{id}/related")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> related(@PathVariable Long id) {
         Contract contract = contractService.getContractById(id);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         Map<String, Object> detail = contractService.buildContractDetailResponse(contract);
         Object related = detail.get("relatedContracts");
@@ -270,12 +297,12 @@ public class ContractController {
             @RequestParam(value = "contractId", required = false) Long contractId) {
         Map<String, Object> result = new HashMap<>();
         if (file.isEmpty()) {
-            return ApiResponse.error("文件不能为空");
+            return ApiResponse.error("文件不能为空", "error.upload.fileRequired");
         }
         
         String originalFileName = file.getOriginalFilename();
         if (originalFileName == null || originalFileName.isEmpty()) {
-            return ApiResponse.error("文件名无效");
+            return ApiResponse.error("文件名无效", "error.upload.invalidName");
         }
         
         // 不再限制文件类型，允许所有格式上传
@@ -353,11 +380,11 @@ public class ContractController {
         File file = getSecureFile(fileName);
         
         if (file == null || !file.exists()) {
-            return ApiResponse.error("文件不存在");
+            return ApiResponse.error("文件不存在", "error.file.notFound");
         }
         
         if (!file.delete()) {
-            return ApiResponse.error("文件删除失败");
+            return ApiResponse.error("文件删除失败", "error.file.deleteFailed");
         }
         
         return ApiResponse.success(null);
@@ -682,7 +709,7 @@ public class ContractController {
         
         Contract contract = contractService.getContractById(id);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         
         Long userId = SecurityUtils.getCurrentUserId();
@@ -826,7 +853,7 @@ public class ContractController {
     public ApiResponse<Map<String, Object>> addComment(@PathVariable Long id, @RequestBody Map<String, Object> commentData) {
         Contract contract = contractService.getContractById(id);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         ContractComment comment = new ContractComment();
         comment.setContractId(id);
@@ -882,7 +909,7 @@ public class ContractController {
     public ApiResponse<Void> deleteComment(@PathVariable Long id, @PathVariable Long commentId) {
         int result = commentMapper.deleteById(commentId);
         if (result == 0) {
-            return ApiResponse.error("评论不存在");
+            return ApiResponse.error("评论不存在", "error.comment.notFound");
         }
         return ApiResponse.success(null);
     }

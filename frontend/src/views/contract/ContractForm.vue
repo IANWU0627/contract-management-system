@@ -100,7 +100,7 @@
                 <el-form-item :label="$t('contract.parentContract')">
                   <el-select v-model="form.parentContractId" filterable clearable :placeholder="$t('contract.placeholder.parentContract')" style="width: 100%">
                     <el-option
-                      v-for="item in parentContracts.filter((c: any) => (!isEdit || c.id !== contractId) && (c.relationType || 'MAIN') !== 'SUPPLEMENT')"
+                      v-for="item in parentContractOptions"
                       :key="item.id"
                       :label="`${item.contractNo} - ${item.title}`"
                       :value="item.id"
@@ -485,45 +485,102 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { createContract, updateContract, getContract, getContractPayload, getContractList, getNextContractNo, uploadContractFile, analyzeContract } from '@/api/contract'
-import { getContractCategories } from '@/api/contractCategory'
-import { getContractTypeFormFields } from '@/api/contractTypeField'
+import type { FormInstance, FormRules, UploadFile } from 'element-plus'
+import {
+  createContract,
+  updateContract,
+  getContract,
+  getContractPayload,
+  getContractList,
+  getNextContractNo,
+  uploadContractFile,
+  analyzeContract,
+  generateContractPdf,
+  type Contract
+} from '@/api/contract'
+import { getContractCategories, type ContractCategory } from '@/api/contractCategory'
+import { getContractTypeFormFields, type ContractTypeField } from '@/api/contractTypeField'
 import { getQuickCodeByCode } from '@/api/quickCode'
 import { getAllFolders } from '@/api/folder'
-import { getCounterpartiesByContractId, saveCounterpartiesBatch } from '@/api/counterparty'
-import { getAttachmentsByContractId, saveAttachmentsBatch } from '@/api/attachment'
-import { getTemplateList, extractTemplateVariables, replaceTemplateVariables } from '@/api/template'
-import { getTemplateVariables } from '@/api/templateVariable'
+import { getCounterpartiesByContractId, saveCounterpartiesBatch, type Counterparty as ApiCounterparty } from '@/api/counterparty'
+import { getAttachmentsByContractId, saveAttachmentsBatch, type Attachment as ContractAttachment } from '@/api/attachment'
+import { getTemplateList, extractTemplateVariables, replaceTemplateVariables, type Template } from '@/api/template'
+import { getTemplateVariables, type TemplateVariableItem } from '@/api/templateVariable'
 import { getSystemConfigs } from '@/api/system'
-import { generateContractPdf } from '@/api/contract'
 import { ArrowLeft, Collection, User, Edit, Plus, Delete, Tickets, Paperclip, Document, Upload, Close, FolderOpened, Clock, Files, List, View, UploadFilled, Download } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
-const formRef = ref()
+const formRef = ref<FormInstance>()
 const loading = ref(false)
-const categories = ref<any[]>([])
-const folders = ref<any[]>([])
-const parentContracts = ref<any[]>([])
-const dynamicFields = ref<any[]>([])
-const dynamicFieldValues = reactive<Record<string, any>>({})
-const quickCodeItemsCache = ref<Record<string, any[]>>({})
-const attachments = ref<any[]>([])
+
+interface ContractFolderRow {
+  id: number
+  name: string
+  color?: string
+}
+
+interface ContractAttachmentDraft {
+  uid?: number
+  name: string
+  fileName?: string
+  url?: string
+  fileUrl?: string
+  size?: number
+  fileSize?: number
+  type?: string
+  fileCategory?: string
+  uploadTime?: string
+}
+
+type DynamicFieldValue = string | number | string[] | null
+
+interface AiContractAnalysisResult {
+  summary: string
+  score: number
+  risks: Array<{ level?: string; content?: string }>
+  suggestions: string[]
+  keyInfo: {
+    partyA?: string
+    partyB?: string
+    amount?: string | number
+    duration?: string
+    keyClauses?: unknown[]
+  }
+  negotiationPoints: unknown[]
+  missingClauseChecks: unknown[]
+  actionSuggestions: unknown[]
+  clauseSuggestions: unknown[]
+}
+
+const categories = ref<ContractCategory[]>([])
+const folders = ref<ContractFolderRow[]>([])
+const parentContracts = ref<Contract[]>([])
+const dynamicFields = ref<ContractTypeField[]>([])
+const dynamicFieldValues = reactive<Record<string, DynamicFieldValue>>({})
+const quickCodeItemsCache = ref<Record<string, QuickCodeOption[]>>({})
+const attachments = ref<ContractAttachmentDraft[]>([])
 const attachmentUploadRef = ref()
 
 const isEdit = computed(() => !!route.params.id)
 const contractId = computed(() => Number(route.params.id))
 
+const parentContractOptions = computed(() =>
+  parentContracts.value.filter(
+    (c) => (!isEdit.value || c.id !== contractId.value) && (c.relationType || 'MAIN') !== 'SUPPLEMENT'
+  )
+)
+
 const contentMode = ref<'template' | 'upload'>('template')
-const templates = ref<any[]>([])
-const selectedTemplate = ref<any>(null)
+const templates = ref<Template[]>([])
+const selectedTemplate = ref<Template | null>(null)
 const selectedTemplateId = ref<number | null>(null)
 
-const templateVariables = ref<Record<string, string | number>>({})
-const extractedVariables = ref<any[]>([])
+const templateVariables = ref<Record<string, TemplateVariableValue>>({})
+const extractedVariables = ref<ExtractedVariableField[]>([])
 const previewContent = ref('')
-const uploadedFile = ref<any>(null)
+const uploadedFile = ref<UploadFile | null>(null)
 const uploadedFileUrl = ref('')
 const pdfGenerating = ref(false)
 const generatedPdf = ref<{ name: string; url: string; blob?: Blob; serverUrl?: string } | null>(null)
@@ -537,7 +594,7 @@ const aiConfigSnapshot = reactive({
   temperature: 0.7,
   maxTokens: 1000
 })
-const aiResult = ref<any>({
+const aiResult = ref<AiContractAnalysisResult>({
   summary: '',
   score: 75,
   risks: [],
@@ -569,6 +626,45 @@ interface Counterparty {
   email: string
 }
 
+interface QuickCodeOption {
+  code: string
+  meaning: string
+  meaningEn?: string
+  enabled?: boolean
+}
+
+interface ExtractedVariableField {
+  key: string
+  label: string
+  type: string
+  quickCodeCode: string
+  required: boolean
+}
+
+type TemplateVariableValue = string | number | string[] | null
+
+/** 创建/更新合同请求体（含模板变量、动态字段等扩展字段） */
+interface ContractFormUpsertPayload {
+  title: string
+  type: string
+  amount: number
+  currency: string
+  startDate: string
+  endDate: string
+  content: string
+  remark: string
+  folderId: number | null
+  relationType: 'MAIN' | 'SUPPLEMENT'
+  parentContractId: number | null
+  timezone: string
+  templateVariables: string
+  dynamicFieldValues: string
+  dynamicFields: Record<string, DynamicFieldValue>
+  templateId: number | null
+  contentMode: 'template' | 'upload'
+  status?: string
+}
+
 const form = reactive({
   title: '',
   type: '',
@@ -597,8 +693,8 @@ const currencyOptions = [
   { value: 'HKD', label: 'HKD - Hong Kong Dollar' }
 ]
 
-const currentStepRules = computed(() => {
-  const rules: any = {}
+const currentStepRules = computed<FormRules>(() => {
+  const rules: FormRules = {}
   rules.title = [{ required: true, message: t('contract.error.title'), trigger: 'blur' }]
   rules.type = [{ required: true, message: t('contract.error.type'), trigger: 'change' }]
   rules.amount = [{ required: true, message: t('contract.error.amount'), trigger: 'blur' }]
@@ -608,10 +704,10 @@ const currentStepRules = computed(() => {
   return rules
 })
 
-const getSelectOptions = (field: any) => {
+const getSelectOptions = (field: ContractTypeField) => {
   if (field.quickCodeId) {
     const items = quickCodeItemsCache.value[field.quickCodeId] || []
-    return items.map((item: any) => ({
+    return items.map((item) => ({
       ...item,
       displayLabel: locale.value === 'en' && item.meaningEn ? item.meaningEn : item.meaning
     }))
@@ -622,7 +718,7 @@ const getSelectOptions = (field: any) => {
 const loadCategories = async () => {
   try {
     const res = await getContractCategories()
-    categories.value = res.data || []
+    categories.value = (res.data || []) as ContractCategory[]
   } catch (error) {
     console.error('Failed to load categories:', error)
   }
@@ -631,7 +727,7 @@ const loadCategories = async () => {
 const loadFolders = async () => {
   try {
     const res = await getAllFolders()
-    folders.value = res.data || []
+    folders.value = (res.data || []) as ContractFolderRow[]
   } catch (error) {
     console.error('Failed to load folders:', error)
   }
@@ -639,8 +735,8 @@ const loadFolders = async () => {
 
 const loadParentContracts = async () => {
   try {
-    const res = await getContractList({ page: 1, pageSize: 300, status: 'APPROVED,SIGNED,ARCHIVED,RENEWING,RENEWED' } as any)
-    parentContracts.value = res.data?.list || []
+    const res = await getContractList({ page: 1, pageSize: 300, status: 'APPROVED,SIGNED,ARCHIVED,RENEWING,RENEWED' })
+    parentContracts.value = res.data.list
   } catch (error) {
     console.error('Failed to load parent contracts:', error)
     parentContracts.value = []
@@ -650,17 +746,17 @@ const loadParentContracts = async () => {
 const loadTemplates = async () => {
   try {
     const res = await getTemplateList({ pageSize: 100 })
-    templates.value = res.data?.list || []
+    templates.value = res.data.list
   } catch (error) {
     console.error('Failed to load templates:', error)
   }
 }
 
-const templateVariableList = ref<any[]>([])
+const templateVariableList = ref<TemplateVariableItem[]>([])
 const loadTemplateVariables = async () => {
   try {
     const res = await getTemplateVariables({ status: 1 })
-    templateVariableList.value = res.data || []
+    templateVariableList.value = res.data.list
   } catch (error) {
     console.error('Failed to load template variables:', error)
   }
@@ -673,7 +769,7 @@ const handleTemplateChange = async (templateId: number | null) => {
     return
   }
   selectedTemplateId.value = templateId
-  selectedTemplate.value = templates.value.find(t => t.id === templateId)
+  selectedTemplate.value = templates.value.find(t => Number(t.id) === Number(templateId))
   if (selectedTemplate.value) {
     await extractVariables()
     updatePreview()
@@ -684,28 +780,27 @@ const extractVariables = async () => {
   if (!selectedTemplate.value?.content) return
   try {
     const res = await extractTemplateVariables(selectedTemplate.value.content)
-    if (res.data && Array.isArray(res.data)) {
-      templateVariables.value = {}
-      extractedVariables.value = []
-      for (const v of res.data) {
-        const tv = templateVariableList.value.find(tv => tv.code === v)
-        const variableType = tv?.type || 'text'
-        if (variableType === 'number') {
-          templateVariables.value[v] = tv?.defaultValue ? Number(tv.defaultValue) : 0
-        } else {
-          templateVariables.value[v] = tv?.defaultValue || ''
-        }
-        const quickCodeCode = tv?.quickCodeCode || ''
-        extractedVariables.value.push({
-          key: v,
-          label: getVariableLabel(v),
-          type: tv?.type || 'text',
-          quickCodeCode,
-          required: tv?.required || false
-        })
-        if (quickCodeCode) {
-          await loadQuickCodeItems(quickCodeCode)
-        }
+    const variableCodes = res.data
+    templateVariables.value = {}
+    extractedVariables.value = []
+    for (const v of variableCodes) {
+      const tv = templateVariableList.value.find((item) => item.code === v)
+      const variableType = tv?.type || 'text'
+      if (variableType === 'number') {
+        templateVariables.value[v] = tv?.defaultValue ? Number(tv.defaultValue) : 0
+      } else {
+        templateVariables.value[v] = tv?.defaultValue || ''
+      }
+      const quickCodeCode = tv?.quickCodeCode || ''
+      extractedVariables.value.push({
+        key: v,
+        label: getVariableLabel(v),
+        type: variableType,
+        quickCodeCode,
+        required: !!tv?.required
+      })
+      if (quickCodeCode) {
+        await loadQuickCodeItems(quickCodeCode)
       }
     }
   } catch (error) {
@@ -725,7 +820,7 @@ const getVariableLabel = (key: string): string => {
   return key
 }
 
-const getQuickCodeOptions = (quickCodeCode: string): any[] => {
+const getQuickCodeOptions = (quickCodeCode: string): QuickCodeOption[] => {
   if (!quickCodeCode) return []
   if (quickCodeItemsCache.value[quickCodeCode]) {
     return quickCodeItemsCache.value[quickCodeCode]
@@ -738,9 +833,9 @@ const loadQuickCodeItems = async (quickCodeCode: string) => {
   try {
     const res = await getQuickCodeByCode(quickCodeCode)
     // /quick-codes/code/{code} 的 data 为选项数组；详情接口为 { items: [] }
-    const d = res.data as any[] | { items?: any[] } | undefined
+    const d = res.data as QuickCodeOption[] | { items?: QuickCodeOption[] } | undefined
     const items = Array.isArray(d) ? d : (d?.items ?? [])
-    quickCodeItemsCache.value[quickCodeCode] = items.filter((item: any) => item.enabled !== false)
+    quickCodeItemsCache.value[quickCodeCode] = items.filter((item) => item.enabled !== false)
   } catch (error) {
     console.error('Failed to load quick code items:', error)
   }
@@ -749,7 +844,7 @@ const loadQuickCodeItems = async (quickCodeCode: string) => {
 const updatePreview = async () => {
   if (!selectedTemplate.value?.content) return
   
-  const allValues: Record<string, any> = {
+  const allValues: Record<string, unknown> = {
     ...templateVariables.value,
     contractNo: form.contractNo,
     startDate: form.startDate,
@@ -764,7 +859,7 @@ const updatePreview = async () => {
   
   try {
     const res = await replaceTemplateVariables(selectedTemplate.value.content, allValues)
-    previewContent.value = res.data || selectedTemplate.value.content
+    previewContent.value = res.data
     form.content = previewContent.value
   } catch (error) {
     previewContent.value = selectedTemplate.value.content
@@ -772,7 +867,7 @@ const updatePreview = async () => {
   }
 }
 
-let previewDebounceTimer: any = null
+let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const updatePreviewDebounced = () => {
   if (previewDebounceTimer) clearTimeout(previewDebounceTimer)
   previewDebounceTimer = setTimeout(() => {
@@ -820,7 +915,7 @@ watch(() => form.relationType, (newType) => {
   }
 })
 
-const handleFileUpload = async (file: any) => {
+const handleFileUpload = async (file: UploadFile) => {
   uploadedFile.value = file
   const ext = file.name.split('.').pop()?.toLowerCase()
   
@@ -867,7 +962,7 @@ const loadDynamicFields = async () => {
   }
   try {
     const res = await getContractTypeFormFields(form.type)
-    dynamicFields.value = res.data || []
+    dynamicFields.value = (res.data || []) as ContractTypeField[]
     for (const field of dynamicFields.value) {
       if (dynamicFieldValues[field.fieldKey] === undefined) {
         if (field.fieldType === 'number') {
@@ -890,7 +985,7 @@ const loadDynamicFields = async () => {
   }
 }
 
-const normalizeDynamicFieldValue = (field: any, rawValue: any) => {
+const normalizeDynamicFieldValue = (field: ContractTypeField, rawValue: unknown): DynamicFieldValue => {
   if (rawValue === null || rawValue === undefined) {
     return field.fieldType === 'number' ? null : ''
   }
@@ -899,7 +994,7 @@ const normalizeDynamicFieldValue = (field: any, rawValue: any) => {
     const parsed = Number(rawValue)
     return Number.isFinite(parsed) ? parsed : null
   }
-  return rawValue
+  return rawValue as DynamicFieldValue
 }
 
 const handleTypeChange = () => {
@@ -955,7 +1050,7 @@ const removeCounterparty = (index: number) => {
   form.counterparties.splice(index, 1)
 }
 
-const handleAttachmentChange = async (file: any) => {
+const handleAttachmentChange = async (file: UploadFile) => {
   try {
     const res = await uploadContractFile(file.raw)
     const fileUrl = res.data?.fileUrl || `/api/contracts/download/${res.data?.fileName}`
@@ -967,7 +1062,7 @@ const handleAttachmentChange = async (file: any) => {
       fileUrl: fileUrl,
       size: file.size,
       fileSize: file.size,
-      type: file.raw?.type || file.type,
+      type: file.raw?.type,
       fileCategory: 'support',
       uploadTime: new Date().toISOString()
     })
@@ -976,8 +1071,8 @@ const handleAttachmentChange = async (file: any) => {
   }
 }
 
-const handleAttachmentRemove = (file: any) => {
-  const idx = attachments.value.findIndex((a: any) => a.uid === file.uid)
+const handleAttachmentRemove = (file: UploadFile) => {
+  const idx = attachments.value.findIndex((a) => a.uid === file.uid)
   if (idx !== -1) attachments.value.splice(idx, 1)
 }
 
@@ -1148,10 +1243,15 @@ const fetchContract = async () => {
       try {
         const vars = JSON.parse(data.templateVariables)
         templateVariables.value = vars
-        extractedVariables.value = Object.keys(vars).map(key => ({
-          key,
-          label: getVariableLabel(key)
-        }))
+        extractedVariables.value = Object.keys(vars).map(
+          (key): ExtractedVariableField => ({
+            key,
+            label: getVariableLabel(key),
+            type: 'text',
+            quickCodeCode: '',
+            required: false
+          })
+        )
       } catch (e) {
         console.error('Failed to parse templateVariables:', e)
       }
@@ -1163,9 +1263,9 @@ const fetchContract = async () => {
     
     try {
       const cpRes = await getCounterpartiesByContractId(contractId.value)
-      const cpList = Array.isArray(cpRes) ? cpRes : (cpRes as any)?.data || []
+      const cpList = cpRes.data ?? []
       if (cpList.length > 0) {
-        form.counterparties = cpList.map((cp: any) => ({
+        form.counterparties = cpList.map((cp: ApiCounterparty) => ({
           type: cp.type || 'partyB',
           name: cp.name || '',
           contact: cp.contactPerson || '',
@@ -1187,11 +1287,11 @@ const fetchContract = async () => {
     
     try {
       const attRes = await getAttachmentsByContractId(contractId.value)
-      const attList = Array.isArray(attRes) ? attRes : (attRes as any)?.data || []
+      const attList = attRes.data ?? []
       if (attList.length > 0) {
         attachments.value = attList
-          .filter((att: any) => att.fileCategory === 'support')
-          .map((att: any) => ({
+          .filter((att: ContractAttachment) => att.fileCategory === 'support')
+          .map((att: ContractAttachment) => ({
             uid: att.id || Date.now() + Math.random(),
             name: att.fileName,
             fileName: att.fileName,
@@ -1203,7 +1303,7 @@ const fetchContract = async () => {
             fileCategory: 'support',
             uploadTime: att.uploadTime || new Date().toISOString()
           }))
-        const contractFile = attList.find((att: any) => att.fileCategory === 'contract')
+        const contractFile = attList.find((att: ContractAttachment) => att.fileCategory === 'contract')
         if (contractFile) {
           generatedPdf.value = {
             name: contractFile.fileName,
@@ -1244,7 +1344,7 @@ const fetchContract = async () => {
   }
 }
 
-const createAiFallbackResult = () => ({
+const createAiFallbackResult = (): AiContractAnalysisResult => ({
   summary: '未获取到完整 AI 结果，已提供基础分析视图。请保存合同内容后重试，或配置可用 AI 接口。',
   score: 75,
   risks: [{ level: 'low', content: '暂未识别到结构化风险，请人工复核关键条款。' }],
@@ -1254,29 +1354,35 @@ const createAiFallbackResult = () => ({
     partyB: form.counterparties.find(cp => cp.type === 'partyB')?.name || '-',
     amount: form.amount || '-',
     duration: form.startDate && form.endDate ? `${form.startDate} ~ ${form.endDate}` : '-'
-  }
+  },
+  negotiationPoints: [],
+  missingClauseChecks: [],
+  actionSuggestions: [],
+  clauseSuggestions: []
 })
 
-const normalizeAiResult = (raw: any) => {
+const normalizeAiResult = (raw: unknown): AiContractAnalysisResult => {
   if (!raw || typeof raw !== 'object') return createAiFallbackResult()
   const fallback = createAiFallbackResult()
-  const keyInfo = raw.keyInfo && typeof raw.keyInfo === 'object' ? raw.keyInfo : {}
+  const rawObj = raw as Record<string, unknown>
+  const keyInfo =
+    rawObj.keyInfo && typeof rawObj.keyInfo === 'object' ? (rawObj.keyInfo as Record<string, unknown>) : {}
   return {
-    summary: typeof raw.summary === 'string' && raw.summary.trim() ? raw.summary : fallback.summary,
-    score: Number.isFinite(Number(raw.score)) ? Number(raw.score) : fallback.score,
-    risks: Array.isArray(raw.risks) && raw.risks.length > 0 ? raw.risks : fallback.risks,
-    suggestions: Array.isArray(raw.suggestions) && raw.suggestions.length > 0 ? raw.suggestions : fallback.suggestions,
+    summary: typeof rawObj.summary === 'string' && rawObj.summary.trim() ? rawObj.summary : fallback.summary,
+    score: Number.isFinite(Number(rawObj.score)) ? Number(rawObj.score) : fallback.score,
+    risks: Array.isArray(rawObj.risks) && rawObj.risks.length > 0 ? (rawObj.risks as AiContractAnalysisResult['risks']) : fallback.risks,
+    suggestions: Array.isArray(rawObj.suggestions) && rawObj.suggestions.length > 0 ? (rawObj.suggestions as string[]) : fallback.suggestions,
     keyInfo: {
-      partyA: keyInfo.partyA || fallback.keyInfo.partyA,
-      partyB: keyInfo.partyB || fallback.keyInfo.partyB,
-      amount: keyInfo.amount || fallback.keyInfo.amount,
-      duration: keyInfo.duration || fallback.keyInfo.duration,
+      partyA: (keyInfo.partyA as string | undefined) || fallback.keyInfo.partyA,
+      partyB: (keyInfo.partyB as string | undefined) || fallback.keyInfo.partyB,
+      amount: (keyInfo.amount as string | number | undefined) || fallback.keyInfo.amount,
+      duration: (keyInfo.duration as string | undefined) || fallback.keyInfo.duration,
       keyClauses: Array.isArray(keyInfo.keyClauses) ? keyInfo.keyClauses : []
     },
-    negotiationPoints: Array.isArray(raw.negotiationPoints) ? raw.negotiationPoints : [],
-    missingClauseChecks: Array.isArray(raw.missingClauseChecks) ? raw.missingClauseChecks : [],
-    actionSuggestions: Array.isArray(raw.actionSuggestions) ? raw.actionSuggestions : [],
-    clauseSuggestions: Array.isArray(raw.clauseSuggestions) ? raw.clauseSuggestions : []
+    negotiationPoints: Array.isArray(rawObj.negotiationPoints) ? rawObj.negotiationPoints : [],
+    missingClauseChecks: Array.isArray(rawObj.missingClauseChecks) ? rawObj.missingClauseChecks : [],
+    actionSuggestions: Array.isArray(rawObj.actionSuggestions) ? rawObj.actionSuggestions : [],
+    clauseSuggestions: Array.isArray(rawObj.clauseSuggestions) ? rawObj.clauseSuggestions : []
   }
 }
 
@@ -1307,9 +1413,9 @@ const handleEditAiAnalyze = async () => {
     const aiConfig = await loadAiRuntimeConfig()
     const res = await analyzeContract(contractId.value, aiConfig)
     aiResult.value = normalizeAiResult(res.data)
-  } catch (error: any) {
+  } catch (error: unknown) {
     aiResult.value = createAiFallbackResult()
-    ElMessage.error(error?.message || t('ai.analysisFailed'))
+    ElMessage.error((error as { message?: string })?.message || t('ai.analysisFailed'))
   } finally {
     aiAnalyzing.value = false
   }
@@ -1322,7 +1428,7 @@ const handleSaveDraft = async () => {
   }
   savingDraft.value = true
   try {
-    const draftData: any = {
+    const draftData: ContractFormUpsertPayload = {
       title: form.title || t('contract.untitled'),
       type: form.type,
       amount: form.amount || 0,
@@ -1367,7 +1473,7 @@ const handleSaveDraft = async () => {
       await saveCounterpartiesBatch(savedContractId, counterpartiesData)
 
       const attachmentsData = attachments.value
-        .map((att: any) => ({
+        .map((att) => ({
           fileName: att.fileName || att.name,
           fileUrl: att.fileUrl || att.url || '',
           fileSize: att.fileSize || att.size,
@@ -1418,7 +1524,7 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
-    const submitData: any = {
+    const submitData: ContractFormUpsertPayload = {
       title: form.title,
       type: form.type,
       amount: form.amount,
@@ -1458,7 +1564,7 @@ const handleSubmit = async () => {
     await saveCounterpartiesBatch(savedContractId, counterpartiesData)
     
     const attachmentsData = attachments.value
-      .map((att: any) => ({
+      .map((att) => ({
         fileName: att.fileName || att.name,
         fileUrl: att.fileUrl || att.url || '',
         fileSize: att.fileSize || att.size,
@@ -1482,8 +1588,8 @@ const handleSubmit = async () => {
     
     ElMessage.success(t('common.success'))
     router.push('/contracts')
-  } catch (error: any) {
-    ElMessage.error(error.message || t('common.error'))
+  } catch (error: unknown) {
+    ElMessage.error((error as { message?: string })?.message || t('common.error'))
   } finally {
     loading.value = false
   }

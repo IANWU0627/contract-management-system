@@ -8,12 +8,16 @@ import com.contracthub.mapper.ContractCategoryMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -27,12 +31,18 @@ public class ContractTypeFieldController {
 
     private final ContractTypeFieldMapper fieldMapper;
     private final ContractCategoryMapper categoryMapper;
+    private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
-    public ContractTypeFieldController(ContractTypeFieldMapper fieldMapper, ContractCategoryMapper categoryMapper) {
+    public ContractTypeFieldController(
+            ContractTypeFieldMapper fieldMapper,
+            ContractCategoryMapper categoryMapper,
+            JdbcTemplate jdbcTemplate) {
         this.fieldMapper = fieldMapper;
         this.categoryMapper = categoryMapper;
+        this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
     }
 
@@ -162,6 +172,145 @@ public class ContractTypeFieldController {
         return ApiResponse.success(result);
     }
 
+    @GetMapping("/draft/{contractType}")
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
+    public ApiResponse<Map<String, Object>> getDraftByType(@PathVariable String contractType) {
+        ensureDraftInitialized(contractType);
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "SELECT contract_type, fields_json, draft_updated_at, published_at, publish_version FROM contract_type_field_draft WHERE contract_type = ?",
+                contractType);
+
+        List<ContractTypeField> draftFields = parseDraftFields((String) row.get("fields_json"));
+        if (draftFields.isEmpty()) {
+            List<ContractTypeField> liveFields = fieldMapper.selectByContractType(contractType);
+            if (!liveFields.isEmpty()) {
+                draftFields = liveFields;
+                try {
+                    String fieldsJson = objectMapper.writeValueAsString(draftFields);
+                    jdbcTemplate.update(
+                            "UPDATE contract_type_field_draft SET fields_json = ?, draft_updated_at = NOW() WHERE contract_type = ?",
+                            fieldsJson,
+                            contractType
+                    );
+                } catch (Exception e) {
+                    return ApiResponse.error("草稿初始化失败: " + e.getMessage());
+                }
+            }
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put("contractType", contractType);
+        result.put("fields", draftFields);
+        result.put("total", draftFields.size());
+        result.put("draftUpdatedAt", row.get("draft_updated_at"));
+        result.put("publishedAt", row.get("published_at"));
+        result.put("publishVersion", row.get("publish_version"));
+        result.put("hasDraft", true);
+        return ApiResponse.success(result);
+    }
+
+    @PutMapping("/draft/{contractType}")
+    @CacheEvict(value = {"contractTypeFields", "contractTypes"}, allEntries = true)
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
+    public ApiResponse<Map<String, Object>> saveDraftByType(
+            @PathVariable String contractType,
+            @RequestBody Map<String, Object> payload) {
+        ensureDraftTableSchema();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> fieldMaps = (List<Map<String, Object>>) payload.get("fields");
+        if (fieldMaps == null) {
+            return ApiResponse.error("草稿字段不能为空");
+        }
+        List<ContractTypeField> draftFields = parseDraftFieldMaps(fieldMaps);
+        for (int i = 0; i < draftFields.size(); i++) {
+            ContractTypeField field = draftFields.get(i);
+            field.setContractType(contractType);
+            if (field.getFieldOrder() == null) {
+                field.setFieldOrder(i);
+            }
+        }
+
+        String fieldsJson;
+        try {
+            fieldsJson = objectMapper.writeValueAsString(draftFields);
+        } catch (Exception e) {
+            return ApiResponse.error("草稿序列化失败");
+        }
+
+        int updated = jdbcTemplate.update(
+                "UPDATE contract_type_field_draft SET fields_json = ?, draft_updated_at = NOW() WHERE contract_type = ?",
+                fieldsJson, contractType);
+        if (updated == 0) {
+            jdbcTemplate.update(
+                    "INSERT INTO contract_type_field_draft(contract_type, fields_json, draft_updated_at, publish_version) VALUES(?, ?, NOW(), 0)",
+                    contractType, fieldsJson);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("contractType", contractType);
+        result.put("total", draftFields.size());
+        result.put("draftUpdatedAt", new Date());
+        return ApiResponse.success(result);
+    }
+
+    @DeleteMapping("/draft/{contractType}")
+    @CacheEvict(value = {"contractTypeFields", "contractTypes"}, allEntries = true)
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
+    public ApiResponse<Void> discardDraft(@PathVariable String contractType) {
+        ensureDraftTableSchema();
+        List<ContractTypeField> liveFields = fieldMapper.selectByContractType(contractType);
+        String fieldsJson;
+        try {
+            fieldsJson = objectMapper.writeValueAsString(liveFields);
+        } catch (Exception e) {
+            return ApiResponse.error("重置草稿失败");
+        }
+        int updated = jdbcTemplate.update(
+                "UPDATE contract_type_field_draft SET fields_json = ?, draft_updated_at = NOW() WHERE contract_type = ?",
+                fieldsJson, contractType);
+        if (updated == 0) {
+            jdbcTemplate.update(
+                    "INSERT INTO contract_type_field_draft(contract_type, fields_json, draft_updated_at, publish_version) VALUES(?, ?, NOW(), 0)",
+                    contractType, fieldsJson);
+        }
+        return ApiResponse.success(null);
+    }
+
+    @PostMapping("/publish/{contractType}")
+    @CacheEvict(value = {"contractTypeFields", "contractTypes"}, allEntries = true)
+    @PreAuthorize("hasAuthority('CATEGORY_MANAGE')")
+    public ApiResponse<Map<String, Object>> publishDraft(@PathVariable String contractType) {
+        ensureDraftInitialized(contractType);
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "SELECT fields_json, publish_version FROM contract_type_field_draft WHERE contract_type = ?",
+                contractType);
+        List<ContractTypeField> draftFields = parseDraftFields((String) row.get("fields_json"));
+
+        QueryWrapper<ContractTypeField> deleteWrapper = new QueryWrapper<>();
+        deleteWrapper.eq("contract_type", contractType);
+        fieldMapper.delete(deleteWrapper);
+
+        for (int i = 0; i < draftFields.size(); i++) {
+            ContractTypeField field = draftFields.get(i);
+            field.setId(null);
+            field.setContractType(contractType);
+            field.setFieldOrder(i);
+            if (!"select".equals(field.getFieldType()) && !"multiselect".equals(field.getFieldType())) {
+                field.setQuickCodeId(null);
+            }
+            fieldMapper.insert(field);
+        }
+
+        jdbcTemplate.update(
+                "UPDATE contract_type_field_draft SET published_at = NOW(), publish_version = publish_version + 1 WHERE contract_type = ?",
+                contractType);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("contractType", contractType);
+        result.put("publishedCount", draftFields.size());
+        result.put("publishVersion", ((Number) row.get("publish_version")).intValue() + 1);
+        return ApiResponse.success(result);
+    }
+
     /**
      * 创建字段
      */
@@ -229,8 +378,7 @@ public class ContractTypeFieldController {
             } catch (Exception ex) {
                 String message = ex.getMessage() != null ? ex.getMessage() : "";
                 if (message.contains("quick_code_id")) {
-                    fieldMapper.updateByIdWithoutQuickCodeId(existing);
-                    return ApiResponse.success(null);
+                    return ApiResponse.error("当前数据库缺少 quick_code_id 字段，请先完成数据库迁移");
                 }
                 throw ex;
             }
@@ -401,6 +549,142 @@ public class ContractTypeFieldController {
             return ApiResponse.success(result);
         } catch (Exception e) {
             return ApiResponse.error("导入失败: " + e.getMessage());
+        }
+    }
+
+    private void ensureDraftInitialized(String contractType) {
+        ensureDraftTableSchema();
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(1) FROM contract_type_field_draft WHERE contract_type = ?",
+                Integer.class,
+                contractType);
+        if (count != null && count > 0) {
+            return;
+        }
+        List<ContractTypeField> liveFields = fieldMapper.selectByContractType(contractType);
+        String fieldsJson = "[]";
+        try {
+            fieldsJson = objectMapper.writeValueAsString(liveFields);
+        } catch (Exception e) {
+            throw new IllegalStateException("草稿初始化序列化失败", e);
+        }
+        jdbcTemplate.update(
+                "INSERT INTO contract_type_field_draft(contract_type, fields_json, draft_updated_at, publish_version) VALUES(?, ?, NOW(), 0)",
+                contractType,
+                fieldsJson);
+    }
+
+    private void ensureDraftTableSchema() {
+        jdbcTemplate.execute(
+                """
+                CREATE TABLE IF NOT EXISTS contract_type_field_draft (
+                    contract_type VARCHAR(50) PRIMARY KEY,
+                    fields_json LONGTEXT NOT NULL,
+                    draft_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    published_at TIMESTAMP NULL,
+                    publish_version INT DEFAULT 0
+                )
+                """
+        );
+        ensureDraftColumn("ALTER TABLE contract_type_field_draft ADD COLUMN published_at TIMESTAMP NULL");
+        ensureDraftColumn("ALTER TABLE contract_type_field_draft ADD COLUMN publish_version INT DEFAULT 0");
+        ensureDraftColumn(
+                "ALTER TABLE contract_type_field_draft ADD COLUMN draft_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+        );
+        ensureDraftColumn("ALTER TABLE contract_type_field_draft ADD COLUMN fields_json LONGTEXT NOT NULL");
+    }
+
+    private void ensureDraftColumn(String ddl) {
+        try {
+            jdbcTemplate.execute(ddl);
+        } catch (Exception ex) {
+            String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(Locale.ROOT);
+            boolean duplicateColumn = message.contains("duplicate column")
+                    || message.contains("already exists");
+            if (!duplicateColumn) {
+                throw ex;
+            }
+        }
+    }
+
+    private List<ContractTypeField> parseDraftFields(String fieldsJson) {
+        if (fieldsJson == null || fieldsJson.isBlank()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(fieldsJson, new TypeReference<List<ContractTypeField>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("草稿字段格式错误，无法解析", e);
+        }
+    }
+
+    private List<ContractTypeField> parseDraftFieldMaps(List<Map<String, Object>> fieldMaps) {
+        List<ContractTypeField> result = new ArrayList<>();
+        for (Map<String, Object> item : fieldMaps) {
+            ContractTypeField field = new ContractTypeField();
+            field.setId(parseLong(item.get("id")));
+            field.setContractType(parseString(item.get("contractType")));
+            field.setFieldKey(parseString(item.get("fieldKey")));
+            field.setFieldLabel(parseString(item.get("fieldLabel")));
+            field.setFieldLabelEn(parseString(item.get("fieldLabelEn")));
+            field.setFieldType(parseString(item.get("fieldType")));
+            field.setQuickCodeId(parseString(item.get("quickCodeId")));
+            field.setRequired(parseBoolean(item.get("required")));
+            field.setShowInList(parseBoolean(item.get("showInList")));
+            field.setShowInForm(parseBoolean(item.get("showInForm")));
+            field.setFieldOrder(parseInteger(item.get("fieldOrder")));
+            field.setPlaceholder(parseString(item.get("placeholder")));
+            field.setPlaceholderEn(parseString(item.get("placeholderEn")));
+            field.setDefaultValue(parseString(item.get("defaultValue")));
+            field.setOptions(parseString(item.get("options")));
+            field.setMinValue(parseBigDecimal(item.get("minValue")));
+            field.setMaxValue(parseBigDecimal(item.get("maxValue")));
+            result.add(field);
+        }
+        return result;
+    }
+
+    private String parseString(Object raw) {
+        return raw == null ? null : String.valueOf(raw);
+    }
+
+    private Long parseLong(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Number n) return n.longValue();
+        try {
+            return Long.valueOf(String.valueOf(raw));
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("id 格式非法: " + raw, ex);
+        }
+    }
+
+    private Integer parseInteger(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Number n) return n.intValue();
+        try {
+            return Integer.valueOf(String.valueOf(raw));
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("fieldOrder 格式非法: " + raw, ex);
+        }
+    }
+
+    private Boolean parseBoolean(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Boolean b) return b;
+        String text = String.valueOf(raw).trim().toLowerCase(Locale.ROOT);
+        if ("1".equals(text) || "true".equals(text) || "yes".equals(text)) return true;
+        if ("0".equals(text) || "false".equals(text) || "no".equals(text)) return false;
+        return null;
+    }
+
+    private BigDecimal parseBigDecimal(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof BigDecimal bd) return bd;
+        if (raw instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
+        try {
+            return new BigDecimal(String.valueOf(raw));
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("数值格式非法: " + raw, ex);
         }
     }
 }

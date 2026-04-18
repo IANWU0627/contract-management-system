@@ -8,5 +8,5 @@ const i18n = createI18n({
   messages
 })
 
-export const t = (key: string) => i18n.global.t(key)
+export const t = (key: string, params?: Record<string, unknown>) => i18n.global.t(key, params)
 export default i18n

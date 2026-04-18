@@ -112,11 +112,11 @@ public class UserController {
         try {
             Long currentUserId = SecurityUtils.getCurrentUserId();
             if (currentUserId == null) {
-                return ApiResponse.error("未登录或登录已失效");
+                return ApiResponse.error("未登录或登录已失效", "error.user.notLoggedIn");
             }
             User user = userMapper.selectById(currentUserId);
             if (user == null) {
-                return ApiResponse.error("用户不存在");
+                return ApiResponse.error("用户不存在", "error.user.notFound");
             }
             Map<String, Object> result = new HashMap<>();
             result.put("id", user.getId());
@@ -133,7 +133,7 @@ public class UserController {
             return ApiResponse.success(result);
         } catch (Exception e) {
             log.error("获取用户信息失败", e);
-            return ApiResponse.error("获取用户信息失败");
+            return ApiResponse.error("获取用户信息失败", "error.user.fetchFailed");
         }
     }
     
@@ -258,7 +258,7 @@ public class UserController {
             
             return ApiResponse.success(result);
         } catch (Exception e) {
-            return ApiResponse.error("创建用户失败: " + e.getMessage());
+            return ApiResponse.error("创建用户失败: " + e.getMessage(), "error.user.createFailed");
         }
     }
     
@@ -268,7 +268,7 @@ public class UserController {
         try {
             User user = userMapper.selectById(id);
             if (user == null) {
-                return ApiResponse.error("用户不存在");
+                return ApiResponse.error("用户不存在", "error.user.notFound");
             }
             
             if (userData.containsKey("username")) {
@@ -301,7 +301,7 @@ public class UserController {
             return ApiResponse.success(result);
         } catch (Exception e) {
             log.error("更新用户失败", e);
-            return ApiResponse.error("更新用户失败");
+            return ApiResponse.error("更新用户失败", "error.user.updateFailed");
         }
     }
     
@@ -311,12 +311,12 @@ public class UserController {
         try {
             int result = userMapper.deleteById(id);
             if (result == 0) {
-                return ApiResponse.error("用户不存在");
+                return ApiResponse.error("用户不存在", "error.user.notFound");
             }
             return ApiResponse.success(null);
         } catch (Exception e) {
             log.error("删除用户失败", e);
-            return ApiResponse.error("删除用户失败");
+            return ApiResponse.error("删除用户失败", "error.user.deleteFailed");
         }
     }
     
@@ -327,7 +327,7 @@ public class UserController {
             String status = req.get("status");
             User user = userMapper.selectById(id);
             if (user == null) {
-                return ApiResponse.error("用户不存在");
+                return ApiResponse.error("用户不存在", "error.user.notFound");
             }
             
             user.setStatus("active".equals(status) ? 1 : 0);
@@ -336,7 +336,7 @@ public class UserController {
             return ApiResponse.success(null);
         } catch (Exception e) {
             log.error("更新用户状态失败", e);
-            return ApiResponse.error("更新用户状态失败");
+            return ApiResponse.error("更新用户状态失败", "error.user.statusUpdateFailed");
         }
     }
     
@@ -346,7 +346,7 @@ public class UserController {
         try {
             User user = userMapper.selectById(id);
             if (user == null) {
-                return ApiResponse.error("用户不存在");
+                return ApiResponse.error("用户不存在", "error.user.notFound");
             }
             
             user.setPassword(passwordEncoder.encode("123456"));
@@ -354,7 +354,7 @@ public class UserController {
             
             return ApiResponse.success("密码已重置为 123456");
         } catch (Exception e) {
-            return ApiResponse.error("重置密码失败: " + e.getMessage());
+            return ApiResponse.error("重置密码失败: " + e.getMessage(), "error.user.resetPasswordFailed");
         }
     }
     
@@ -365,7 +365,7 @@ public class UserController {
             Long currentUserId = SecurityUtils.getCurrentUserId();
             User user = userMapper.selectById(currentUserId);
             if (user == null) {
-                return ApiResponse.error("用户不存在");
+                return ApiResponse.error("用户不存在", "error.user.notFound");
             }
             
             if (userData.containsKey("nickname")) {
@@ -401,7 +401,7 @@ public class UserController {
             return ApiResponse.success(result);
         } catch (Exception e) {
             log.error("更新用户信息失败", e);
-            return ApiResponse.error("更新用户信息失败");
+            return ApiResponse.error("更新用户信息失败", "error.user.updateProfileFailed");
         }
     }
     
@@ -412,24 +412,24 @@ public class UserController {
             String newPassword = req.get("newPassword");
             
             if (oldPassword == null || oldPassword.isEmpty()) {
-                return ApiResponse.error("原密码不能为空");
+                return ApiResponse.error("原密码不能为空", "error.user.originalPasswordRequired");
             }
             if (newPassword == null || newPassword.length() < 8) {
-                return ApiResponse.error("新密码至少8位");
+                return ApiResponse.error("新密码至少8位", "error.user.newPasswordMinLength");
             }
             
             Long currentUserId = SecurityUtils.getCurrentUserId();
             User user = userMapper.selectById(currentUserId);
             if (user != null) {
                 if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
-                    return ApiResponse.error("原密码错误");
+                    return ApiResponse.error("原密码错误", "error.user.originalPasswordWrong");
                 }
                 if (oldPassword.equals(newPassword)) {
-                    return ApiResponse.error("新密码不能与原密码相同");
+                    return ApiResponse.error("新密码不能与原密码相同", "error.user.newPasswordSameAsOld");
                 }
                 // At least one uppercase, one lowercase, one digit, one special character.
                 if (!newPassword.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).{8,}$")) {
-                    return ApiResponse.error("密码需包含大小写字母、数字和特殊字符");
+                    return ApiResponse.error("密码需包含大小写字母、数字和特殊字符", "error.user.passwordComplexity");
                 }
                 user.setPassword(passwordEncoder.encode(newPassword));
                 userMapper.updateById(user);
@@ -438,7 +438,7 @@ public class UserController {
             return ApiResponse.success("密码修改成功");
         } catch (Exception e) {
             log.error("修改密码失败", e);
-            return ApiResponse.error("修改密码失败");
+            return ApiResponse.error("修改密码失败", "error.user.changePasswordFailed");
         }
     }
     

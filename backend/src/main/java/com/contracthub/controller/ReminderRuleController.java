@@ -92,8 +92,17 @@ public class ReminderRuleController {
 
     @PostMapping
     public ApiResponse<Map<String, Object>> createRule(@RequestBody Map<String, Object> ruleData) {
+        String name = ruleData.get("name") != null ? String.valueOf(ruleData.get("name")).trim() : "";
+        if (name.isEmpty()) {
+            return ApiResponse.error(
+                    400,
+                    "规则名称不能为空",
+                    "error.reminderRule.fieldRequired",
+                    Map.of("field", "name"));
+        }
+
         ReminderRule rule = new ReminderRule();
-        rule.setName((String) ruleData.get("name"));
+        rule.setName(name);
         
         if (ruleData.containsKey("contractType")) {
             Object contractTypeObj = ruleData.get("contractType");
@@ -115,7 +124,15 @@ public class ReminderRuleController {
         if (ruleData.containsKey("minAmount")) {
             Object minAmountObj = ruleData.get("minAmount");
             if (minAmountObj != null) {
-                rule.setMinAmount(new BigDecimal(minAmountObj.toString()));
+                try {
+                    rule.setMinAmount(new BigDecimal(minAmountObj.toString()));
+                } catch (NumberFormatException ex) {
+                    return ApiResponse.error(
+                            400,
+                            "最小金额格式错误",
+                            "error.reminderRule.fieldInvalid",
+                            Map.of("field", "minAmount", "value", String.valueOf(minAmountObj)));
+                }
             } else {
                 rule.setMinAmount(null);
             }
@@ -123,13 +140,36 @@ public class ReminderRuleController {
         if (ruleData.containsKey("maxAmount")) {
             Object maxAmountObj = ruleData.get("maxAmount");
             if (maxAmountObj != null) {
-                rule.setMaxAmount(new BigDecimal(maxAmountObj.toString()));
+                try {
+                    rule.setMaxAmount(new BigDecimal(maxAmountObj.toString()));
+                } catch (NumberFormatException ex) {
+                    return ApiResponse.error(
+                            400,
+                            "最大金额格式错误",
+                            "error.reminderRule.fieldInvalid",
+                            Map.of("field", "maxAmount", "value", String.valueOf(maxAmountObj)));
+                }
             } else {
                 rule.setMaxAmount(null);
             }
         }
         
         rule.setRemindDays((Integer) ruleData.getOrDefault("remindDays", 30));
+        if (rule.getRemindDays() == null || rule.getRemindDays() < 1 || rule.getRemindDays() > 365) {
+            return ApiResponse.error(
+                    400,
+                    "提醒天数超出范围",
+                    "error.reminderRule.fieldOutOfRange",
+                    Map.of("field", "remindDays", "value", String.valueOf(rule.getRemindDays()), "min", 1, "max", 365));
+        }
+        if (rule.getMinAmount() != null && rule.getMaxAmount() != null
+                && rule.getMinAmount().compareTo(rule.getMaxAmount()) > 0) {
+            return ApiResponse.error(
+                    400,
+                    "金额区间不合法",
+                    "error.reminderRule.amountRangeInvalid",
+                    Map.of("minValue", rule.getMinAmount().toPlainString(), "maxValue", rule.getMaxAmount().toPlainString()));
+        }
         rule.setIsEnabled(true);
         rule.setCreatorId(SecurityUtils.getCurrentUserId());
         rule.setIsPublic(ruleData.containsKey("isPublic") ? (Boolean) ruleData.get("isPublic") : true);
@@ -147,21 +187,29 @@ public class ReminderRuleController {
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<Void> updateRule(@PathVariable Long id, @RequestBody Map<String, Object> ruleData) {
+    public ApiResponse<?> updateRule(@PathVariable Long id, @RequestBody Map<String, Object> ruleData) {
         ReminderRule rule = ruleMapper.selectById(id);
         if (rule == null) {
-            return ApiResponse.error("规则不存在");
+            return ApiResponse.error("规则不存在", "error.reminderRule.notFound");
         }
         
         Long userId = SecurityUtils.getCurrentUserId();
         Boolean isPublic = rule.getIsPublic() != null && rule.getIsPublic();
         
         if (!isPublic && rule.getCreatorId() != null && !rule.getCreatorId().equals(userId)) {
-            return ApiResponse.error("您没有权限修改此规则");
+            return ApiResponse.error("您没有权限修改此规则", "error.reminderRule.noEditPermission");
         }
         
         if (ruleData.containsKey("name")) {
-            rule.setName((String) ruleData.get("name"));
+            String name = ruleData.get("name") != null ? String.valueOf(ruleData.get("name")).trim() : "";
+            if (name.isEmpty()) {
+                return ApiResponse.error(
+                        400,
+                        "规则名称不能为空",
+                        "error.reminderRule.fieldRequired",
+                        Map.of("field", "name"));
+            }
+            rule.setName(name);
         }
         
         if (ruleData.containsKey("contractType")) {
@@ -184,7 +232,15 @@ public class ReminderRuleController {
         if (ruleData.containsKey("minAmount")) {
             Object minAmountObj = ruleData.get("minAmount");
             if (minAmountObj != null && !minAmountObj.toString().isEmpty()) {
-                rule.setMinAmount(new BigDecimal(minAmountObj.toString()));
+                try {
+                    rule.setMinAmount(new BigDecimal(minAmountObj.toString()));
+                } catch (NumberFormatException ex) {
+                    return ApiResponse.error(
+                            400,
+                            "最小金额格式错误",
+                            "error.reminderRule.fieldInvalid",
+                            Map.of("field", "minAmount", "value", String.valueOf(minAmountObj)));
+                }
             } else {
                 rule.setMinAmount(null);
             }
@@ -192,34 +248,58 @@ public class ReminderRuleController {
         if (ruleData.containsKey("maxAmount")) {
             Object maxAmountObj = ruleData.get("maxAmount");
             if (maxAmountObj != null && !maxAmountObj.toString().isEmpty()) {
-                rule.setMaxAmount(new BigDecimal(maxAmountObj.toString()));
+                try {
+                    rule.setMaxAmount(new BigDecimal(maxAmountObj.toString()));
+                } catch (NumberFormatException ex) {
+                    return ApiResponse.error(
+                            400,
+                            "最大金额格式错误",
+                            "error.reminderRule.fieldInvalid",
+                            Map.of("field", "maxAmount", "value", String.valueOf(maxAmountObj)));
+                }
             } else {
                 rule.setMaxAmount(null);
             }
         }
         if (ruleData.containsKey("remindDays")) {
             rule.setRemindDays((Integer) ruleData.get("remindDays"));
+            if (rule.getRemindDays() == null || rule.getRemindDays() < 1 || rule.getRemindDays() > 365) {
+                return ApiResponse.error(
+                        400,
+                        "提醒天数超出范围",
+                        "error.reminderRule.fieldOutOfRange",
+                        Map.of("field", "remindDays", "value", String.valueOf(rule.getRemindDays()), "min", 1, "max", 365));
+            }
         }
         if (ruleData.containsKey("isEnabled")) {
             rule.setIsEnabled((Boolean) ruleData.get("isEnabled"));
         }
         
+        if (rule.getMinAmount() != null && rule.getMaxAmount() != null
+                && rule.getMinAmount().compareTo(rule.getMaxAmount()) > 0) {
+            return ApiResponse.error(
+                    400,
+                    "金额区间不合法",
+                    "error.reminderRule.amountRangeInvalid",
+                    Map.of("minValue", rule.getMinAmount().toPlainString(), "maxValue", rule.getMaxAmount().toPlainString()));
+        }
+
         ruleMapper.updateById(rule);
         return ApiResponse.success(null);
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteRule(@PathVariable Long id) {
+    public ApiResponse<?> deleteRule(@PathVariable Long id) {
         ReminderRule rule = ruleMapper.selectById(id);
         if (rule == null) {
-            return ApiResponse.error("规则不存在");
+            return ApiResponse.error("规则不存在", "error.reminderRule.notFound");
         }
         
         Long userId = SecurityUtils.getCurrentUserId();
         Boolean isPublic = rule.getIsPublic() != null && rule.getIsPublic();
         
         if (!isPublic && rule.getCreatorId() != null && !rule.getCreatorId().equals(userId)) {
-            return ApiResponse.error("您没有权限删除此规则");
+            return ApiResponse.error("您没有权限删除此规则", "error.reminderRule.noDeletePermission");
         }
         
         ruleMapper.deleteById(id);
@@ -227,10 +307,10 @@ public class ReminderRuleController {
     }
 
     @PutMapping("/{id}/toggle")
-    public ApiResponse<Void> toggleRule(@PathVariable Long id) {
+    public ApiResponse<?> toggleRule(@PathVariable Long id) {
         ReminderRule rule = ruleMapper.selectById(id);
         if (rule == null) {
-            return ApiResponse.error("规则不存在");
+            return ApiResponse.error("规则不存在", "error.reminderRule.notFound");
         }
         
         rule.setIsEnabled(!rule.getIsEnabled());

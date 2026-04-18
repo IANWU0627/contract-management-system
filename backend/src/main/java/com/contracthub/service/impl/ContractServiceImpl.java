@@ -11,6 +11,8 @@ import com.contracthub.entity.ContractAiSummary;
 import com.contracthub.entity.ContractPayload;
 import com.contracthub.entity.User;
 import com.contracthub.entity.ApprovalRecord;
+import com.contracthub.entity.QuickCodeHeader;
+import com.contracthub.entity.QuickCodeItem;
 import com.contracthub.mapper.ContractCounterpartyMapper;
 import com.contracthub.mapper.ContractMapper;
 import com.contracthub.mapper.ContractFieldValueMapper;
@@ -23,6 +25,8 @@ import com.contracthub.mapper.ContractAiSummaryMapper;
 import com.contracthub.mapper.ContractPayloadMapper;
 import com.contracthub.mapper.UserMapper;
 import com.contracthub.mapper.ApprovalRecordMapper;
+import com.contracthub.mapper.QuickCodeHeaderMapper;
+import com.contracthub.mapper.QuickCodeItemMapper;
 import com.contracthub.service.ContractService;
 import com.contracthub.service.ContractNumberService;
 import com.contracthub.service.NotificationService;
@@ -30,6 +34,7 @@ import com.contracthub.service.ContractVersionService;
 import com.contracthub.service.ContractChangeLogService;
 import com.contracthub.service.ContractDataScopeService;
 import com.contracthub.service.ContractAiAssistantService;
+import com.contracthub.exception.BusinessException;
 import com.contracthub.enums.UserRole;
 import com.contracthub.util.ClauseCompareUtils;
 import com.contracthub.util.SecurityUtils;
@@ -44,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -63,6 +69,8 @@ public class ContractServiceImpl implements ContractService {
     private final ContractPayloadMapper contractPayloadMapper;
     private final UserMapper userMapper;
     private final ApprovalRecordMapper approvalRecordMapper;
+    private final QuickCodeHeaderMapper quickCodeHeaderMapper;
+    private final QuickCodeItemMapper quickCodeItemMapper;
     private final ContractNumberService contractNumberService;
     private final NotificationService notificationService;
     private final ContractVersionService contractVersionService;
@@ -83,6 +91,8 @@ public class ContractServiceImpl implements ContractService {
                                 ContractPayloadMapper contractPayloadMapper,
                                 UserMapper userMapper,
                                 ApprovalRecordMapper approvalRecordMapper,
+                                QuickCodeHeaderMapper quickCodeHeaderMapper,
+                                QuickCodeItemMapper quickCodeItemMapper,
                                 ContractNumberService contractNumberService,
                                 NotificationService notificationService,
                                 ContractVersionService contractVersionService,
@@ -101,6 +111,8 @@ public class ContractServiceImpl implements ContractService {
         this.contractPayloadMapper = contractPayloadMapper;
         this.userMapper = userMapper;
         this.approvalRecordMapper = approvalRecordMapper;
+        this.quickCodeHeaderMapper = quickCodeHeaderMapper;
+        this.quickCodeItemMapper = quickCodeItemMapper;
         this.contractNumberService = contractNumberService;
         this.notificationService = notificationService;
         this.contractVersionService = contractVersionService;
@@ -179,21 +191,30 @@ public class ContractServiceImpl implements ContractService {
             queryWrapper.le("amount", amountMax);
         }
         if (keyword != null && !keyword.isEmpty()) {
-            queryWrapper.and(wrapper -> wrapper
-                .like("title", keyword)
-                .or()
-                .like("contract_no", keyword)
-                .or()
-                .apply("id IN (SELECT contract_id FROM contract_payload WHERE content LIKE {0})", "%" + keyword + "%")
-                .or()
-                .like("remark", keyword)
-                .or()
-                .like("type", keyword)
-                .or()
-                .like("status", keyword)
-                .or()
-                .apply("id IN (SELECT contract_id FROM contract_counterparty WHERE name LIKE {0})", "%" + keyword + "%")
-            );
+            String kw = keyword.trim();
+            if (!kw.isEmpty()) {
+                final String payloadKw = kw.length() >= 2 ? kw : null;
+                queryWrapper.and(wrapper -> {
+                    wrapper.like("title", kw).or().like("contract_no", kw);
+                    if (payloadKw != null) {
+                        wrapper.or().apply(
+                            "id IN (SELECT contract_id FROM contract_payload WHERE content LIKE {0})",
+                            "%" + payloadKw + "%"
+                        );
+                    }
+                    wrapper.or()
+                        .like("remark", kw)
+                        .or()
+                        .like("type", kw)
+                        .or()
+                        .like("status", kw)
+                        .or()
+                        .apply(
+                            "id IN (SELECT contract_id FROM contract_counterparty WHERE name LIKE {0})",
+                            "%" + kw + "%"
+                        );
+                });
+            }
         }
 
         // 数据范围：管理员/法务全部；其他用户本人 + 同部门
@@ -357,6 +378,7 @@ public class ContractServiceImpl implements ContractService {
         saveCounterpartiesToTable(contract.getId(), resolveCounterparties(counterpartiesList));
         
         Map<String, Object> dynamicFields = resolveDynamicFields(contractMap);
+        validateDynamicFieldQuickCodeValues(contract.getType(), dynamicFields);
         String payloadDynamicFieldValues = null;
         if (!dynamicFields.isEmpty()) {
             try {
@@ -587,6 +609,7 @@ public class ContractServiceImpl implements ContractService {
         }
         
         Map<String, Object> dynamicFields = resolveDynamicFields(contractMap);
+        validateDynamicFieldQuickCodeValues(contract.getType(), dynamicFields);
         String payloadDynamicFieldValues = contract.getDynamicFieldValues();
         if (!dynamicFields.isEmpty()) {
             try {
@@ -2438,6 +2461,135 @@ public class ContractServiceImpl implements ContractService {
             }
         }
         return new HashMap<>();
+    }
+
+    private void validateDynamicFieldQuickCodeValues(String contractType, Map<String, Object> dynamicFields) {
+        if (contractType == null || contractType.isBlank() || dynamicFields == null || dynamicFields.isEmpty()) {
+            return;
+        }
+        List<ContractTypeField> configuredFields = typeFieldMapper.selectByContractType(contractType);
+        if (configuredFields == null || configuredFields.isEmpty()) {
+            return;
+        }
+        Map<String, ContractTypeField> fieldConfigMap = new HashMap<>();
+        for (ContractTypeField field : configuredFields) {
+            fieldConfigMap.put(field.getFieldKey(), field);
+        }
+
+        Map<String, Set<String>> quickCodeValidValueCache = new HashMap<>();
+        for (Map.Entry<String, Object> entry : dynamicFields.entrySet()) {
+            String fieldKey = entry.getKey();
+            ContractTypeField field = fieldConfigMap.get(fieldKey);
+            if (field == null) continue;
+            String fieldType = field.getFieldType();
+            if (!"select".equals(fieldType) && !"multiselect".equals(fieldType)) continue;
+
+            String quickCodeCode = field.getQuickCodeId();
+            if (quickCodeCode == null || quickCodeCode.isBlank()) continue;
+
+            Set<String> allowedValues = quickCodeValidValueCache.computeIfAbsent(
+                quickCodeCode,
+                this::loadValidQuickCodeValues
+            );
+            if (allowedValues.isEmpty()) {
+                throw new BusinessException(
+                    "动态字段快码无可用选项",
+                    "error.contract.dynamicQuickCodeNoOptions",
+                    Map.of(
+                        "field", field.getFieldLabel(),
+                        "quickCode", quickCodeCode
+                    )
+                );
+            }
+
+            List<String> selectedValues = normalizeSelectedQuickCodeValues(entry.getValue(), "multiselect".equals(fieldType));
+            for (String value : selectedValues) {
+                if (!allowedValues.contains(value)) {
+                    throw new BusinessException(
+                        "动态字段包含无效快码值",
+                        "error.contract.dynamicQuickCodeInvalidValue",
+                        Map.of(
+                            "field", field.getFieldLabel(),
+                            "value", value,
+                            "quickCode", quickCodeCode
+                        )
+                    );
+                }
+            }
+        }
+    }
+
+    private Set<String> loadValidQuickCodeValues(String quickCodeCode) {
+        if (quickCodeCode == null || quickCodeCode.isBlank()) {
+            return Collections.emptySet();
+        }
+        QueryWrapper<QuickCodeHeader> headerWrapper = new QueryWrapper<>();
+        headerWrapper.eq("code", quickCodeCode).eq("status", 1);
+        QuickCodeHeader header = quickCodeHeaderMapper.selectOne(headerWrapper);
+        if (header == null) return Collections.emptySet();
+
+        List<QuickCodeItem> items = quickCodeItemMapper.selectEnabledByHeaderId(header.getId());
+        if (items == null || items.isEmpty()) return Collections.emptySet();
+
+        LocalDate today = LocalDate.now();
+        Set<String> result = new HashSet<>();
+        for (QuickCodeItem item : items) {
+            boolean valid = true;
+            if (item.getValidFrom() != null && item.getValidFrom().isAfter(today)) valid = false;
+            if (item.getValidTo() != null && item.getValidTo().isBefore(today)) valid = false;
+            if (!valid) continue;
+            if (item.getCode() != null && !item.getCode().isBlank()) {
+                result.add(item.getCode());
+            }
+        }
+        return result;
+    }
+
+    private List<String> normalizeSelectedQuickCodeValues(Object valueObj, boolean multiSelect) {
+        if (valueObj == null) return Collections.emptyList();
+        if (!multiSelect) {
+            String single = String.valueOf(valueObj).trim();
+            if (single.isEmpty()) return Collections.emptyList();
+            return Collections.singletonList(single);
+        }
+
+        List<String> result = new ArrayList<>();
+        if (valueObj instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                if (item == null) continue;
+                String val = String.valueOf(item).trim();
+                if (!val.isEmpty()) result.add(val);
+            }
+            return result;
+        }
+
+        String raw = String.valueOf(valueObj).trim();
+        if (raw.isEmpty()) return Collections.emptyList();
+
+        if (raw.startsWith("[") && raw.endsWith("]")) {
+            try {
+                List<?> parsed = objectMapper.readValue(raw, List.class);
+                for (Object item : parsed) {
+                    if (item == null) continue;
+                    String val = String.valueOf(item).trim();
+                    if (!val.isEmpty()) result.add(val);
+                }
+                return result;
+            } catch (Exception ignored) {
+                // fallthrough
+            }
+        }
+
+        if (raw.contains(",")) {
+            for (String part : raw.split(",")) {
+                String val = part.trim();
+                if (!val.isEmpty()) result.add(val);
+            }
+            return result;
+        }
+
+        result.add(raw);
+        return result;
     }
 
     private List<Map<String, Object>> resolveCounterparties(List<Map<String, Object>> counterpartiesList) {

@@ -303,7 +303,7 @@ const handleCreate = async () => {
     resetForm()
     fetchData()
   } catch (error) {
-    ElMessage.error(t('common.error'))
+    ElMessage.error((error as any)?.message || t('common.error'))
   }
 }
 
@@ -366,7 +366,7 @@ const handleToggle = async (rule: any) => {
     ElMessage.success(t('common.success'))
     fetchData()
   } catch (error) {
-    ElMessage.error(t('common.error'))
+    ElMessage.error((error as any)?.message || t('common.error'))
   }
 }
 

@@ -32,7 +32,7 @@ public class PermissionAspect {
 
         // 检查敏感操作权限
         if (ADMIN_PERMISSIONS.contains(permission) && !"ADMIN".equals(currentUserRole)) {
-            return ApiResponse.error(403, "无权执行此操作，需要管理员权限");
+            return ApiResponse.error(403, "无权执行此操作，需要管理员权限", "error.permission.adminRequired");
         }
 
         // 检查版本恢复权限 - 只有合同创建者或管理员可以恢复
@@ -41,7 +41,7 @@ public class PermissionAspect {
             if (args.length >= 4) {
                 Long operatorId = (Long) args[2];
                 if (!currentUserId.equals(operatorId)) {
-                    return ApiResponse.error(403, "无权恢复此版本");
+                    return ApiResponse.error(403, "无权恢复此版本", "error.permission.versionRestoreDenied");
                 }
             }
         }

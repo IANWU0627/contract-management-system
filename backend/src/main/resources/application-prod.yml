@@ -1,0 +1,19 @@
+# 生产：通过 --spring.profiles.active=prod 启用
+logging:
+  level:
+    root: WARN
+    com.contracthub: INFO
+    org.springframework.web: WARN
+  file:
+    name: ./logs/application-prod.log
+    max-size: 20MB
+    max-history: 60
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health,info

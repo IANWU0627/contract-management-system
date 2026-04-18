@@ -63,12 +63,12 @@ public class FavoriteController {
     public ApiResponse<Void> addFavorite(@PathVariable Long contractId, @RequestParam(defaultValue = "1") Long userId) {
         Contract contract = contractMapper.selectById(contractId);
         if (contract == null) {
-            return ApiResponse.error("合同不存在");
+            return ApiResponse.error("合同不存在", "error.contract.notFound");
         }
         
         boolean exists = favoriteMapper.isFavorited(contractId, userId);
         if (exists) {
-            return ApiResponse.error("已经收藏过了");
+            return ApiResponse.error("已经收藏过了", "error.favorite.alreadyFavorited");
         }
         
         ContractFavorite favorite = new ContractFavorite();

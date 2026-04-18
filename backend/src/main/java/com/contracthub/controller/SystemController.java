@@ -148,50 +148,32 @@ public class SystemController {
     }
     
     private int getCpuUsage() {
-        try {
-            OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
-            double load = osBean.getSystemLoadAverage();
-            int processors = osBean.getAvailableProcessors();
-            
-            if (load >= 0) {
-                return Math.min(100, (int) ((load / processors) * 100));
-            }
-        } catch (Exception e) {
-            log.error("获取CPU使用率失败", e);
+        OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
+        double load = osBean.getSystemLoadAverage();
+        int processors = osBean.getAvailableProcessors();
+        if (load < 0 || processors <= 0) {
+            throw new IllegalStateException("当前运行环境不支持获取CPU负载");
         }
-        
-        Random random = new Random();
-        return random.nextInt(40) + 20;
+        return Math.min(100, (int) ((load / processors) * 100));
     }
     
     private int getMemoryUsage(MemoryMXBean memoryBean) {
-        try {
-            long maxMemory = Runtime.getRuntime().maxMemory();
-            long usedMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-            
-            if (maxMemory > 0) {
-                return (int) ((usedMemory * 100) / maxMemory);
-            }
-        } catch (Exception e) {
-            log.error("获取内存使用率失败", e);
+        long maxMemory = Runtime.getRuntime().maxMemory();
+        long usedMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        if (maxMemory <= 0) {
+            throw new IllegalStateException("当前运行环境不支持获取内存上限");
         }
-        
-        Random random = new Random();
-        return random.nextInt(40) + 40;
+        return (int) ((usedMemory * 100) / maxMemory);
     }
 
     private int getDiskUsage() {
-        try {
-            File root = new File(".");
-            long total = root.getTotalSpace();
-            long usable = root.getUsableSpace();
-            if (total > 0) {
-                return (int) (((total - usable) * 100) / total);
-            }
-        } catch (Exception e) {
-            log.error("获取磁盘使用率失败", e);
+        File root = new File(".");
+        long total = root.getTotalSpace();
+        long usable = root.getUsableSpace();
+        if (total <= 0) {
+            throw new IllegalStateException("当前运行环境不支持获取磁盘容量");
         }
-        return 0;
+        return (int) (((total - usable) * 100) / total);
     }
     
     // ==================== 操作日志 ====================
@@ -292,7 +274,7 @@ public class SystemController {
             return ApiResponse.success(data);
         } catch (Exception e) {
             log.error("获取操作日志失败", e);
-            return ApiResponse.error("获取操作日志失败");
+            return ApiResponse.error("获取操作日志失败", "error.system.operationLogFetchFailed");
         }
     }
 
@@ -454,7 +436,7 @@ public class SystemController {
 
         UserSession session = userSessionMapper.selectOne(wrapper);
         if (session == null) {
-            return ApiResponse.error("会话不存在或无权限操作");
+            return ApiResponse.error("会话不存在或无权限操作", "error.auth.sessionInvalid");
         }
         String authHeader = request.getHeader("Authorization");
         String currentToken = null;
@@ -462,7 +444,7 @@ public class SystemController {
             currentToken = authHeader.substring(7);
         }
         if (currentToken != null && currentToken.equals(session.getToken())) {
-            return ApiResponse.error("当前会话不能被终止");
+            return ApiResponse.error("当前会话不能被终止", "error.auth.currentSessionCannotTerminate");
         }
 
         userSessionMapper.deleteById(id);
@@ -519,7 +501,7 @@ public class SystemController {
     public ApiResponse<Void> sendTestEmail(@RequestBody Map<String, String> config) {
         String toEmail = config.get("toEmail");
         if (toEmail == null || toEmail.isBlank()) {
-            return ApiResponse.error("测试邮箱不能为空");
+            return ApiResponse.error("测试邮箱不能为空", "error.system.testEmailRequired");
         }
 
         try {
@@ -530,10 +512,15 @@ public class SystemController {
             String username = userConfigs.get("email_smtp_username");
             String password = userConfigs.get("email_smtp_password");
             boolean useSsl = Boolean.parseBoolean(userConfigs.getOrDefault("email_smtp_use_ssl", "true"));
-            int port = parseInt(userConfigs.get("email_smtp_port"), useSsl ? 465 : 25);
+            Integer parsedPort = parseInt(userConfigs.get("email_smtp_port"));
 
             if (isBlank(host) || isBlank(from) || isBlank(username) || isBlank(password)) {
-                return ApiResponse.error("请先在系统设置中完整配置SMTP参数后再测试");
+                return ApiResponse.error("请先在系统设置中完整配置SMTP参数后再测试", "error.system.smtpConfigIncomplete");
+            }
+            int defaultPort = useSsl ? 465 : 25;
+            int port = parsedPort == null ? defaultPort : parsedPort;
+            if (parsedPort != null && (parsedPort < 1 || parsedPort > 65535)) {
+                return ApiResponse.error("SMTP端口配置无效", "error.system.smtpPortInvalid");
             }
 
             JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
@@ -561,7 +548,7 @@ public class SystemController {
             return ApiResponse.success(null);
         } catch (Exception e) {
             log.error("发送测试邮件失败", e);
-            return ApiResponse.error("测试邮件发送失败: " + e.getMessage());
+            return ApiResponse.error("测试邮件发送失败", "error.system.testEmailSendFailed");
         }
     }
     
@@ -571,7 +558,7 @@ public class SystemController {
     public ApiResponse<Void> sendTestSms(@RequestBody Map<String, String> config) {
         String phone = config.get("phone");
         if (phone == null || phone.isBlank()) {
-            return ApiResponse.error("测试手机号不能为空");
+            return ApiResponse.error("测试手机号不能为空", "error.system.testPhoneRequired");
         }
 
         try {
@@ -586,10 +573,10 @@ public class SystemController {
             String templateCode = userConfigs.getOrDefault("sms_template_code", "");
 
             if (isBlank(provider)) {
-                return ApiResponse.error("请先配置短信服务商");
+                return ApiResponse.error("请先配置短信服务商", "error.system.smsProviderRequired");
             }
             if (isBlank(apiUrl)) {
-                return ApiResponse.error("请先配置短信网关API地址（sms_api_url）");
+                return ApiResponse.error("请先配置短信网关API地址（sms_api_url）", "error.system.smsApiUrlRequired");
             }
 
             Map<String, Object> payload = new HashMap<>();
@@ -610,7 +597,7 @@ public class SystemController {
             return ApiResponse.success(null);
         } catch (Exception e) {
             log.error("发送测试短信失败", e);
-            return ApiResponse.error("测试短信发送失败: " + e.getMessage());
+            return ApiResponse.error("测试短信发送失败", "error.system.testSmsSendFailed");
         }
     }
 
@@ -625,14 +612,14 @@ public class SystemController {
         return result;
     }
 
-    private int parseInt(String value, int defaultValue) {
+    private Integer parseInt(String value) {
         if (value == null || value.isBlank()) {
-            return defaultValue;
+            return null;
         }
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
-            return defaultValue;
+            return null;
         }
     }
 

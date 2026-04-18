@@ -1,4 +1,5 @@
 import { get, post, put, del, download } from './index'
+import type { ApiResponse, PageData } from './types'
 
 export interface Contract {
   id?: number
@@ -18,6 +19,8 @@ export interface Contract {
   createdAt?: string
   updatedAt?: string
 }
+
+export type ContractListData = PageData<Contract>
 
 export interface ContractQuery {
   page?: number
@@ -40,8 +43,8 @@ export interface ContractQuery {
 }
 
 // 合同列表
-export const getContractList = (params: ContractQuery) => 
-  get('/contracts', { params })
+export const getContractList = (params: ContractQuery, options?: { signal?: AbortSignal }) =>
+  get<ApiResponse<ContractListData>>('/contracts', { params, ...(options?.signal ? { signal: options.signal } : {}) })
 
 // 合同详情
 export const getContract = (id: number) => 
@@ -66,6 +69,13 @@ export const getApprovalSummary = (id: number) =>
 // 审批摘要卡片（生成/刷新）
 export const generateApprovalSummary = (id: number, force = false) =>
   post(`/contracts/${id}/approval-summary/generate?force=${force}`)
+
+// 履约节点（正文提取 / 列表）
+export const getPerformanceMilestones = (id: number) =>
+  get(`/contracts/${id}/performance-milestones`)
+
+export const extractPerformanceMilestones = (id: number) =>
+  post(`/contracts/${id}/performance-milestones/extract`)
 
 // 合同关联信息（主合同/补充协议）
 export const getRelatedContracts = (id: number) =>

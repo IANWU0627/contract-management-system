@@ -32,9 +32,11 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BusinessException.class)
     @ResponseStatus(HttpStatus.OK)
-    public ApiResponse<Void> handleBusinessException(BusinessException e) {
+    public ApiResponse<Map<String, Object>> handleBusinessException(BusinessException e) {
         log.warn("业务异常: {}", e.getMessage());
-        return ApiResponse.error(e.getMessage());
+        String messageKey = e.getMessageKey() != null ? e.getMessageKey() : "error.business";
+        Map<String, Object> data = e.getData();
+        return ApiResponse.error(400, e.getMessage(), messageKey, data);
     }
 
     /**
@@ -50,7 +52,7 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         log.warn("参数校验失败: {}", errors);
-        return ApiResponse.error("参数校验失败", errors);
+        return ApiResponse.error("参数校验失败", "error.http.validationFailed", errors);
     }
 
     /**
@@ -66,7 +68,7 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         log.warn("参数绑定失败: {}", errors);
-        return ApiResponse.error("参数绑定失败", errors);
+        return ApiResponse.error("参数绑定失败", "error.http.bindFailed", errors);
     }
 
     /**
@@ -76,7 +78,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleHttpMessageNotReadableException(HttpMessageNotReadableException e) {
         log.warn("请求体解析失败: {}", e.getMessage());
-        return ApiResponse.error("请求体格式错误，请检查JSON格式");
+        return ApiResponse.error("请求体格式错误，请检查JSON格式", "error.http.bodyInvalid");
     }
 
     /**
@@ -86,7 +88,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleMissingServletRequestParameterException(MissingServletRequestParameterException e) {
         log.warn("缺少请求参数: {}", e.getParameterName());
-        return ApiResponse.error("缺少必需参数: " + e.getParameterName());
+        return ApiResponse.error("缺少必需参数: " + e.getParameterName(), "error.http.missingParam");
     }
 
     /**
@@ -96,7 +98,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
         log.warn("参数类型不匹配: {} 需要类型 {}", e.getName(), e.getRequiredType());
-        return ApiResponse.error("参数类型错误: " + e.getName());
+        return ApiResponse.error("参数类型错误: " + e.getName(), "error.http.paramTypeMismatch");
     }
 
     /**
@@ -106,7 +108,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
     public ApiResponse<Void> handleHttpRequestMethodNotSupportedException(HttpRequestMethodNotSupportedException e) {
         log.warn("请求方法不支持: {}", e.getMethod());
-        return ApiResponse.error("不支持的请求方法: " + e.getMethod());
+        return ApiResponse.error("不支持的请求方法: " + e.getMethod(), "error.http.methodNotAllowed");
     }
 
     /**
@@ -116,7 +118,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Void> handleNoHandlerFoundException(NoHandlerFoundException e) {
         log.warn("资源不存在: {}", e.getRequestURL());
-        return ApiResponse.error("请求的资源不存在: " + e.getRequestURL());
+        return ApiResponse.error("请求的资源不存在: " + e.getRequestURL(), "error.http.notFound");
     }
 
     /**
@@ -126,7 +128,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
         log.warn("文件大小超限: {}", e.getMessage());
-        return ApiResponse.error("文件大小超出限制，请上传较小的文件");
+        return ApiResponse.error("文件大小超出限制，请上传较小的文件", "error.http.fileTooLarge");
     }
 
     /**
@@ -136,7 +138,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Void> handleBadCredentialsException(BadCredentialsException e) {
         log.warn("认证失败: {}", e.getMessage());
-        return ApiResponse.error("用户名或密码错误");
+        return ApiResponse.error("用户名或密码错误", "error.auth.invalidCredentials");
     }
 
     /**
@@ -146,7 +148,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiResponse<Void> handleAccessDeniedException(AccessDeniedException e) {
         log.warn("权限不足: {}", e.getMessage());
-        return ApiResponse.error("权限不足，无法执行此操作");
+        return ApiResponse.error("权限不足，无法执行此操作", "error.auth.forbidden");
     }
 
     /**
@@ -156,7 +158,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleException(Exception e) {
         log.error("系统异常: ", e);
-        return ApiResponse.error("系统内部错误，请联系管理员");
+        return ApiResponse.error("系统内部错误，请联系管理员", "error.system.internal");
     }
 
     /**
@@ -166,6 +168,6 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleRuntimeException(RuntimeException e) {
         log.error("运行时异常: ", e);
-        return ApiResponse.error("操作失败，请稍后重试");
+        return ApiResponse.error("操作失败，请稍后重试", "error.system.runtime");
     }
 }

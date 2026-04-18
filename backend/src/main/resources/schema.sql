@@ -101,6 +101,28 @@ CREATE TABLE IF NOT EXISTS contract_payload (
     UNIQUE KEY uk_contract_payload_contract_id (contract_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_contract_status_create_time ON contract(status, create_time);
+CREATE INDEX IF NOT EXISTS idx_contract_creator_create_time ON contract(creator_id, create_time);
+CREATE INDEX IF NOT EXISTS idx_contract_folder_create_time ON contract(folder_id, create_time);
+
+CREATE TABLE IF NOT EXISTS contract_performance_milestone (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    contract_id BIGINT NOT NULL,
+    title VARCHAR(512) NOT NULL,
+    due_date DATE NULL,
+    offset_days INT NULL,
+    anchor_note VARCHAR(64) NULL,
+    raw_snippet VARCHAR(1024) NULL,
+    status VARCHAR(20) DEFAULT 'PENDING',
+    source VARCHAR(32) DEFAULT 'EXTRACTED',
+    last_reminded_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_cpm_contract ON contract_performance_milestone(contract_id);
+CREATE INDEX IF NOT EXISTS idx_cpm_due_status ON contract_performance_milestone(due_date, status);
+
 -- 创建合同分类表
 CREATE TABLE IF NOT EXISTS contract_category (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -300,6 +322,14 @@ CREATE TABLE IF NOT EXISTS contract_type_field (
     max_value DECIMAL(15,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS contract_type_field_draft (
+    contract_type VARCHAR(50) PRIMARY KEY,
+    fields_json LONGTEXT NOT NULL,
+    draft_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    published_at TIMESTAMP NULL,
+    publish_version INT DEFAULT 0
 );
 
 -- 创建合同版本表

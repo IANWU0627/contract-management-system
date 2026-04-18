@@ -62,7 +62,7 @@ public class AuthController {
         String password = req.get("password");
         
         if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
-            return ApiResponse.error("用户名和密码不能为空");
+            return ApiResponse.error("用户名和密码不能为空", "error.auth.usernamePasswordRequired");
         }
 
         String ip = getClientIp(request);
@@ -70,7 +70,12 @@ public class AuthController {
         FailedLoginState failedState = failedLoginAttempts.get(loginAttemptKey);
         if (failedState != null && failedState.lockedUntil > System.currentTimeMillis()) {
             long remainingSeconds = Math.max(1, (failedState.lockedUntil - System.currentTimeMillis()) / 1000);
-            return ApiResponse.error("登录失败次数过多，请在 " + remainingSeconds + " 秒后重试");
+            Map<String, Object> lock = new HashMap<>();
+            lock.put("seconds", remainingSeconds);
+            return ApiResponse.error(400,
+                    "登录失败次数过多，请在 " + remainingSeconds + " 秒后重试",
+                    "error.auth.loginLocked",
+                    lock);
         }
         
         // 查找用户（避免全表扫描）
@@ -78,7 +83,7 @@ public class AuthController {
         
         if (user == null) {
             recordFailedLogin(loginAttemptKey);
-            return ApiResponse.error("用户名或密码错误");
+            return ApiResponse.error("用户名或密码错误", "error.auth.invalidCredentials");
         }
         
         // 验证密码
@@ -95,11 +100,11 @@ public class AuthController {
         
         if (!passwordValid) {
             recordFailedLogin(loginAttemptKey);
-            return ApiResponse.error("用户名或密码错误");
+            return ApiResponse.error("用户名或密码错误", "error.auth.invalidCredentials");
         }
         
         if (user.getStatus() == null || user.getStatus() != 1) {
-            return ApiResponse.error("用户已被禁用");
+            return ApiResponse.error("用户已被禁用", "error.auth.userDisabled");
         }
         failedLoginAttempts.remove(loginAttemptKey);
         
@@ -139,7 +144,7 @@ public class AuthController {
             session.setLastActiveTime(java.time.LocalDateTime.now());
             int inserted = userSessionMapper.insert(session);
             if (inserted <= 0) {
-                return ApiResponse.error("创建会话失败，请稍后重试");
+                return ApiResponse.error("创建会话失败，请稍后重试", "error.auth.sessionCreateFailed");
             }
 
             if (isAnomalousLogin(user.getId(), ip, userAgent, token)) {
@@ -156,7 +161,7 @@ public class AuthController {
                 );
             }
         } catch (Exception e) {
-            return ApiResponse.error("创建会话失败，请稍后重试");
+            return ApiResponse.error("创建会话失败，请稍后重试", "error.auth.sessionCreateFailed");
         }
         
         return ApiResponse.success(data);
@@ -221,15 +226,15 @@ public class AuthController {
         String email = req.get("email");
         
         if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
-            return ApiResponse.error("用户名和密码不能为空");
+            return ApiResponse.error("用户名和密码不能为空", "error.auth.usernamePasswordRequired");
         }
         
         if (password.length() < 6) {
-            return ApiResponse.error("密码至少6位");
+            return ApiResponse.error("密码至少6位", "error.auth.passwordTooShort");
         }
         
         if (userMapper.selectByUsername(username) != null) {
-            return ApiResponse.error("用户名已存在");
+            return ApiResponse.error("用户名已存在", "error.auth.usernameExists");
         }
         
         User user = new User();
@@ -243,7 +248,7 @@ public class AuthController {
         try {
             userMapper.insert(user);
         } catch (DuplicateKeyException e) {
-            return ApiResponse.error("用户名已存在");
+            return ApiResponse.error("用户名已存在", "error.auth.usernameExists");
         }
         
         return ApiResponse.success("注册成功");
@@ -252,33 +257,33 @@ public class AuthController {
     @PostMapping("/refresh")
     public ApiResponse<Map<String, Object>> refresh(@RequestHeader("Authorization") String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return ApiResponse.error("无效的Token");
+            return ApiResponse.error("无效的Token", "error.auth.invalidToken");
         }
         
         String token = authHeader.substring(7);
         Long userId = jwtUtils.getUserIdFromToken(token);
         if (userId == null) {
-            return ApiResponse.error("无效的Token");
+            return ApiResponse.error("无效的Token", "error.auth.invalidToken");
         }
 
         LambdaQueryWrapper<UserSession> sessionWrapper = new LambdaQueryWrapper<>();
         sessionWrapper.eq(UserSession::getToken, token);
         UserSession session = userSessionMapper.selectOne(sessionWrapper);
         if (session == null) {
-            return ApiResponse.error("会话不存在或已失效，请重新登录");
+            return ApiResponse.error("会话不存在或已失效，请重新登录", "error.auth.sessionInvalid");
         }
         if (!userId.equals(session.getUserId())) {
-            return ApiResponse.error("会话校验失败，请重新登录");
+            return ApiResponse.error("会话校验失败，请重新登录", "error.auth.sessionMismatch");
         }
 
         if (!jwtUtils.canRefreshToken(token)) {
-            return ApiResponse.error("刷新令牌已过期，请重新登录");
+            return ApiResponse.error("刷新令牌已过期，请重新登录", "error.auth.refreshExpired");
         }
 
         String newToken = jwtUtils.refreshToken(token);
         
         if (newToken == null) {
-            return ApiResponse.error("Token刷新失败");
+            return ApiResponse.error("Token刷新失败", "error.auth.refreshFailed");
         }
 
         session.setToken(newToken);

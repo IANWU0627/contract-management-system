@@ -313,7 +313,7 @@ const fetchData = async () => {
   loading.value = true
   try {
     const res = await getTemplateList(query)
-    templates.value = res.data?.list || []
+    templates.value = res.data.list
   } catch (error) {
     ElMessage.error(t('template.error.load'))
   } finally {

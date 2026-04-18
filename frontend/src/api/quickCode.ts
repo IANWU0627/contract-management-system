@@ -26,6 +26,21 @@ export interface QuickCodeItem {
   sortOrder?: number
 }
 
+export interface QuickCodeImpact {
+  id: number
+  code: string
+  name: string
+  inUse: boolean
+  referencedFieldCount: number
+  referencedContractTypeCount: number
+  referencedContractTypes: string[]
+  referencedFields: Array<{
+    contractType: string
+    fieldKey: string
+    fieldLabel: string
+  }>
+}
+
 const QC_CACHE_KEY = 'quick_code_cache'
 const QC_CACHE_TTL = 30 * 60 * 1000
 
@@ -92,6 +107,7 @@ export const getAllQuickCodes = (page?: number, pageSize?: number) =>
   get('/quick-codes/all', { params: { page, pageSize } })
 
 export const getQuickCode = (id: number) => get(`/quick-codes/${id}`)
+export const getQuickCodeImpact = (id: number) => get(`/quick-codes/${id}/impact`)
 
 export const getQuickCodeByCode = (code: string) => {
   const cacheKey = `quickCodes:code:${code}`

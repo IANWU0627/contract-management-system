@@ -25,6 +25,7 @@ public class DatabaseSchemaHealthCheck implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         checkContractTypeFieldQuickCodeId();
+        ensurePerformanceMilestoneTable();
     }
 
     private void checkContractTypeFieldQuickCodeId() {
@@ -47,6 +48,76 @@ public class DatabaseSchemaHealthCheck implements ApplicationRunner {
             }
         } catch (Exception e) {
             log.warn("Database schema check failed for contract_type_field.quick_code_id: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 旧库若未执行 V1.15 迁移，访问履约节点会 500。此处幂等补建表与索引（与 Flyway 脚本一致）。
+     */
+    private void ensurePerformanceMilestoneTable() {
+        try {
+            Integer tableCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'contract_performance_milestone'
+                    """,
+                    Integer.class
+            );
+            if (tableCount == null || tableCount == 0) {
+                log.warn("Database schema: table contract_performance_milestone missing; creating (bootstrap).");
+                jdbcTemplate.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS contract_performance_milestone (
+                            id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                            contract_id BIGINT NOT NULL,
+                            title VARCHAR(512) NOT NULL,
+                            due_date DATE NULL,
+                            offset_days INT NULL,
+                            anchor_note VARCHAR(64) NULL,
+                            raw_snippet VARCHAR(1024) NULL,
+                            status VARCHAR(20) DEFAULT 'PENDING',
+                            source VARCHAR(32) DEFAULT 'EXTRACTED',
+                            last_reminded_at TIMESTAMP NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                        """
+                );
+            }
+            ensureIndexIfAbsent(
+                    "idx_cpm_contract",
+                    "contract_performance_milestone",
+                    "CREATE INDEX idx_cpm_contract ON contract_performance_milestone(contract_id)"
+            );
+            ensureIndexIfAbsent(
+                    "idx_cpm_due_status",
+                    "contract_performance_milestone",
+                    "CREATE INDEX idx_cpm_due_status ON contract_performance_milestone(due_date, status)"
+            );
+            log.info("Database schema check: contract_performance_milestone is ready.");
+        } catch (Exception e) {
+            log.error("Database schema: failed to ensure contract_performance_milestone: {}", e.getMessage(), e);
+        }
+    }
+
+    private void ensureIndexIfAbsent(String indexName, String tableName, String createDdl) {
+        Integer n = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(1)
+                FROM information_schema.statistics
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """,
+                Integer.class,
+                tableName,
+                indexName
+        );
+        if (n == null || n == 0) {
+            jdbcTemplate.execute(createDdl);
+            log.info("Database schema: created index {} on {}", indexName, tableName);
         }
     }
 }

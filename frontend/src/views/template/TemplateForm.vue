@@ -174,8 +174,15 @@ import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { getTemplate, createTemplate, updateTemplate } from '@/api/template'
 import { getClauseList, type Clause } from '@/api/clause'
-import { getTemplateVariables } from '@/api/templateVariable'
+import { getTemplateVariables, type TemplateVariableItem } from '@/api/templateVariable'
 import { getContractCategories } from '@/api/contractCategory'
+
+interface ContractCategoryItem {
+  code: string
+  name: string
+  nameEn?: string
+  color?: string
+}
 
 const { t, locale } = useI18n()
 
@@ -189,7 +196,7 @@ const showPreview = ref(false)
 const previewContent = ref('')
 const loadingVariables = ref(false)
 const editorMode = ref('rich')
-const quillEditor = ref<any>(null)
+const quillEditor = ref<InstanceType<typeof QuillEditor> | null>(null)
 
 const quillToolbarOptions = [
   [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
@@ -209,14 +216,14 @@ const quillToolbarOptions = [
 const isEdit = computed(() => !!route.params.id)
 const templateId = computed(() => Number(route.params.id))
 
-const allVariables = ref<any[]>([])
+const allVariables = ref<TemplateVariableItem[]>([])
 const selectedCategory = ref('')
 const selectedVariable = ref('')
 const allClauses = ref<Clause[]>([])
 const selectedClauseCategory = ref('')
 const selectedClauseId = ref<number | ''>('')
 const clauseOutline = ref<Clause[]>([])
-const categories = ref<any[]>([])
+const categories = ref<ContractCategoryItem[]>([])
 
 // 合同分类（用于模板分类选择）
 const categoryOptions = computed(() => {
@@ -259,7 +266,7 @@ const loadCategories = async () => {
   }
 }
 
-const getCategoryName = (category: any) => {
+const getCategoryName = (category: ContractCategoryItem | null | undefined) => {
   if (!category) return ''
   if (locale.value === 'en') {
     return category.nameEn || category.name || category.code || ''
@@ -271,7 +278,7 @@ const loadVariables = async () => {
   loadingVariables.value = true
   try {
     const res = await getTemplateVariables({ status: 1 })
-    allVariables.value = res.data || []
+    allVariables.value = res.data.list
   } catch (error) {
     console.error('Failed to load variables', error)
     ElMessage.error(t('common.error'))
@@ -532,8 +539,9 @@ const handleSubmit = async () => {
       }
       
       router.push('/templates')
-    } catch (error: any) {
-      ElMessage.error(error.message || t('common.error'))
+    } catch (error: unknown) {
+      const err = error as { message?: string }
+      ElMessage.error(err.message || t('common.error'))
     } finally {
       loading.value = false
     }
