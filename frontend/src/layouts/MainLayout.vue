@@ -468,6 +468,11 @@
             >{{ t('notification.system') }}</span>
           </div>
           <div class="settings-right">
+            <el-tooltip :content="onlyUnread ? t('reminder.unread') : t('common.all')">
+              <span class="sound-toggle" @click="toggleUnreadOnly">
+                <el-icon :size="18"><View /></el-icon>
+              </span>
+            </el-tooltip>
             <el-tooltip :content="notificationSoundEnabled ? t('notification.soundOn') : t('notification.soundOff')">
               <span class="sound-toggle" @click="toggleSound">
                 <el-icon v-if="notificationSoundEnabled" :size="18"><Bell /></el-icon>
@@ -489,7 +494,10 @@
           </div>
         </div>
         
-        <div class="notification-list" @contextmenu.prevent>
+        <div class="notification-list" @contextmenu.prevent @scroll.passive="handleNotificationScroll">
+          <div v-if="notificationLoading && filteredNotifications.length === 0" class="notification-empty">
+            <p>{{ t('common.loading') }}</p>
+          </div>
           <div 
             v-for="notif in filteredNotifications" 
             :key="notif.id" 
@@ -531,11 +539,22 @@
             <el-icon :size="48"><Bell /></el-icon>
             <p>{{ t('notification.empty') }}</p>
           </div>
+          <div v-if="notificationLoading && filteredNotifications.length > 0" class="notification-load-more">
+            <el-button link type="primary" loading>
+              {{ t('common.loading') }}
+            </el-button>
+          </div>
+          <div v-else-if="hasMoreNotifications && filteredNotifications.length > 0" class="notification-load-more">
+            <el-button link type="primary" :loading="notificationLoading" @click="loadMoreNotifications">
+              {{ loadMoreText }}
+            </el-button>
+          </div>
         </div>
         
         <div class="notification-footer">
-          <span v-if="unreadCount > 0" @click="markAllRead">{{ t('reminder.markRead') }}</span>
-          <span @click="$router.push('/reminders')">{{ t('common.viewAll') }}</span>
+          <span v-if="unreadCount > 0" @click="markAllRead">{{ markAllReadText }}</span>
+          <span class="notification-progress" v-if="notificationTotal > 0">{{ notificationProgressText }}</span>
+          <span @click="$router.push('/reminders')">{{ openReminderCenterText }}</span>
         </div>
       </div>
     </el-dialog>
@@ -580,6 +599,7 @@ import { pageList } from '@/api/types'
 import { getContractList } from '@/api/contract'
 import { getTemplateList } from '@/api/template'
 import { getUserList } from '@/api/user'
+import { clearMyNotifications, deleteNotificationById, getMyNotifications, markAllNotificationRead, markNotificationRead, setNotificationImportant } from '@/api/notification'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import MobileNav from '@/components/MobileNav.vue'
 import {
@@ -591,6 +611,7 @@ import {
   Sunny,
   Moon,
   Search,
+  View,
   FullScreen,
   Close,
   ArrowUp,
@@ -1149,6 +1170,74 @@ interface Notification {
 
 // 初始化通知列表（合并模拟数据和WebSocket数据）
 const notifications = ref<Notification[]>([])
+const notificationLoading = ref(false)
+const notificationPage = ref(1)
+const notificationPageSize = 20
+const notificationTotal = ref(0)
+const notificationUnreadCount = ref(0)
+const onlyUnread = ref(false)
+const hasMoreNotifications = computed(() => notifications.value.length < notificationTotal.value)
+const loadMoreText = computed(() => locale.value === 'en' ? 'Load More' : '加载更多')
+const openReminderCenterText = computed(() => locale.value === 'en' ? 'Open Reminder Center' : '前往提醒中心')
+const markAllReadText = computed(() => locale.value === 'en' ? 'Mark All as Read' : '全部标记已读')
+const notificationProgressText = computed(() =>
+  locale.value === 'en'
+    ? `Loaded ${notifications.value.length} / ${notificationTotal.value}`
+    : `已加载 ${notifications.value.length} / 总 ${notificationTotal.value}`
+)
+
+const loadNotificationHistory = async (loadMore = false) => {
+  notificationLoading.value = true
+  try {
+    if (!loadMore) {
+      notificationPage.value = 1
+    }
+    const res = await getMyNotifications({
+      page: notificationPage.value,
+      pageSize: notificationPageSize,
+      category: notifTab.value === 'approval' ? 'approval' : (notifTab.value === 'system' ? 'system' : undefined),
+      unreadOnly: onlyUnread.value || undefined,
+      importantOnly: notifTab.value === 'important' ? true : undefined
+    })
+    const list = Array.isArray(res?.data?.list) ? res.data.list : []
+    const mapped = list.map((item: any) => ({
+      id: item.id,
+      type: getUiNotificationType(item.type),
+      priority: item.type === 'approval_request' ? 'important' : 'normal',
+      title: item.title || t('common.notification'),
+      desc: item.content || '',
+      time: item.createdAt ? new Date(item.createdAt.replace(' ', 'T')) : new Date(),
+      unread: !item.isRead,
+      important: Boolean(item.isImportant),
+      link: item?.data?.contractId ? `/contracts/${item.data.contractId}` : undefined
+    }))
+    if (loadMore) {
+      notifications.value = [...notifications.value, ...mapped]
+    } else {
+      notifications.value = mapped
+    }
+    notificationTotal.value = Number(res?.data?.total || 0)
+    notificationUnreadCount.value = Number(res?.data?.unreadCount || 0)
+  } catch {
+    // ignore load failures to avoid blocking layout render
+  } finally {
+    notificationLoading.value = false
+  }
+}
+
+const loadMoreNotifications = () => {
+  if (!hasMoreNotifications.value || notificationLoading.value) return
+  notificationPage.value += 1
+  loadNotificationHistory(true)
+}
+
+const getUiNotificationType = (rawType?: string): Notification['type'] => {
+  if (!rawType) return 'system'
+  if (['approval_request', 'approval_result'].includes(rawType)) return 'approval'
+  if (['renewal_request', 'renewal_result'].includes(rawType)) return 'renewal'
+  if (rawType === 'reminder') return 'reminder'
+  return 'system'
+}
 
 // 合并 WebSocket 通知到本地列表
 const mergeWebSocketNotifications = () => {
@@ -1179,10 +1268,11 @@ const mergeWebSocketNotifications = () => {
 // 监听 WebSocket 新通知
 watch(() => webSocketService.notifications.value.length, () => {
   mergeWebSocketNotifications()
+  loadNotificationHistory()
 })
 
 
-const unreadCount = computed(() => notifications.value.filter(n => n.unread).length)
+const unreadCount = computed(() => notificationUnreadCount.value)
 
 // WebSocket 连接状态
 const wsConnected = computed(() => webSocketService.connected.value)
@@ -1195,13 +1285,41 @@ const filteredNotifications = computed(() => {
   return notifications.value
 })
 
-const markAllRead = () => {
-  notifications.value.forEach(n => n.unread = false)
+watch(notifTab, () => {
+  loadNotificationHistory()
+})
+
+const toggleUnreadOnly = () => {
+  onlyUnread.value = !onlyUnread.value
+  loadNotificationHistory()
 }
 
-const deleteNotification = (id?: string | number) => {
+const handleNotificationScroll = (event: Event) => {
+  const target = event.target as HTMLElement
+  if (!target || notificationLoading.value || !hasMoreNotifications.value) return
+  const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight
+  if (distanceToBottom <= 24) {
+    loadMoreNotifications()
+  }
+}
+
+const markAllRead = () => {
+  notifications.value.forEach(n => n.unread = false)
+  notificationUnreadCount.value = 0
+  markAllNotificationRead().catch(() => undefined)
+}
+
+const deleteNotification = async (id?: string | number) => {
   if (id) {
+    const target = notifications.value.find(n => n.id === id)
     notifications.value = notifications.value.filter(n => n.id !== id)
+    if (typeof id === 'number') {
+      await deleteNotificationById(id).catch(() => undefined)
+    }
+    notificationTotal.value = Math.max(0, notificationTotal.value - 1)
+    if (target?.unread) {
+      notificationUnreadCount.value = Math.max(0, notificationUnreadCount.value - 1)
+    }
   }
   closeContextMenu()
 }
@@ -1249,7 +1367,13 @@ const toggleSound = () => {
 
 // 点击通知
 const handleNotificationClick = (notif: Notification) => {
-  notif.unread = false
+  if (notif.unread) {
+    notif.unread = false
+    notificationUnreadCount.value = Math.max(0, notificationUnreadCount.value - 1)
+  }
+  if (typeof notif.id === 'number') {
+    markNotificationRead(notif.id).catch(() => undefined)
+  }
   showNotifications.value = false
   if (notif.link) {
     router.push(notif.link)
@@ -1274,12 +1398,23 @@ const closeContextMenu = () => {
 }
 
 const markAsRead = (notif: Notification | null) => {
-  if (notif) notif.unread = false
+  if (notif && notif.unread) {
+    notif.unread = false
+    notificationUnreadCount.value = Math.max(0, notificationUnreadCount.value - 1)
+  }
+  if (notif && typeof notif.id === 'number') {
+    markNotificationRead(notif.id).catch(() => undefined)
+  }
   closeContextMenu()
 }
 
 const toggleImportant = (notif: Notification | null) => {
-  if (notif) notif.important = !notif.important
+  if (notif) {
+    notif.important = !notif.important
+    if (typeof notif.id === 'number') {
+      setNotificationImportant(notif.id, notif.important).catch(() => undefined)
+    }
+  }
   closeContextMenu()
 }
 
@@ -1325,6 +1460,9 @@ const handleNotificationSettings = (command: string) => {
     markAllRead()
   } else if (command === 'clearAll') {
     notifications.value = []
+    notificationTotal.value = 0
+    notificationUnreadCount.value = 0
+    clearMyNotifications().catch(() => undefined)
   } else if (command === 'settings') {
     router.push('/settings')
     showNotifications.value = false
@@ -1334,6 +1472,7 @@ const handleNotificationSettings = (command: string) => {
 // 启动：搜索历史、通知、WebSocket（失败则静默）
 onMounted(() => {
   loadSearchHistory()
+  loadNotificationHistory()
   mergeWebSocketNotifications()
   webSocketService.setSoundEnabled(notificationSoundEnabled.value)
   if (userStore.isLoggedIn && userStore.userInfo?.id) {
@@ -2945,6 +3084,12 @@ watch(() => route.path, (newPath) => {
         font-size: 14px;
       }
     }
+
+    .notification-load-more {
+      padding: 10px 0 14px;
+      display: flex;
+      justify-content: center;
+    }
   }
   
   .notification-footer {
@@ -2952,6 +3097,7 @@ watch(() => route.path, (newPath) => {
     justify-content: space-between;
     padding: 12px 16px;
     border-top: 1px solid var(--border-color);
+    gap: 8px;
     
     span {
       font-size: 13px;
@@ -2960,6 +3106,17 @@ watch(() => route.path, (newPath) => {
       
       &:hover {
         text-decoration: underline;
+      }
+    }
+
+    .notification-progress {
+      color: var(--text-secondary);
+      cursor: default;
+      flex: 1;
+      text-align: center;
+
+      &:hover {
+        text-decoration: none;
       }
     }
   }

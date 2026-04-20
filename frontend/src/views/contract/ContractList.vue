@@ -24,6 +24,43 @@
           </el-input>
         </div>
         <div class="filter-item" style="width: 160px;">
+          <el-select v-model="query.type" clearable :placeholder="$t('contract.type')" @change="handleSearch">
+            <el-option
+              v-for="cat in categories"
+              :key="cat.code"
+              :label="locale === 'en' && cat.nameEn ? cat.nameEn : cat.name"
+              :value="cat.code"
+            />
+          </el-select>
+        </div>
+        <div class="filter-item" style="width: 160px;">
+          <el-select v-model="query.status" clearable :placeholder="$t('contract.status')" @change="handleSearch">
+            <el-option :label="$t('contract.statuses.draft')" value="DRAFT" />
+            <el-option :label="$t('contract.statuses.pending')" value="PENDING" />
+            <el-option :label="$t('contract.statuses.approving')" value="APPROVING" />
+            <el-option :label="$t('contract.statuses.approved')" value="APPROVED" />
+            <el-option :label="$t('contract.statuses.signed')" value="SIGNED" />
+            <el-option :label="$t('contract.statuses.archived')" value="ARCHIVED" />
+            <el-option :label="$t('contract.statuses.terminated')" value="TERMINATED" />
+          </el-select>
+        </div>
+        <div class="filter-item" style="width: 260px;">
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            :start-placeholder="$t('contract.startDate')"
+            :end-placeholder="$t('contract.endDate')"
+            @change="handleDateRangeChange"
+          />
+        </div>
+        <div class="filter-item" style="width: 120px;">
+          <el-input-number v-model="query.amountMin" :min="0" :controls="false" :placeholder="$t('contract.amount')" />
+        </div>
+        <div class="filter-item" style="width: 120px;">
+          <el-input-number v-model="query.amountMax" :min="0" :controls="false" :placeholder="$t('contract.amount')" />
+        </div>
+        <div class="filter-item" style="width: 160px;">
           <el-select v-model="query.folderId" clearable :placeholder="$t('folder.title')" @change="handleSearch">
             <el-option
               v-for="folder in folders"
@@ -526,6 +563,7 @@ const handleDateRangeChange = (val: string[] | null) => {
     query.startDateFrom = ''
     query.startDateTo = ''
   }
+  handleSearch()
 }
 
 const aiDialogVisible = ref(false)

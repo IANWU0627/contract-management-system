@@ -1,6 +1,9 @@
 package com.contracthub.service;
 
+import com.contracthub.entity.NotificationMessage;
+import com.contracthub.mapper.NotificationMessageMapper;
 import com.contracthub.websocket.WebSocketHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -15,11 +18,17 @@ public class NotificationService {
     private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
     private final WebSocketHandler webSocketHandler;
     private final UserConfigService userConfigService;
+    private final NotificationMessageMapper notificationMessageMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    public NotificationService(WebSocketHandler webSocketHandler, UserConfigService userConfigService) {
+    public NotificationService(
+            WebSocketHandler webSocketHandler,
+            UserConfigService userConfigService,
+            NotificationMessageMapper notificationMessageMapper) {
         this.webSocketHandler = webSocketHandler;
         this.userConfigService = userConfigService;
+        this.notificationMessageMapper = notificationMessageMapper;
     }
 
     public void sendToUser(Long userId, String type, String title, String content, Map<String, Object> data) {
@@ -44,9 +53,27 @@ public class NotificationService {
         message.put("data", data);
         message.put("timestamp", LocalDateTime.now().format(FORMATTER));
         message.put("read", false);
+
+        persistNotification(userId, type, title, content, data);
         
         webSocketHandler.sendToUser(userId, message);
         logger.info("Notification sent to user {}: {}", userId, title);
+    }
+
+    private void persistNotification(Long userId, String type, String title, String content, Map<String, Object> data) {
+        try {
+            NotificationMessage message = new NotificationMessage();
+            message.setUserId(userId);
+            message.setType(type);
+            message.setTitle(title);
+            message.setContent(content);
+            message.setData(data == null ? "{}" : objectMapper.writeValueAsString(data));
+            message.setIsRead(false);
+            message.setIsImportant(false);
+            notificationMessageMapper.insert(message);
+        } catch (Exception e) {
+            logger.warn("Persist notification failed for user {}: {}", userId, e.getMessage());
+        }
     }
 
     private boolean isCategoryEnabled(Map<String, String> configs, String type) {

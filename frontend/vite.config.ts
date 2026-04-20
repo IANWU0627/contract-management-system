@@ -2,21 +2,43 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
-const manualChunks = (id: string) => {
-  if (id.includes('node_modules')) {
-    if (id.includes('element-plus') || id.includes('@element-plus/icons-vue')) {
-      return 'element-plus'
-    }
-    if (id.includes('@antv/g2plot')) {
-      return 'chart-lib'
-    }
-    if (id.includes('axios') || id.includes('xlsx') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('@vueup/vue-quill')) {
-      return 'utils-lib'
-    }
-    if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia') || id.includes('vue-i18n')) {
-      return 'vue-vendor'
-    }
+const getPackageName = (id: string) => {
+  const nodeModulesIndex = id.lastIndexOf('node_modules/')
+  if (nodeModulesIndex < 0) return null
+  const packagePath = id.slice(nodeModulesIndex + 'node_modules/'.length)
+  const parts = packagePath.split('/')
+  if (parts[0]?.startsWith('@') && parts.length > 1) {
+    return `${parts[0]}/${parts[1]}`
   }
+  return parts[0] || null
+}
+
+const manualChunks = (id: string) => {
+  if (!id.includes('node_modules')) return
+
+  if (id.includes('/node_modules/element-plus/es/components/')) {
+    const seg = id.split('/node_modules/element-plus/es/components/')[1]
+    const component = seg?.split('/')[0]
+    if (component) return `el-${component}`
+  }
+
+  if (id.includes('/node_modules/@element-plus/icons-vue/')) {
+    return 'el-icons'
+  }
+
+  if (id.includes('/node_modules/vue/') || id.includes('/node_modules/vue-router/') || id.includes('/node_modules/pinia/') || id.includes('/node_modules/vue-i18n/')) {
+    return 'vue-vendor'
+  }
+
+  const pkg = getPackageName(id)
+  if (!pkg) return
+
+  if (pkg.startsWith('@antv/')) return `antv-${pkg.split('/')[1]}`
+  if (pkg === 'xlsx') return 'xlsx'
+  if (pkg === 'jspdf') return 'jspdf'
+  if (pkg === 'html2canvas') return 'html2canvas'
+  if (pkg === '@vueup/vue-quill' || pkg === 'quill' || pkg === 'parchment' || pkg === 'quill-delta') return 'quill'
+  if (pkg === 'axios') return 'axios'
 }
 
 export default defineConfig({

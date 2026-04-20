@@ -8,6 +8,7 @@ public class ContractReminder {
     
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long recipientUserId;
     private Long contractId;
     private String contractNo;
     private String contractTitle;
@@ -25,6 +26,8 @@ public class ContractReminder {
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getRecipientUserId() { return recipientUserId; }
+    public void setRecipientUserId(Long recipientUserId) { this.recipientUserId = recipientUserId; }
     public Long getContractId() { return contractId; }
     public void setContractId(Long contractId) { this.contractId = contractId; }
     public String getContractNo() { return contractNo; }

@@ -14,13 +14,21 @@ export interface Reminder {
 }
 
 // 获取我的提醒
-export const getMyReminders = () => get('/reminders/my')
+export const getMyReminders = (params?: {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  status?: number | ''
+}) => get('/reminders/my', { params })
 
 // 获取所有提醒
 export const getAllReminders = () => get('/reminders')
 
 // 标记为已读
 export const markReminderRead = (id: number) => put(`/reminders/${id}/read`)
+
+// 批量标记已读
+export const markReminderBatchRead = (ids: number[]) => put('/reminders/read-batch', { ids })
 
 // 删除提醒
 export const deleteReminder = (id: number) => del(`/reminders/${id}`)

@@ -834,9 +834,8 @@ public class ContractServiceImpl implements ContractService {
                         failedItems.add(Map.of("id", id, "reason", "无权限修改该合同"));
                         continue;
                     }
-                    contract.setStatus(status);
-                    contract.setUpdateTime(LocalDateTime.now());
-                    contractMapper.updateById(contract);
+                    validateBatchStatusTransition(contract.getStatus(), status);
+                    updateStatusWithAudit(contract, status, "批量状态更新", "批量状态变更");
                     successCount++;
                 } else {
                     failedItems.add(Map.of("id", id, "reason", "合同不存在"));
@@ -1255,6 +1254,27 @@ public class ContractServiceImpl implements ContractService {
     private void ensureStatusAllowed(String currentStatus, Set<String> allowedStatuses, String errorMessage) {
         if (currentStatus == null || !allowedStatuses.contains(currentStatus)) {
             throw new RuntimeException(errorMessage);
+        }
+    }
+
+    private void validateBatchStatusTransition(String currentStatus, String targetStatus) {
+        if (targetStatus == null || targetStatus.isBlank()) {
+            throw new RuntimeException("目标状态不能为空");
+        }
+        if (Objects.equals(currentStatus, targetStatus)) {
+            return;
+        }
+        Map<String, Set<String>> transitions = new HashMap<>();
+        transitions.put("DRAFT", Set.of("PENDING"));
+        transitions.put("PENDING", Set.of("APPROVED", "DRAFT"));
+        transitions.put("APPROVING", Set.of("APPROVED", "DRAFT"));
+        transitions.put("APPROVED", Set.of("SIGNED", "ARCHIVED", "TERMINATED", "RENEWING"));
+        transitions.put("SIGNED", Set.of("ARCHIVED", "TERMINATED", "RENEWING"));
+        transitions.put("ARCHIVED", Set.of("TERMINATED", "RENEWING"));
+        transitions.put("RENEWING", Set.of("RENEWED", "NOT_RENEWED", "TERMINATED"));
+        Set<String> allowedTargets = transitions.getOrDefault(currentStatus, Set.of());
+        if (!allowedTargets.contains(targetStatus)) {
+            throw new RuntimeException("状态不允许从 " + currentStatus + " 变更为 " + targetStatus);
         }
     }
 

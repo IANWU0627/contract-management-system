@@ -50,6 +50,7 @@ export interface ContractQuery {
   amountMin?: number
   amountMax?: number
   keyword?: string
+  folderId?: number | null
   creatorName?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'

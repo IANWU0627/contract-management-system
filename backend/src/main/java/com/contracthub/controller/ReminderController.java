@@ -6,6 +6,7 @@ import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.ContractReminder;
 import com.contracthub.mapper.ContractReminderMapper;
 import com.contracthub.service.ReminderSchedulerService;
+import com.contracthub.util.SecurityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,9 +34,23 @@ public class ReminderController {
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> getMyReminders(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int pageSize) {
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status) {
         try {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId == null) {
+                return ApiResponse.error("用户未登录", "error.auth.notLogin");
+            }
             QueryWrapper<ContractReminder> wrapper = new QueryWrapper<>();
+            wrapper.eq("recipient_user_id", currentUserId);
+            if (keyword != null && !keyword.isBlank()) {
+                String kw = keyword.trim();
+                wrapper.and(w -> w.like("contract_no", kw).or().like("contract_title", kw));
+            }
+            if (status != null && !status.isBlank()) {
+                wrapper.eq("status", Integer.parseInt(status));
+            }
             wrapper.orderByDesc("created_at");
             
             Page<ContractReminder> pagination = new Page<>(page, pageSize);
@@ -58,7 +73,8 @@ public class ReminderController {
             }
             
             QueryWrapper<ContractReminder> countWrapper = new QueryWrapper<>();
-            countWrapper.eq("is_read", false).or().isNull("is_read");
+            countWrapper.eq("recipient_user_id", currentUserId)
+                    .and(w -> w.eq("is_read", false).or().isNull("is_read"));
             long totalUnread = contractReminderMapper.selectCount(countWrapper);
             
             Map<String, Object> result = new HashMap<>();
@@ -116,16 +132,65 @@ public class ReminderController {
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<String> markRead(@PathVariable Long id) {
         try {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId == null) {
+                return ApiResponse.error("用户未登录", "error.auth.notLogin");
+            }
             ContractReminder reminder = contractReminderMapper.selectById(id);
             if (reminder == null) {
                 return ApiResponse.error("提醒不存在", "error.reminder.notFound");
             }
+            if (reminder.getRecipientUserId() != null && !reminder.getRecipientUserId().equals(currentUserId)) {
+                return ApiResponse.error("无权限操作该提醒", "error.reminder.forbidden");
+            }
             reminder.setIsRead(true);
+            reminder.setStatus(1);
             contractReminderMapper.updateById(reminder);
             return ApiResponse.success("已标记为已读");
         } catch (Exception e) {
             log.error("标记提醒已读失败: id={}", id, e);
             return ApiResponse.error("标记已读失败", "error.reminder.markReadFailed");
+        }
+    }
+
+    @PutMapping("/read-batch")
+    @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
+    @SuppressWarnings("unchecked")
+    public ApiResponse<Map<String, Object>> markBatchRead(@RequestBody Map<String, Object> request) {
+        try {
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            if (currentUserId == null) {
+                return ApiResponse.error("用户未登录", "error.auth.notLogin");
+            }
+            List<Object> idsObj = (List<Object>) request.get("ids");
+            if (idsObj == null || idsObj.isEmpty()) {
+                return ApiResponse.error("请选择需要标记的提醒", "error.reminder.idsRequired");
+            }
+            List<Long> ids = idsObj.stream()
+                    .filter(Number.class::isInstance)
+                    .map(id -> ((Number) id).longValue())
+                    .toList();
+            int successCount = 0;
+            for (Long id : ids) {
+                ContractReminder reminder = contractReminderMapper.selectById(id);
+                if (reminder == null) {
+                    continue;
+                }
+                if (reminder.getRecipientUserId() != null && !reminder.getRecipientUserId().equals(currentUserId)) {
+                    continue;
+                }
+                reminder.setIsRead(true);
+                reminder.setStatus(1);
+                contractReminderMapper.updateById(reminder);
+                successCount++;
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("successCount", successCount);
+            result.put("totalCount", ids.size());
+            return ApiResponse.success(result);
+        } catch (Exception e) {
+            log.error("批量标记已读失败", e);
+            return ApiResponse.error("批量标记已读失败", "error.reminder.batchMarkReadFailed");
         }
     }
     
@@ -149,6 +214,12 @@ public class ReminderController {
     public ApiResponse<Map<String, Object>> create(@RequestBody Map<String, Object> reminderMap) {
         try {
             ContractReminder reminder = new ContractReminder();
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            if (reminderMap.get("recipientUserId") instanceof Number recipientIdObj) {
+                reminder.setRecipientUserId(recipientIdObj.longValue());
+            } else {
+                reminder.setRecipientUserId(currentUserId);
+            }
             reminder.setContractId((Long) reminderMap.get("contractId"));
             reminder.setContractNo((String) reminderMap.get("contractNo"));
             reminder.setContractTitle((String) reminderMap.get("contractTitle"));

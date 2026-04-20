@@ -60,6 +60,7 @@ public class StatisticsController {
             stats.put("expiringSoon", expiringSoon);
             
             String thisMonth = today.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+            String previousMonth = today.minusMonths(1).format(DateTimeFormatter.ofPattern("yyyy-MM"));
             long monthlyNew = contractList.stream()
                 .filter(c -> {
                     LocalDateTime createTime = toLocalDateTime(c.get("create_time"));
@@ -78,9 +79,38 @@ public class StatisticsController {
                 })
                 .count();
             stats.put("signedThisMonth", signedThisMonth);
-            
-            stats.put("amountGrowth", 12.5);
-            stats.put("contractGrowth", 8.3);
+
+            BigDecimal thisMonthAmount = contractList.stream()
+                    .filter(c -> {
+                        LocalDateTime createTime = toLocalDateTime(c.get("create_time"));
+                        return createTime != null
+                                && createTime.format(DateTimeFormatter.ofPattern("yyyy-MM")).equals(thisMonth);
+                    })
+                    .map(item -> (BigDecimal) item.get("amount"))
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal previousMonthAmount = contractList.stream()
+                    .filter(c -> {
+                        LocalDateTime createTime = toLocalDateTime(c.get("create_time"));
+                        return createTime != null
+                                && createTime.format(DateTimeFormatter.ofPattern("yyyy-MM")).equals(previousMonth);
+                    })
+                    .map(item -> (BigDecimal) item.get("amount"))
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            long previousMonthlyNew = contractList.stream()
+                    .filter(c -> {
+                        LocalDateTime createTime = toLocalDateTime(c.get("create_time"));
+                        return createTime != null
+                                && createTime.format(DateTimeFormatter.ofPattern("yyyy-MM")).equals(previousMonth);
+                    })
+                    .count();
+
+            double amountGrowth = calculateGrowthRate(previousMonthAmount.doubleValue(), thisMonthAmount.doubleValue());
+            double contractGrowth = calculateGrowthRate(previousMonthlyNew, monthlyNew);
+            stats.put("amountGrowth", amountGrowth);
+            stats.put("contractGrowth", contractGrowth);
             
             return ApiResponse.success(stats);
         } catch (Exception e) {
@@ -299,5 +329,12 @@ public class StatisticsController {
             }
         }
         return null;
+    }
+
+    private double calculateGrowthRate(double previousValue, double currentValue) {
+        if (previousValue == 0d) {
+            return currentValue == 0d ? 0d : 100d;
+        }
+        return Math.round(((currentValue - previousValue) / previousValue) * 1000d) / 10d;
     }
 }

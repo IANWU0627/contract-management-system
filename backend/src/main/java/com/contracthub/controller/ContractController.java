@@ -1228,6 +1228,7 @@ public class ContractController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String counterparty,
+            @RequestParam(required = false) String contractNo,
             @RequestParam(required = false) String startDateFrom,
             @RequestParam(required = false) String startDateTo,
             @RequestParam(required = false) String endDateFrom,
@@ -1235,65 +1236,41 @@ public class ContractController {
             @RequestParam(required = false) Double amountMin,
             @RequestParam(required = false) Double amountMax,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long folderId,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false, defaultValue = "desc") String sortOrder,
             HttpServletResponse response) throws IOException {
-        
-        List<Contract> allContracts = getVisibleContracts();
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("title", title);
+        params.put("type", type);
+        params.put("status", status);
+        params.put("counterparty", counterparty);
+        params.put("contractNo", contractNo);
+        params.put("startDateFrom", startDateFrom);
+        params.put("startDateTo", startDateTo);
+        params.put("endDateFrom", endDateFrom);
+        params.put("endDateTo", endDateTo);
+        params.put("amountMin", amountMin);
+        params.put("amountMax", amountMax);
+        params.put("keyword", keyword);
+        params.put("folderId", folderId);
+        params.put("sortBy", sortBy);
+        params.put("sortOrder", sortOrder);
+
         List<Contract> filteredContracts = new ArrayList<>();
-        
-        for (Contract contract : allContracts) {
-            if (title != null && !title.isEmpty() && 
-                (contract.getTitle() == null || !contract.getTitle().toLowerCase().contains(title.toLowerCase()))) {
-                continue;
+        int currentPage = 1;
+        int pageSize = 1000;
+        while (true) {
+            com.baomidou.mybatisplus.core.metadata.IPage<Contract> pageData = contractService.listContracts(params, currentPage, pageSize);
+            if (pageData.getRecords().isEmpty()) {
+                break;
             }
-            if (type != null && !type.isEmpty() && !type.equals(contract.getType())) {
-                continue;
+            filteredContracts.addAll(pageData.getRecords());
+            if (pageData.getCurrent() >= pageData.getPages()) {
+                break;
             }
-            if (status != null && !status.isEmpty() && !status.equals(contract.getStatus())) {
-                continue;
-            }
-            String counterpartySummary = resolveCounterpartySummary(contract);
-            if (counterparty != null && !counterparty.isEmpty() &&
-                (counterpartySummary.isEmpty() || !counterpartySummary.toLowerCase().contains(counterparty.toLowerCase()))) {
-                continue;
-            }
-            if (startDateFrom != null && !startDateFrom.isEmpty() && contract.getStartDate() != null && 
-                contract.getStartDate().isBefore(LocalDate.parse(startDateFrom))) {
-                continue;
-            }
-            if (startDateTo != null && !startDateTo.isEmpty() && contract.getStartDate() != null && 
-                contract.getStartDate().isAfter(LocalDate.parse(startDateTo))) {
-                continue;
-            }
-            if (endDateFrom != null && !endDateFrom.isEmpty() && contract.getEndDate() != null && 
-                contract.getEndDate().isBefore(LocalDate.parse(endDateFrom))) {
-                continue;
-            }
-            if (endDateTo != null && !endDateTo.isEmpty() && contract.getEndDate() != null && 
-                contract.getEndDate().isAfter(LocalDate.parse(endDateTo))) {
-                continue;
-            }
-            if (amountMin != null && contract.getAmount() != null && contract.getAmount().doubleValue() < amountMin) {
-                continue;
-            }
-            if (amountMax != null && contract.getAmount() != null && contract.getAmount().doubleValue() > amountMax) {
-                continue;
-            }
-            if (keyword != null && !keyword.isEmpty()) {
-                boolean match = false;
-                String kwLower = keyword.toLowerCase();
-                if (contract.getTitle() != null && contract.getTitle().toLowerCase().contains(kwLower)) match = true;
-                if (contract.getContractNo() != null && contract.getContractNo().toLowerCase().contains(kwLower)) match = true;
-                if (resolveCounterpartySummary(contract).toLowerCase().contains(kwLower)) match = true;
-                if (contract.getContent() != null && contract.getContent().toLowerCase().contains(kwLower)) match = true;
-                if (contract.getRemark() != null && contract.getRemark().toLowerCase().contains(kwLower)) match = true;
-                String typeLower = contract.getType() != null ? contract.getType().toLowerCase() : "";
-                if (typeLower.contains(kwLower)) match = true;
-                String statusLower = contract.getStatus() != null ? contract.getStatus().toLowerCase() : "";
-                if (statusLower.contains(kwLower)) match = true;
-                if (!match) continue;
-            }
-            
-            filteredContracts.add(contract);
+            currentPage++;
         }
         
         List<String> exportFields = List.of("contractNo", "title", "type", "counterparty", "amount", "startDate", "endDate", "status");

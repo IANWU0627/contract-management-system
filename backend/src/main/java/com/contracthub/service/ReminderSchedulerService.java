@@ -143,6 +143,7 @@ public class ReminderSchedulerService {
         
         if (existing == null) {
             ContractReminder reminder = new ContractReminder();
+            reminder.setRecipientUserId(contract.getCreatorId());
             reminder.setContractId(contract.getId());
             reminder.setContractNo(contract.getContractNo());
             reminder.setContractTitle(contract.getTitle());
@@ -155,6 +156,9 @@ public class ReminderSchedulerService {
             log.info("创建提醒: 合同 {} 还有 {} 天到期", contract.getContractNo(), daysRemaining);
         } else {
             // 如果已存在提醒，更新提醒天数为当前剩余天数
+            if (existing.getRecipientUserId() == null) {
+                existing.setRecipientUserId(contract.getCreatorId());
+            }
             existing.setRemindDays(daysRemaining);
             existing.setStatus(0);
             reminderMapper.updateById(existing);
