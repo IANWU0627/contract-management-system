@@ -1,98 +1,54 @@
 package com.contracthub.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.Contract;
-import com.contracthub.entity.ContractComment;
-import com.contracthub.entity.ApprovalRecord;
-import com.contracthub.entity.ContractFieldValue;
-import com.contracthub.mapper.ContractMapper;
-import com.contracthub.mapper.ContractCommentMapper;
-import com.contracthub.mapper.ApprovalRecordMapper;
-import com.contracthub.mapper.ContractFieldValueMapper;
-import com.contracthub.service.WordExportService;
-import com.contracthub.service.ExcelExportService;
 import com.contracthub.service.ContractNumberService;
 import com.contracthub.service.ContractService;
-import com.contracthub.service.NotificationService;
-import com.contracthub.service.UserConfigService;
-import com.contracthub.service.ContractDataScopeService;
-import com.contracthub.service.ContractAiAssistantService;
 import com.contracthub.service.ContractPerformanceMilestoneService;
-import com.contracthub.util.SecurityUtils;
+import com.contracthub.service.ContractFileService;
+import com.contracthub.service.ContractExportService;
+import com.contracthub.service.ContractWorkflowService;
+import com.contracthub.service.ContractCollaborationService;
+import com.contracthub.service.ContractAiGatewayService;
+import com.contracthub.service.ContractCommandService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.http.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import jakarta.servlet.http.HttpServletResponse;
-import com.itextpdf.kernel.pdf.PdfDocument;
-import com.itextpdf.kernel.pdf.PdfWriter;
-import com.itextpdf.layout.Document;
-import com.itextpdf.layout.element.Paragraph;
-import com.itextpdf.layout.element.Table;
-import com.itextpdf.layout.element.Cell;
-import com.itextpdf.layout.properties.TextAlignment;
-import com.itextpdf.layout.properties.UnitValue;
-import com.itextpdf.layout.properties.VerticalAlignment;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URLEncoder;
-import java.io.FileInputStream;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @RestController
 @RequestMapping("/api/contracts")
 public class ContractController {
-    private final ContractMapper contractMapper;
-    private final ContractCommentMapper commentMapper;
-    private final ApprovalRecordMapper approvalRecordMapper;
-    private final ContractFieldValueMapper fieldValueMapper;
-    private final WordExportService wordExportService;
-    private final ExcelExportService excelExportService;
     private final ContractNumberService contractNumberService;
     private final ContractService contractService;
-    private final NotificationService notificationService;
-    private final UserConfigService userConfigService;
-    private final ContractDataScopeService contractDataScopeService;
-    private final ContractAiAssistantService contractAiAssistantService;
     private final ContractPerformanceMilestoneService performanceMilestoneService;
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ContractFileService contractFileService;
+    private final ContractExportService contractExportService;
+    private final ContractWorkflowService contractWorkflowService;
+    private final ContractCollaborationService contractCollaborationService;
+    private final ContractAiGatewayService contractAiGatewayService;
+    private final ContractCommandService contractCommandService;
     
-    public ContractController(ContractMapper contractMapper, ContractCommentMapper commentMapper, 
-                              ApprovalRecordMapper approvalRecordMapper, ContractFieldValueMapper fieldValueMapper,
-                              WordExportService wordExportService, ExcelExportService excelExportService,
-                              ContractNumberService contractNumberService,
+    public ContractController(ContractNumberService contractNumberService,
                               ContractService contractService,
-                              NotificationService notificationService,
-                              UserConfigService userConfigService,
-                              ContractDataScopeService contractDataScopeService,
-                              ContractAiAssistantService contractAiAssistantService,
                               ContractPerformanceMilestoneService performanceMilestoneService,
-                              RestTemplate restTemplate) {
-        this.contractMapper = contractMapper;
-        this.commentMapper = commentMapper;
-        this.approvalRecordMapper = approvalRecordMapper;
-        this.fieldValueMapper = fieldValueMapper;
-        this.wordExportService = wordExportService;
-        this.excelExportService = excelExportService;
+                              ContractFileService contractFileService,
+                              ContractExportService contractExportService,
+                              ContractWorkflowService contractWorkflowService,
+                              ContractCollaborationService contractCollaborationService,
+                              ContractAiGatewayService contractAiGatewayService,
+                              ContractCommandService contractCommandService) {
         this.contractNumberService = contractNumberService;
         this.contractService = contractService;
-        this.notificationService = notificationService;
-        this.userConfigService = userConfigService;
-        this.contractDataScopeService = contractDataScopeService;
-        this.contractAiAssistantService = contractAiAssistantService;
         this.performanceMilestoneService = performanceMilestoneService;
-        this.restTemplate = restTemplate;
+        this.contractFileService = contractFileService;
+        this.contractExportService = contractExportService;
+        this.contractWorkflowService = contractWorkflowService;
+        this.contractCollaborationService = contractCollaborationService;
+        this.contractAiGatewayService = contractAiGatewayService;
+        this.contractCommandService = contractCommandService;
     }
     
     /**
@@ -284,211 +240,53 @@ public class ContractController {
         return ApiResponse.success(new HashMap<>());
     }
     
-    private static final String UPLOAD_DIR;
-    
-    static {
-        UPLOAD_DIR = System.getProperty("user.dir") + File.separator + "uploads";
-    }
-    
     @PostMapping("/upload")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "contractId", required = false) Long contractId) {
-        Map<String, Object> result = new HashMap<>();
-        if (file.isEmpty()) {
-            return ApiResponse.error("文件不能为空", "error.upload.fileRequired");
-        }
-        
-        String originalFileName = file.getOriginalFilename();
-        if (originalFileName == null || originalFileName.isEmpty()) {
-            return ApiResponse.error("文件名无效", "error.upload.invalidName");
-        }
-        
-        // 不再限制文件类型，允许所有格式上传
-        
-        String uniqueFileName = UUID.randomUUID().toString().replace("-", "") + "_" + originalFileName;
-        
         try {
-            File dir = new File(UPLOAD_DIR);
-            if (!dir.exists()) {
-                dir.mkdirs();
+            return ApiResponse.success(contractFileService.upload(file, contractId));
+        } catch (IllegalArgumentException e) {
+            if ("文件不能为空".equals(e.getMessage())) {
+                return ApiResponse.error("文件不能为空", "error.upload.fileRequired");
             }
-            
-            File dest = new File(dir, uniqueFileName);
-            file.transferTo(dest);
-        } catch (Exception e) {
-            return ApiResponse.error("文件上传失败: " + e.getMessage());
-        }
-        
-        result.put("fileName", uniqueFileName);
-        result.put("originalName", originalFileName);
-        result.put("fileUrl", "/api/contracts/download/" + uniqueFileName);
-        result.put("fileSize", file.getSize());
-        result.put("uploadTime", LocalDate.now().toString());
-        if (contractId != null) {
-            result.put("contractId", contractId);
-        }
-        return ApiResponse.success(result);
-    }
-    
-    private String getFileExtension(String fileName) {
-        if (fileName == null || !fileName.contains(".")) {
-            return "";
-        }
-        return fileName.substring(fileName.lastIndexOf(".") + 1);
-    }
-    
-    private boolean isValidFileName(String fileName) {
-        if (fileName == null || fileName.isEmpty()) {
-            return false;
-        }
-        if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
-            return false;
-        }
-        if (fileName.contains("\0")) {
-            return false;
-        }
-        return true;
-    }
-    
-    private File getSecureFile(String fileName) {
-        if (!isValidFileName(fileName)) {
-            return null;
-        }
-        
-        File uploadDir = new File(UPLOAD_DIR);
-        File requestedFile = new File(uploadDir, fileName);
-        
-        try {
-            String canonicalDir = uploadDir.getCanonicalPath();
-            String canonicalFile = requestedFile.getCanonicalPath();
-            
-            if (!canonicalFile.startsWith(canonicalDir + File.separator)) {
-                return null;
-            }
-            
-            return requestedFile;
-        } catch (Exception e) {
-            return null;
+            return ApiResponse.error(e.getMessage(), "error.upload.invalidName");
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
         }
     }
     
     @DeleteMapping("/attachments/{fileName}")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Void> deleteAttachment(@PathVariable String fileName) {
-        File file = getSecureFile(fileName);
-        
-        if (file == null || !file.exists()) {
-            return ApiResponse.error("文件不存在", "error.file.notFound");
-        }
-        
-        if (!file.delete()) {
-            return ApiResponse.error("文件删除失败", "error.file.deleteFailed");
-        }
-        
-        return ApiResponse.success(null);
-    }
-    
-    private String getContentType(String fileName) {
-        String extension = getFileExtension(fileName).toLowerCase();
-        switch (extension) {
-            case "pdf": return "application/pdf";
-            case "doc": return "application/msword";
-            case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            case "xls": return "application/vnd.ms-excel";
-            case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            case "jpg":
-            case "jpeg": return "image/jpeg";
-            case "png": return "image/png";
-            case "gif": return "image/gif";
-            case "txt": return "text/plain";
-            default: return "application/octet-stream";
+        try {
+            contractFileService.deleteAttachment(fileName);
+            return ApiResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage(), "error.file.notFound");
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage(), "error.file.deleteFailed");
         }
     }
 
     @GetMapping("/download/{fileName}")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public void download(@PathVariable String fileName, HttpServletResponse response) {
-        File file = getSecureFile(fileName);
-        
-        if (file == null || !file.exists()) {
-            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            return;
-        }
-        
-        try {
-            String contentType = getContentType(fileName);
-            response.setContentType(contentType);
-            response.setHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(file.getName(), "UTF-8"));
-            response.setContentLength((int) file.length());
-            
-            try (InputStream inputStream = new FileInputStream(file);
-                 OutputStream outputStream = response.getOutputStream()) {
-                byte[] buffer = new byte[1024];
-                int len;
-                while ((len = inputStream.read(buffer)) > 0) {
-                    outputStream.write(buffer, 0, len);
-                }
-            }
-        } catch (Exception e) {
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
+        contractFileService.download(fileName, response);
     }
     
     @PostMapping
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
-    @SuppressWarnings("unchecked")
     public ApiResponse<Map<String, Object>> create(@RequestBody Map<String, Object> contractMap) {
-        // 调用Service层创建合同
-        Contract contract = contractService.createContract(contractMap);
-        
-        // 构建响应
-        Map<String, Object> result = contractService.buildContractResponse(contract);
-        
-        // 添加相对方列表（从contractMap获取）
-        if (contractMap.containsKey("counterparties")) {
-            result.put("counterparties", contractMap.get("counterparties"));
-        } else {
-            result.put("counterparties", new ArrayList<>());
-        }
-        
-        // 添加时区
-        if (contractMap.containsKey("timezone")) {
-            result.put("timezone", contractMap.get("timezone"));
-        } else {
-            result.put("timezone", java.time.ZoneId.systemDefault().getId());
-        }
-        
-        return ApiResponse.success(result);
+        return ApiResponse.success(contractCommandService.create(contractMap));
     }
     
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
-    @SuppressWarnings("unchecked")
     public ApiResponse<Map<String, Object>> update(@PathVariable Long id, @RequestBody Map<String, Object> contractMap) {
         try {
-            // 调用Service层更新合同
-            Contract contract = contractService.updateContract(id, contractMap);
-            
-            // 构建响应
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            
-            // 添加相对方列表（从contractMap获取）
-            if (contractMap.containsKey("counterparties")) {
-                result.put("counterparties", contractMap.get("counterparties"));
-            } else if (contract.getCounterparties() != null && !contract.getCounterparties().isEmpty()) {
-                try {
-                    List<Map<String, Object>> cpList = objectMapper.readValue(contract.getCounterparties(), new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
-                    result.put("counterparties", cpList);
-                } catch (Exception e) {
-                    result.put("counterparties", new ArrayList<>());
-                }
-            } else {
-                result.put("counterparties", new ArrayList<>());
-            }
-            
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractCommandService.update(id, contractMap));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -498,7 +296,7 @@ public class ContractController {
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         try {
-            contractService.deleteContract(id);
+            contractCommandService.delete(id);
             return ApiResponse.success(null);
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
@@ -507,25 +305,16 @@ public class ContractController {
     
     @PostMapping("/batch-delete")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
-    @SuppressWarnings("unchecked")
     public ApiResponse<Void> batchDelete(@RequestBody Map<String, Object> request) {
-        List<Object> idsObj = (List<Object>) request.get("ids");
-        if (idsObj != null) {
-            List<Long> ids = idsObj.stream()
-                .filter(id -> id instanceof Number)
-                .map(id -> ((Number) id).longValue())
-                .collect(java.util.stream.Collectors.toList());
-            contractService.batchDeleteContracts(ids);
-        }
+        contractWorkflowService.batchDelete(request);
         return ApiResponse.success(null);
     }
     
     @PostMapping("/batch-status")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
-    @SuppressWarnings("unchecked")
     public ApiResponse<Map<String, Object>> batchUpdateStatus(@RequestBody Map<String, Object> request) {
         try {
-            Map<String, Object> result = contractService.batchUpdateStatus(request);
+            Map<String, Object> result = contractWorkflowService.batchUpdateStatus(request);
             return ApiResponse.success(result);
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
@@ -535,23 +324,28 @@ public class ContractController {
     @PostMapping("/batch-approve")
     @PreAuthorize("hasAuthority('CONTRACT_APPROVE')")
     public ApiResponse<Map<String, Object>> batchApprove(@RequestBody Map<String, Object> request) {
-        request.put("status", "APPROVED");
-        return batchUpdateStatus(request);
+        try {
+            return ApiResponse.success(contractWorkflowService.batchApprove(request));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
     }
     
     @PostMapping("/batch-submit")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> batchSubmit(@RequestBody Map<String, Object> request) {
-        request.put("status", "PENDING");
-        return batchUpdateStatus(request);
+        try {
+            return ApiResponse.success(contractWorkflowService.batchSubmit(request));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(e.getMessage());
+        }
     }
     
     @PostMapping("/batch-edit")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
-    @SuppressWarnings("unchecked")
     public ApiResponse<Map<String, Object>> batchEdit(@RequestBody Map<String, Object> request) {
         try {
-            Map<String, Object> result = contractService.batchEditContracts(request);
+            Map<String, Object> result = contractWorkflowService.batchEdit(request);
             return ApiResponse.success(result);
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
@@ -563,9 +357,7 @@ public class ContractController {
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> submit(@PathVariable Long id) {
         try {
-            Contract contract = contractService.submitForApproval(id);
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractWorkflowService.submit(id));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -577,9 +369,7 @@ public class ContractController {
     public ApiResponse<Map<String, Object>> approve(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> data) {
         try {
             String comment = data != null ? (String) data.get("comment") : null;
-            Contract contract = contractService.approveContract(id, comment);
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractWorkflowService.approve(id, comment));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -591,9 +381,7 @@ public class ContractController {
     public ApiResponse<Map<String, Object>> reject(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> data) {
         try {
             String comment = data != null ? (String) data.get("comment") : null;
-            Contract contract = contractService.rejectContract(id, comment);
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractWorkflowService.reject(id, comment));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -605,9 +393,7 @@ public class ContractController {
     public ApiResponse<Map<String, Object>> withdraw(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> data) {
         try {
             String reason = data != null ? (String) data.get("reason") : null;
-            Contract contract = contractService.withdrawApproval(id, reason);
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractWorkflowService.withdraw(id, reason));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -618,9 +404,7 @@ public class ContractController {
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> sign(@PathVariable Long id) {
         try {
-            Contract contract = contractService.signContract(id);
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractWorkflowService.sign(id));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -631,9 +415,7 @@ public class ContractController {
     @PreAuthorize("hasAuthority('CONTRACT_APPROVE')")
     public ApiResponse<Map<String, Object>> archive(@PathVariable Long id) {
         try {
-            Contract contract = contractService.archiveContract(id);
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractWorkflowService.archive(id));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -647,9 +429,7 @@ public class ContractController {
             @RequestBody(required = false) Map<String, Object> data) {
         try {
             String reason = data != null ? (String) data.get("reason") : null;
-            Contract contract = contractService.terminateContract(id, reason);
-            Map<String, Object> result = contractService.buildContractResponse(contract);
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractWorkflowService.terminate(id, reason));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -662,8 +442,7 @@ public class ContractController {
             @RequestBody(required = false) Map<String, Object> data) {
         try {
             String reason = data != null ? (String) data.get("reason") : null;
-            Contract contract = contractService.startRenewal(id, reason);
-            return ApiResponse.success(contractService.buildContractResponse(contract));
+            return ApiResponse.success(contractWorkflowService.startRenewal(id, reason));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -676,8 +455,7 @@ public class ContractController {
             @RequestBody(required = false) Map<String, Object> data) {
         try {
             String reason = data != null ? (String) data.get("reason") : null;
-            Contract contract = contractService.completeRenewal(id, reason);
-            return ApiResponse.success(contractService.buildContractResponse(contract));
+            return ApiResponse.success(contractWorkflowService.completeRenewal(id, reason));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -690,8 +468,7 @@ public class ContractController {
             @RequestBody(required = false) Map<String, Object> data) {
         try {
             String reason = data != null ? (String) data.get("reason") : null;
-            Contract contract = contractService.markNotRenewed(id, reason);
-            return ApiResponse.success(contractService.buildContractResponse(contract));
+            return ApiResponse.success(contractWorkflowService.declineRenewal(id, reason));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -702,522 +479,59 @@ public class ContractController {
     // AI 分析 - 支持自定义 AI 配置
     @PostMapping("/{id}/analyze")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
-    @SuppressWarnings("unchecked")
     public ApiResponse<Map<String, Object>> analyze(
             @PathVariable Long id,
             @RequestBody(required = false) Map<String, Object> aiConfig) {
-        
-        Contract contract = contractService.getContractById(id);
-        if (contract == null) {
-            return ApiResponse.error("合同不存在", "error.contract.notFound");
-        }
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        Map<String, String> configs = userConfigService.getUserConfigValues(userId);
-        String apiUrl = getConfigValue(aiConfig, "apiUrl", userConfigService.getStringConfig(configs, "ai_api_url", ""));
-        String apiKey = getConfigValue(aiConfig, "apiKey", userConfigService.getStringConfig(configs, "ai_api_key", ""));
-        String model = getConfigValue(aiConfig, "model", userConfigService.getStringConfig(configs, "ai_model", "gpt-3.5-turbo"));
-        double temperature = getDoubleConfigValue(aiConfig, "temperature", userConfigService.getDoubleConfig(configs, "bd_temperature", 0.7));
-        int maxTokens = getIntConfigValue(aiConfig, "maxTokens", userConfigService.getIntConfig(configs, "bd_max_tokens", 1000));
-
-        // 如果有 AI 配置，调用 AI 服务
-        if (!apiUrl.isBlank()) {
-            try {
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                if (apiKey != null && !apiKey.isEmpty()) {
-                    headers.set("Authorization", "Bearer " + apiKey);
-                }
-                
-                String prompt = contractAiAssistantService.buildUserPrompt(contract);
-                
-                Map<String, Object> requestBody = new HashMap<>();
-                requestBody.put("model", model);
-                requestBody.put("messages", Arrays.asList(
-                    Map.of("role", "system", "content", "You are a bilingual contract assistant. Always respond with a single JSON object only, following the user's schema. Use Chinese for natural-language fields when the user writes in Chinese."),
-                    Map.of("role", "user", "content", prompt)
-                ));
-                requestBody.put("temperature", temperature);
-                requestBody.put("max_tokens", maxTokens);
-                
-                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-                ResponseEntity<String> response = restTemplate.exchange(apiUrl, HttpMethod.POST, entity, String.class);
-                
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    String responseBody = response.getBody();
-                    Map<String, Object> parsed = objectMapper.readValue(responseBody, Map.class);
-                    
-                    List<?> choices = (List<?>) parsed.get("choices");
-                    if (choices != null && !choices.isEmpty()) {
-                        Map<?, ?> choice = (Map<?, ?>) choices.get(0);
-                        Map<?, ?> message = (Map<?, ?>) choice.get("message");
-                        String aiContent = (String) message.get("content");
-                        
-                        Map<String, Object> parsedResult = contractAiAssistantService.parseModelMessageContent(aiContent);
-                        contractAiAssistantService.enrichResult(contract, parsedResult);
-                        return ApiResponse.success(parsedResult);
-                    }
-                }
-            } catch (Exception e) {
-                return ApiResponse.error("AI 分析失败: " + e.getMessage());
-            }
-        }
-        
-        return ApiResponse.success(contractAiAssistantService.buildOfflineDemoResult(contract));
-    }
-
-    private String getConfigValue(Map<String, Object> configMap, String key, String defaultValue) {
-        if (configMap == null) {
-            return defaultValue;
-        }
-        Object value = configMap.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        String result = String.valueOf(value).trim();
-        return result.isEmpty() ? defaultValue : result;
-    }
-
-    private double getDoubleConfigValue(Map<String, Object> configMap, String key, double defaultValue) {
-        if (configMap == null || configMap.get(key) == null) {
-            return defaultValue;
-        }
-        try {
-            return Double.parseDouble(String.valueOf(configMap.get(key)));
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    private int getIntConfigValue(Map<String, Object> configMap, String key, int defaultValue) {
-        if (configMap == null || configMap.get(key) == null) {
-            return defaultValue;
-        }
-        try {
-            return Integer.parseInt(String.valueOf(configMap.get(key)));
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+        return contractAiGatewayService.analyze(id, aiConfig);
     }
     
     // 评论列表
     @GetMapping("/{id}/comments")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> getComments(@PathVariable Long id) {
-        List<ContractComment> commentList = commentMapper.selectByContractId(id);
-        List<Map<String, Object>> comments = new ArrayList<>();
-        
-        for (ContractComment comment : commentList) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", comment.getId());
-            map.put("userId", comment.getUserId());
-            map.put("userName", comment.getUsername());
-            map.put("content", comment.getContent());
-            map.put("parentId", comment.getParentId());
-            map.put("createdAt", comment.getCreatedAt());
-            comments.add(map);
-        }
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("list", comments);
-        result.put("total", comments.size());
-        return ApiResponse.success(result);
+        return ApiResponse.success(contractCollaborationService.getComments(id));
     }
     
     // 审批历史
     @GetMapping("/{id}/approvals")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<List<Map<String, Object>>> getApprovalHistory(@PathVariable Long id) {
-        List<ApprovalRecord> records = approvalRecordMapper.selectList(
-            new QueryWrapper<ApprovalRecord>().eq("contract_id", id).orderByAsc("create_time")
-        );
-        
-        List<Map<String, Object>> history = new ArrayList<>();
-        for (ApprovalRecord record : records) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", record.getId());
-            map.put("approverId", record.getApproverId());
-            map.put("approverName", record.getApproverName());
-            map.put("action", record.getStatus());
-            map.put("comment", record.getComment());
-            map.put("timestamp", record.getCreateTime());
-            history.add(map);
-        }
-        
-        return ApiResponse.success(history);
+        return ApiResponse.success(contractCollaborationService.getApprovalHistory(id));
     }
     
     // 添加评论
     @PostMapping("/{id}/comments")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> addComment(@PathVariable Long id, @RequestBody Map<String, Object> commentData) {
-        Contract contract = contractService.getContractById(id);
-        if (contract == null) {
-            return ApiResponse.error("合同不存在", "error.contract.notFound");
-        }
-        ContractComment comment = new ContractComment();
-        comment.setContractId(id);
-        comment.setUserId(SecurityUtils.getCurrentUserId());
-        comment.setUsername(SecurityUtils.getCurrentUserName());
-        comment.setContent((String) commentData.get("content"));
-        comment.setParentId(commentData.containsKey("parentId") ? (Long) commentData.get("parentId") : null);
-        comment.setCreatedAt(LocalDateTime.now());
-        
-        commentMapper.insert(comment);
-
-        if (contract != null) {
-            Set<Long> recipients = new LinkedHashSet<>();
-            Long currentUserId = comment.getUserId();
-
-            if (contract.getCreatorId() != null && !contract.getCreatorId().equals(currentUserId)) {
-                recipients.add(contract.getCreatorId());
-            }
-
-            if (comment.getParentId() != null) {
-                ContractComment parentComment = commentMapper.selectById(comment.getParentId());
-                if (parentComment != null && parentComment.getUserId() != null && !parentComment.getUserId().equals(currentUserId)) {
-                    recipients.add(parentComment.getUserId());
-                }
-            }
-
-            for (Long recipientId : recipients) {
-                notificationService.sendCommentNotification(
-                        recipientId,
-                        id,
-                        contract.getContractNo(),
-                        comment.getUsername(),
-                        comment.getContent()
-                );
-            }
-        }
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", comment.getId());
-        result.put("userId", comment.getUserId());
-        result.put("userName", comment.getUsername());
-        result.put("content", comment.getContent());
-        result.put("parentId", comment.getParentId());
-        result.put("createdAt", comment.getCreatedAt());
-        result.put("userAvatar", "");
-        
-        return ApiResponse.success(result);
+        return contractCollaborationService.addComment(id, commentData);
     }
     
     // 删除评论
     @DeleteMapping("/{id}/comments/{commentId}")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Void> deleteComment(@PathVariable Long id, @PathVariable Long commentId) {
-        int result = commentMapper.deleteById(commentId);
-        if (result == 0) {
-            return ApiResponse.error("评论不存在", "error.comment.notFound");
-        }
-        return ApiResponse.success(null);
-    }
-    
-    private Map<String, Object> createComment(Long id, String username, String nickname, String content, String time) {
-        Map<String, Object> c = new HashMap<>();
-        c.put("id", id);
-        c.put("username", username);
-        c.put("userName", nickname);
-        c.put("content", content);
-        c.put("createdAt", time);
-        return c;
-    }
-    
-    private Map<String, Object> createVersion(Long id, String version, String operator, String description, String time) {
-        Map<String, Object> v = new HashMap<>();
-        v.put("id", id);
-        v.put("version", version);
-        v.put("operatorName", operator);
-        v.put("changeDescription", description);
-        v.put("createdAt", time);
-        return v;
+        return contractCollaborationService.deleteComment(commentId);
     }
     
     // 导出
     @GetMapping("/export")
     @PreAuthorize("hasAuthority('REPORT_VIEW')")
     public void export(HttpServletResponse response) {
-        try {
-            // 创建Excel工作簿
-            Workbook workbook = new XSSFWorkbook();
-            Sheet sheet = workbook.createSheet("合同数据");
-            
-            // 设置表头
-            Row headerRow = sheet.createRow(0);
-            String[] headers = {
-                "合同编号", "合同名称", "合同类型", "交易对方", "合同金额", 
-                "开始日期", "结束日期", "状态", "创建人", "创建时间", "更新时间"
-            };
-            
-            // 创建表头单元格样式
-            CellStyle headerStyle = workbook.createCellStyle();
-            headerStyle.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            headerStyle.setBorderTop(BorderStyle.THIN);
-            headerStyle.setBorderBottom(BorderStyle.THIN);
-            headerStyle.setBorderLeft(BorderStyle.THIN);
-            headerStyle.setBorderRight(BorderStyle.THIN);
-            
-            Font headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerFont.setColor(IndexedColors.WHITE.getIndex());
-            headerStyle.setFont(headerFont);
-            
-            // 填充表头
-            for (int i = 0; i < headers.length; i++) {
-                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
-                cell.setCellValue(headers[i]);
-                cell.setCellStyle(headerStyle);
-                sheet.autoSizeColumn(i);
-            }
-            
-            // 从数据库获取合同数据
-            List<Contract> contractList = getVisibleContracts();
-            
-            // 填充数据
-            for (int i = 0; i < contractList.size(); i++) {
-                Contract contract = contractList.get(i);
-                Row dataRow = sheet.createRow(i + 1);
-                
-                // 创建数据单元格样式
-                CellStyle dataStyle = workbook.createCellStyle();
-                dataStyle.setBorderTop(BorderStyle.THIN);
-                dataStyle.setBorderBottom(BorderStyle.THIN);
-                dataStyle.setBorderLeft(BorderStyle.THIN);
-                dataStyle.setBorderRight(BorderStyle.THIN);
-                
-                // 填充数据
-                org.apache.poi.ss.usermodel.Cell cell0 = dataRow.createCell(0);
-                cell0.setCellValue(contract.getContractNo() != null ? contract.getContractNo() : "");
-                
-                org.apache.poi.ss.usermodel.Cell cell1 = dataRow.createCell(1);
-                cell1.setCellValue(contract.getTitle() != null ? contract.getTitle() : "");
-                
-                // 合同类型转换
-                String type = contract.getType();
-                String typeName = "其他";
-                if (type != null) {
-                    switch (type.toUpperCase()) {
-                        case "PURCHASE": typeName = "采购合同"; break;
-                        case "SALES": typeName = "销售合同"; break;
-                        case "SERVICE": typeName = "服务合同"; break;
-                        case "LEASE": typeName = "租赁合同"; break;
-                        case "EMPLOYMENT": typeName = "雇佣合同"; break;
-                        case "OTHER": typeName = "其他"; break;
-                    }
-                }
-                org.apache.poi.ss.usermodel.Cell cell2 = dataRow.createCell(2);
-                cell2.setCellValue(typeName);
-                
-                org.apache.poi.ss.usermodel.Cell cell3 = dataRow.createCell(3);
-                cell3.setCellValue(resolveCounterpartySummary(contract));
-                
-                // 合同金额
-                org.apache.poi.ss.usermodel.Cell cell4 = dataRow.createCell(4);
-                if (contract.getAmount() != null) {
-                    cell4.setCellValue(contract.getAmount().doubleValue());
-                } else {
-                    cell4.setCellValue(0);
-                }
-                
-                org.apache.poi.ss.usermodel.Cell cell5 = dataRow.createCell(5);
-                cell5.setCellValue(contract.getStartDate() != null ? contract.getStartDate().toString() : "");
-                
-                org.apache.poi.ss.usermodel.Cell cell6 = dataRow.createCell(6);
-                cell6.setCellValue(contract.getEndDate() != null ? contract.getEndDate().toString() : "");
-                
-                // 状态转换
-                String status = contract.getStatus();
-                String statusName = "其他";
-                if (status != null) {
-                    switch (status) {
-                        case "DRAFT": statusName = "草稿"; break;
-                        case "PENDING": statusName = "待审批"; break;
-                        case "APPROVED": statusName = "已审批"; break;
-                        case "SIGNED": statusName = "已签署"; break;
-                        case "RENEWING": statusName = "续签中"; break;
-                        case "RENEWED": statusName = "已续签"; break;
-                        case "NOT_RENEWED": statusName = "不续签"; break;
-                        case "ARCHIVED": statusName = "已归档"; break;
-                        case "TERMINATED": statusName = "已终止"; break;
-                    }
-                }
-                org.apache.poi.ss.usermodel.Cell cell7 = dataRow.createCell(7);
-                cell7.setCellValue(statusName);
-                
-                org.apache.poi.ss.usermodel.Cell cell8 = dataRow.createCell(8);
-                cell8.setCellValue("admin"); // 简化处理
-                
-                org.apache.poi.ss.usermodel.Cell cell9 = dataRow.createCell(9);
-                cell9.setCellValue(contract.getCreateTime() != null ? contract.getCreateTime().toString() : "");
-                
-                org.apache.poi.ss.usermodel.Cell cell10 = dataRow.createCell(10);
-                cell10.setCellValue(contract.getUpdateTime() != null ? contract.getUpdateTime().toString() : "");
-                
-                // 应用样式
-                for (int j = 0; j < headers.length; j++) {
-                    dataRow.getCell(j).setCellStyle(dataStyle);
-                }
-            }
-            
-            // 设置响应头
-            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            response.setHeader("Content-Disposition", "attachment; filename=contracts.xlsx");
-            
-            // 写入响应流
-            try (OutputStream outputStream = response.getOutputStream()) {
-                workbook.write(outputStream);
-            } finally {
-                workbook.close();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
+        contractExportService.exportContracts(response);
     }
     
     // 下载PDF
     @GetMapping("/{id}/pdf")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public void downloadPdf(@PathVariable Long id, HttpServletResponse response) throws IOException {
-        // 从数据库查找合同
-        Contract contract = contractService.getContractById(id);
-        
-        if (contract == null) {
-            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            return;
-        }
-        
-        // 设置响应头
-        response.setContentType("application/pdf");
-        response.setHeader("Content-Disposition", "attachment; filename=contract_" + contract.getContractNo() + ".pdf");
-        
-        // 创建PDF
-        try (PdfWriter writer = new PdfWriter(response.getOutputStream());
-             PdfDocument pdfDocument = new PdfDocument(writer);
-             Document document = new Document(pdfDocument)) {
-            
-            // 添加标题
-            Paragraph title = new Paragraph(contract.getTitle() != null ? contract.getTitle() : "合同").setFontSize(18).setBold().setTextAlignment(TextAlignment.CENTER);
-            document.add(title);
-            
-            document.add(new Paragraph("\n"));
-            
-            // 添加合同信息表格
-            Table table = new Table(2);
-            table.setWidth(UnitValue.createPercentValue(100));
-            
-            // 表格数据
-            addTableCell(table, "合同编号", contract.getContractNo() != null ? contract.getContractNo() : "");
-            addTableCell(table, "合同类型", getContractTypeName(contract.getType()));
-            addTableCell(table, "交易对方", resolveCounterpartySummary(contract));
-            addTableCell(table, "合同金额", contract.getAmount() != null ? contract.getAmount().toString() : "0");
-            addTableCell(table, "开始日期", contract.getStartDate() != null ? contract.getStartDate().toString() : "");
-            addTableCell(table, "结束日期", contract.getEndDate() != null ? contract.getEndDate().toString() : "");
-            addTableCell(table, "状态", getContractStatusName(contract.getStatus()));
-            addTableCell(table, "创建人", "admin"); // 简化处理
-            addTableCell(table, "创建时间", contract.getCreateTime() != null ? contract.getCreateTime().toString() : "");
-            addTableCell(table, "更新时间", contract.getUpdateTime() != null ? contract.getUpdateTime().toString() : "");
-            
-            document.add(table);
-            
-            document.add(new Paragraph("\n"));
-            
-            // 添加合同内容
-            if (contract.getContent() != null) {
-                Paragraph contentTitle = new Paragraph("合同内容").setFontSize(14).setBold();
-                document.add(contentTitle);
-                
-                // 简单处理HTML内容，实际项目中可能需要更复杂的处理
-                String content = contract.getContent();
-                content = content.replaceAll("<[^>]*>", ""); // 移除HTML标签
-                Paragraph contentPara = new Paragraph(content).setFontSize(12);
-                document.add(contentPara);
-            }
-        }
-    }
-    
-    // 辅助方法：添加表格单元格
-    private void addTableCell(Table table, String label, String value) {
-        Cell labelCell = new Cell().add(new Paragraph(label)).setBold();
-        labelCell.setTextAlignment(TextAlignment.RIGHT);
-        labelCell.setVerticalAlignment(VerticalAlignment.MIDDLE);
-        table.addCell(labelCell);
-        
-        Cell valueCell = new Cell().add(new Paragraph(value));
-        valueCell.setTextAlignment(TextAlignment.LEFT);
-        valueCell.setVerticalAlignment(VerticalAlignment.MIDDLE);
-        table.addCell(valueCell);
-    }
-    
-    // 辅助方法：获取合同类型名称
-    private String getContractTypeName(String type) {
-        if (type == null) return "其他";
-        switch (type.toUpperCase()) {
-            case "PURCHASE": return "采购合同";
-            case "SALES": return "销售合同";
-            case "SERVICE": return "服务合同";
-            case "LEASE": return "租赁合同";
-            case "EMPLOYMENT": return "雇佣合同";
-            case "OTHER": return "其他";
-            default: return "其他";
-        }
-    }
-    
-    // 辅助方法：获取合同状态名称
-    private String getContractStatusName(String status) {
-        if (status == null) return "其他";
-        switch (status) {
-            case "DRAFT": return "草稿";
-            case "PENDING": return "待审批";
-            case "APPROVED": return "已审批";
-            case "SIGNED": return "已签署";
-            case "RENEWING": return "续签中";
-            case "RENEWED": return "已续签";
-            case "NOT_RENEWED": return "不续签";
-            case "ARCHIVED": return "已归档";
-            case "TERMINATED": return "已终止";
-            default: return "其他";
-        }
+        contractExportService.downloadPdf(id, response);
     }
     
     // 下载Word
     @GetMapping("/{id}/word")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public void downloadWord(@PathVariable Long id, HttpServletResponse response) throws IOException {
-        Contract contract = contractService.getContractById(id);
-        
-        if (contract == null) {
-            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-            return;
-        }
-        
-        try {
-            byte[] wordBytes = wordExportService.exportContractToWord(contract, getContractAdditionalData(id));
-            
-            String fileName = "合同_" + contract.getContractNo() + ".docx";
-            response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-            response.setHeader("Content-Disposition", "attachment; filename=" + java.net.URLEncoder.encode(fileName, "UTF-8"));
-            response.setContentLength(wordBytes.length);
-            response.getOutputStream().write(wordBytes);
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
-    }
-    
-    private Map<String, Object> getContractAdditionalData(Long contractId) {
-        Map<String, Object> data = new HashMap<>();
-        
-        Map<String, Object> dynamicFields = new HashMap<>();
-        List<ContractFieldValue> fieldValues = fieldValueMapper.selectByContractId(contractId);
-        for (ContractFieldValue fv : fieldValues) {
-            dynamicFields.put(fv.getFieldKey(), fv.getFieldValue());
-        }
-        data.put("dynamicFields", dynamicFields);
-        
-        return data;
+        contractExportService.downloadWord(id, response);
     }
     
     // 导出Excel
@@ -1240,7 +554,6 @@ public class ContractController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false, defaultValue = "desc") String sortOrder,
             HttpServletResponse response) throws IOException {
-
         Map<String, Object> params = new HashMap<>();
         params.put("title", title);
         params.put("type", type);
@@ -1257,42 +570,14 @@ public class ContractController {
         params.put("folderId", folderId);
         params.put("sortBy", sortBy);
         params.put("sortOrder", sortOrder);
-
-        List<Contract> filteredContracts = new ArrayList<>();
-        int currentPage = 1;
-        int pageSize = 1000;
-        while (true) {
-            com.baomidou.mybatisplus.core.metadata.IPage<Contract> pageData = contractService.listContracts(params, currentPage, pageSize);
-            if (pageData.getRecords().isEmpty()) {
-                break;
-            }
-            filteredContracts.addAll(pageData.getRecords());
-            if (pageData.getCurrent() >= pageData.getPages()) {
-                break;
-            }
-            currentPage++;
-        }
-        
-        List<String> exportFields = List.of("contractNo", "title", "type", "counterparty", "amount", "startDate", "endDate", "status");
-        
-        byte[] excelBytes = excelExportService.exportContractsToExcel(filteredContracts, exportFields);
-        
-        String fileName = "合同列表_" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".xlsx";
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(fileName, "UTF-8"));
-        response.setContentLength(excelBytes.length);
-        response.getOutputStream().write(excelBytes);
+        contractExportService.exportExcel(params, response);
     }
     
     @PostMapping("/{id}/copy")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
     public ApiResponse<Map<String, Object>> copyContract(@PathVariable Long id) {
         try {
-            Contract contract = contractService.copyContract(id);
-            Map<String, Object> result = new HashMap<>();
-            result.put("id", contract.getId());
-            result.put("contractNo", contract.getContractNo());
-            return ApiResponse.success(result);
+            return ApiResponse.success(contractCommandService.copy(id));
         } catch (RuntimeException e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -1352,34 +637,4 @@ public class ContractController {
         response.getOutputStream().flush();
     }
 
-    private List<Contract> getVisibleContracts() {
-        if (contractDataScopeService.canViewAllContracts()) {
-            return contractMapper.selectList(null);
-        }
-        QueryWrapper<Contract> wrapper = new QueryWrapper<>();
-        contractDataScopeService.applyContractVisibilityFilter(wrapper);
-        return contractMapper.selectList(wrapper);
-    }
-
-    private String resolveCounterpartySummary(Contract contract) {
-        if (contract == null || contract.getCounterparties() == null || contract.getCounterparties().isBlank()) {
-            return "";
-        }
-        try {
-            List<Map<String, Object>> counterparties = objectMapper.readValue(
-                    contract.getCounterparties(),
-                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
-            );
-            return counterparties.stream()
-                    .map(item -> item.get("name"))
-                    .filter(Objects::nonNull)
-                    .map(String::valueOf)
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .distinct()
-                    .collect(java.util.stream.Collectors.joining(" / "));
-        } catch (Exception e) {
-            return "";
-        }
-    }
 }

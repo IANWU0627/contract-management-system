@@ -2,6 +2,10 @@
 
 > 合同管理系统 REST API 完整参考
 
+> 推荐先看拆分入口：
+> - 业务接口：`API_BUSINESS.md`
+> - 系统/运维接口：`API_SYSTEM.md`
+
 ---
 
 ## 📑 目录
@@ -18,6 +22,8 @@
 10. [文件夹](#10-文件夹)
 11. [统计报表](#11-统计报表)
 12. [其他接口](#12-其他接口)
+13. [快速代码管理](#13-快速代码管理)
+14. [附录](#14-附录)
 
 ---
 
@@ -74,6 +80,18 @@
   }
 }
 ```
+
+### 1.6 文档对齐说明（2026-04）
+
+以下路径已按当前后端 `com.contracthub.controller` 包内映射核对；若本文与实现有冲突，以代码中的 `@RequestMapping` / `@GetMapping` 等为准。
+
+### 1.7 维护策略（单点维护）
+
+- 日常新增/改动接口时，优先更新对应入口文档：
+  - 业务接口改动：`API_BUSINESS.md`
+  - 系统/运维改动：`API_SYSTEM.md`
+- `API_DOC.md` 保持“完整参考”定位，按迭代合并更新，不要求每次小改即时逐行同步。
+- 每次合并前执行 `python3 scripts/scan-controller-routes.py` 做路径对账。
 
 ---
 
@@ -321,6 +339,16 @@ Authorization: Bearer <token>
 
 ---
 
+### 3.12.1 续签状态流转（合同主接口）
+
+以下接口位于 `ContractController`，用于合同主状态机中的续签流程：
+
+- **POST** `/api/contracts/{id}/renewal/start`
+- **POST** `/api/contracts/{id}/renewal/complete`
+- **POST** `/api/contracts/{id}/renewal/decline`
+
+---
+
 ### 3.13 AI分析
 
 **POST** `/api/contracts/{id}/analyze`
@@ -388,29 +416,57 @@ Authorization: Bearer <token>
 
 ---
 
-### 3.16 获取版本历史
+### 3.16 版本历史与对比（`/api/contracts/{contractId}/versions`）
 
-**GET** `/api/contracts/{id}/versions`
+路径参数在代码中为 `contractId`，与 `{id}` 含义相同（合同主键）。
+
+**GET** `/api/contracts/{contractId}/versions` — 版本列表  
+
+**GET** `/api/contracts/{contractId}/versions/{versionId}` — 版本详情  
+
+**POST** `/api/contracts/{contractId}/versions` — 手动创建版本记录（body 含 `content`、`changeDesc` 等，以服务端校验为准）  
+
+**POST** `/api/contracts/{contractId}/versions/{versionId}/restore` — 恢复到指定版本（需 `CONTRACT_APPROVE`）  
+
+**POST** `/api/contracts/{contractId}/versions/compare` — 两版本对比（Query：`versionId1`、`versionId2`）
 
 ---
 
-### 3.17 合同附件
+### 3.17 附件与文件
 
-**POST** `/api/contracts/{id}/attachments`
+#### 3.17.1 通用上传（磁盘文件，返回 `fileName` 供正文引用）
 
-使用 `multipart/form-data` 上传文件。
+**POST** `/api/contracts/upload`  
+
+`multipart/form-data`：`file`（必填）；`contractId`（可选）。
+
+**GET** `/api/contracts/download/{fileName}` — 下载  
+
+**DELETE** `/api/contracts/attachments/{fileName}` — 删除磁盘上的附件文件  
+
+#### 3.17.2 结构化附件（`contract_attachment` 表）
+
+**GET** `/api/contract-attachments/contract/{contractId}` — 某合同的附件记录列表  
+
+**POST** `/api/contract-attachments` — 新增附件元数据  
+
+**PUT** `/api/contract-attachments/{id}` / **DELETE** `/api/contract-attachments/{id}`  
+
+**POST** `/api/contract-attachments/batch` — 按合同批量覆盖保存（body 含 `contractId` 与 `attachments` 列表）
 
 ---
 
-### 3.18 导出合同
+### 3.18 导出与单份下载
 
-**GET** `/api/contracts/{id}/export`
+| 说明 | 方法 | 路径 |
+|------|------|------|
+| 合同列表导出 Excel（当前可见范围，与列表权限一致） | GET | `/api/contracts/export` |
+| 合同列表导出 Excel（支持筛选 query，与列表查询参数类似） | GET | `/api/contracts/export/excel` |
+| 单份 PDF | GET | `/api/contracts/{id}/pdf` |
+| 单份 Word | GET | `/api/contracts/{id}/word` |
+| 根据 HTML 正文生成 PDF（body：`content`、`contractNo`、`watermark` 等） | POST | `/api/contracts/generate-pdf` |
 
-#### 请求参数
-
-| 参数 | 说明 |
-|------|------|
-| format | pdf/word/excel |
+> 不再有统一的 `GET /api/contracts/{id}/export?format=`；请按上表选用接口。
 
 ---
 
@@ -470,16 +526,7 @@ Authorization: Bearer <token>
 
 ### 3.24 版本对比（合同版本实体）
 
-在 [3.16 获取版本历史](#316-获取版本历史) 所列版本记录基础上，使用：
-
-**POST** `/api/contracts/{contractId}/versions/compare`
-
-#### 请求参数（Query）
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| versionId1 | long | 版本记录 ID |
-| versionId2 | long | 版本记录 ID |
+版本对比见上文 **3.16** 中的 **POST** `/api/contracts/{contractId}/versions/compare`（Query：`versionId1`、`versionId2`）。
 
 ---
 
@@ -585,6 +632,27 @@ Authorization: Bearer <token>
 ### 4.8 获取模板变量
 
 **GET** `/api/templates/variables/list`
+
+Query：`contractType`（可选），按合同类型筛选可用变量。
+
+---
+
+### 4.9 模板变量、预览与导出（补充）
+
+以下均挂在 **`/api/templates`** 下；列表/详情/增删改需 **`TEMPLATE_MANAGE`**（已在方法上标注的除外）。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/variables/{id}` | 指定模板 ID 的变量 Map（`id` 为模板主键） |
+| GET | `/variables/extract?content=` | 从正文中提取占位符变量名 |
+| POST | `/{id}/preview-simple` | 简单预览（`[[变量名]]` 风格替换，body 为键值对） |
+| POST | `/{id}/preview` | 完整预览；body 可含 `values` 覆盖默认变量 |
+| POST | `/replace` | body：`content`、`values`，仅做变量替换，不读库模板 |
+| POST | `/{id}/watermark` | 水印：body 含 `text` / `imageUrl`、`position`、`opacity` |
+| GET | `/{id}/export/pdf` | 下载模板 PDF |
+| GET | `/{id}/export` | 返回模板 JSON（含 `content`、`variables` 等） |
+
+> 默认种子模板正文使用 `[[placeholder]]` 占位；与仅作示例的 `{{ }}` 写法并存时，以实际模板内容与 `TemplateVariableService` 替换逻辑为准。
 
 ---
 
@@ -768,9 +836,17 @@ Authorization: Bearer <token>
 
 ---
 
-### 7.3 权限列表
+### 7.3 权限列表（含分组）
 
 **GET** `/api/roles/permissions`
+
+响应 `data` 中同时包含：
+
+- `list`：全部权限平铺列表  
+- `grouped`：按业务模块分组后的 `Map<String, List<Permission>>`  
+- `total`：权限总数  
+
+> 不存在单独的 `/api/roles/permissions/grouped` 路径；分组数据请使用本接口的 `grouped` 字段。
 
 ---
 
@@ -812,29 +888,27 @@ Authorization: Bearer <token>
 
 ### 7.8 角色权限分组
 
-获取带分组的权限列表：
+分组后的权限见 **7.3** 响应中的 `data.grouped`（键名为后端按权限 `code` 归类的中文分组，与下表示例可能略有差异，以实际返回为准）。
 
-**GET** `/api/roles/permissions/grouped`
-
-#### 响应示例
+#### 响应示例（`data.grouped` 结构示意）
 
 ```json
 {
-  "code": 200,
-  "data": {
-    "合同模块": [
-      {"id": 1, "code": "CONTRACT_MANAGE", "name": "合同管理"},
-      {"id": 2, "code": "FOLDER_MANAGE", "name": "文件夹管理"}
-    ],
-    "审批流程": [
-      {"id": 3, "code": "CONTRACT_APPROVE", "name": "合同审批"}
-    ],
-    "系统管理": [
-      {"id": 4, "code": "USER_MANAGE", "name": "用户管理"}
-    ]
-  }
+  "合同管理": [
+    {"id": 1, "code": "CONTRACT_MANAGE", "name": "合同管理"}
+  ],
+  "合同协同": [
+    {"id": 3, "code": "CONTRACT_APPROVE", "name": "合同审批"}
+  ],
+  "系统管理": [
+    {"id": 4, "code": "USER_MANAGE", "name": "用户管理"}
+  ]
 }
 ```
+
+### 7.9 启用/停用角色
+
+**PUT** `/api/roles/{id}/toggle`
 
 ---
 
@@ -842,21 +916,28 @@ Authorization: Bearer <token>
 
 ### 8.1 提醒列表
 
-**GET** `/api/reminders`
+**GET** `/api/reminders/my` — 当前登录用户的提醒（需 `CONTRACT_MANAGE`）；支持 `keyword`、`status` 等 query  
 
-#### 请求参数
+**GET** `/api/reminders` — 全部提醒（管理，需 `REMINDER_MANAGE`）
+
+#### 请求参数（`/my` 示例）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | page | int | 页码 |
 | pageSize | int | 每页条数 |
-| status | int | 状态（0未读/1已读） |
+| keyword | string | 合同编号/标题模糊 |
+| status | string | 状态筛选 |
+
+其它：`PUT /api/reminders/{id}/read`、`PUT /api/reminders/read-batch`、`POST /api/reminders/check` 等见 `ReminderController`。
 
 ---
 
 ### 8.2 提醒规则列表
 
 **GET** `/api/reminder-rules`
+
+**GET** `/api/reminder-rules/my` — 当前用户可见规则（本人创建或公开规则）
 
 ---
 
@@ -889,6 +970,10 @@ Authorization: Bearer <token>
 
 **DELETE** `/api/reminder-rules/{id}`
 
+### 8.6 启用/停用规则
+
+**PUT** `/api/reminder-rules/{id}/toggle`
+
 ---
 
 ## 9. 收藏与标签
@@ -897,19 +982,25 @@ Authorization: Bearer <token>
 
 **GET** `/api/favorites`
 
+#### 请求参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| page | int | 页码 |
+| pageSize | int | 每页条数 |
+| userId | long | 用户 ID（当前实现为 query，默认 `1`，与登录用户绑定策略以服务端为准） |
+
 ---
 
 ### 9.2 添加收藏
 
-**POST** `/api/favorites`
+**POST** `/api/favorites/{contractId}`
 
 #### 请求参数
 
-```json
-{
-  "contractId": 1
-}
-```
+路径参数：`contractId`（Long）
+
+Query：`userId`（可选，默认 `1`，与当前登录用户一致性以服务端为准）
 
 ---
 
@@ -917,11 +1008,15 @@ Authorization: Bearer <token>
 
 **DELETE** `/api/favorites/{contractId}`
 
+Query：`userId`（可选，默认 `1`）
+
 ---
 
 ### 9.4 标签列表
 
-**GET** `/api/tags`
+**GET** `/api/tags` — 全部标签（含使用量等）
+
+**GET** `/api/tags/my` — 当前用户可见（本人创建或公开标签）
 
 ---
 
@@ -935,7 +1030,8 @@ Authorization: Bearer <token>
 {
   "name": "重要",
   "color": "#F56C6C",
-  "description": "重要合同标记"
+  "description": "重要合同标记",
+  "isPublic": true
 }
 ```
 
@@ -950,6 +1046,20 @@ Authorization: Bearer <token>
 ### 9.7 删除标签
 
 **DELETE** `/api/tags/{id}`
+
+---
+
+### 9.8 标签与合同关联
+
+均需 **`TAG_MANAGE`**。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/tags/contract/{contractId}` | 某合同已打上的标签 |
+| POST | `/api/tags/contract/{contractId}` | body：`{ "tagId": 1 }`，为合同增加一个标签 |
+| DELETE | `/api/tags/contract/{contractId}/{tagId}` | 移除合同上的某标签 |
+| PUT | `/api/tags/contract/{contractId}` | 覆盖式更新：body `tags: [{ "id": 1 }, ...]` |
+| GET | `/api/tags/{tagId}/contracts` | 某标签下的合同列表 |
 
 ---
 
@@ -1022,85 +1132,93 @@ Authorization: Bearer <token>
 
 #### 响应示例
 
+以下字段与 `StatisticsController#overview` 当前实现一致（金额增长等为数值百分比，非图表专用 `byStatus` / `byType` 结构）：
+
 ```json
 {
   "code": 200,
   "data": {
     "totalContracts": 156,
-    "totalAmount": 12560000,
+    "totalAmount": 12560000.0,
     "pendingApproval": 8,
     "expiringSoon": 12,
-    "byStatus": [
-      {"status": "DRAFT", "count": 15},
-      {"status": "PENDING", "count": 8}
-    ],
-    "byType": [
-      {"type": "PURCHASE", "count": 45},
-      {"type": "SALES", "count": 38}
-    ]
+    "monthlyNew": 10,
+    "signedThisMonth": 4,
+    "amountGrowth": 5.2,
+    "contractGrowth": -1.0
   }
 }
 ```
 
----
-
-### 11.2 金额统计
-
-**GET** `/api/statistics/amount`
-
-#### 请求参数
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| type | string | 合同类型 |
-| startDate | string | 开始日期 |
-| endDate | string | 结束日期 |
+状态/类型分布请使用 **11.2**、**11.3** 对应接口。
 
 ---
 
-### 11.3 导出统计数据
+### 11.2 状态分布
 
-**GET** `/api/statistics/export`
+**GET** `/api/statistics/status-distribution`
 
-#### 请求参数
+---
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| format | string | 导出格式（excel） |
-| type | string | 合同类型 |
-| startDate | string | 开始日期 |
-| endDate | string | 结束日期 |
+### 11.3 类型分布
+
+**GET** `/api/statistics/type-distribution`
+
+---
+
+### 11.4 月度趋势
+
+**GET** `/api/statistics/monthly-trend`
+
+---
+
+### 11.5 交易对手 Top
+
+**GET** `/api/statistics/top-counterparties`
+
+---
+
+### 11.6 用户活跃度
+
+**GET** `/api/statistics/user-activity`
 
 ---
 
 ## 12. 其他接口
 
-### 12.1 续约列表
+### 12.1 续约（主路径：挂在合同下）
 
-**GET** `/api/renewals`
+**GET** `/api/contracts/{contractId}/renewals` — 某合同的续约记录列表  
 
----
+**POST** `/api/contracts/{contractId}/renewals` — 发起续约申请  
 
-### 12.2 创建续约
-
-**POST** `/api/renewals`
-
-#### 请求参数
+#### 请求参数（POST body 示例）
 
 ```json
 {
-  "contractId": 1,
   "newEndDate": "2028-03-31",
-  "renewalType": "RENEW",
+  "renewalType": "EXTEND",
   "remark": "合同到期续约"
 }
 ```
+
+**PUT** `/api/contracts/{contractId}/renewals/{id}/approve` — 审批通过（角色 `ADMIN` / `LEGAL`）  
+
+**PUT** `/api/contracts/{contractId}/renewals/{id}/reject` — 审批拒绝（body 可含 `remark`）
+
+---
+
+### 12.2 续约列表（全局分页）
+
+**GET** `/api/renewals`
+
+Query：`status`、`page`、`pageSize`（实现见 `RenewalListController`）。
 
 ---
 
 ### 12.3 操作日志
 
-**GET** `/api/operation-logs`
+**GET** `/api/logs`
 
 #### 请求参数
 
@@ -1108,45 +1226,134 @@ Authorization: Bearer <token>
 |------|------|------|
 | page | int | 页码 |
 | pageSize | int | 每页条数 |
-| module | string | 模块筛选 |
-| startDate | string | 开始日期 |
-| endDate | string | 结束日期 |
+| module | string | 模块 |
+| targetId | long | 目标实体 ID |
+| keyword | string | 描述或操作人模糊匹配 |
+
+**GET** `/api/logs/{id}` — 详情  
+
+**GET** `/api/logs/modules` — 模块名去重列表  
+
+> 系统设置里另有 **GET** `/api/system/operation-logs`（`SystemController`），与本接口不同，请勿混淆。
 
 ---
 
-### 12.4 获取合同类型字段配置
+### 12.4 合同类型字段（完整子路径见代码）
 
-**GET** `/api/type-field-config`
+基础路径：**GET/POST** `/api/contract-type-fields`
 
-#### 请求参数
+常用示例：
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| contractType | string | 合同类型 |
+- **GET** `/api/contract-type-fields/form/{contractType}` — 表单用字段列表  
+- **GET** `/api/contract-type-fields/config/{contractType}` — 分页配置  
+- **GET/PUT/DELETE** `/api/contract-type-fields/draft/{contractType}` — 草稿  
+- **POST** `/api/contract-type-fields/publish/{contractType}` — 发布草稿到正式表  
+- **GET** `/api/contract-type-fields/export` / **POST** `/api/contract-type-fields/import` — 导入导出  
+
+单条 **POST** `/api/contract-type-fields` 表示新增一条字段配置（body 为 `ContractTypeField` 结构），与「整表 JSON 一次性保存」型接口不同，请以实际请求体为准。
 
 ---
 
-### 12.5 保存合同类型字段配置
+### 12.5 权限资源 CRUD（独立模块）
 
-**POST** `/api/type-field-config`
+**GET** `/api/permissions` — 全部权限  
 
-#### 请求参数
+**GET** `/api/permissions/active` — 启用权限  
 
-```json
-{
-  "contractType": "PURCHASE",
-  "fields": [
-    {
-      "fieldKey": "productName",
-      "fieldLabel": "产品名称",
-      "fieldType": "text",
-      "required": true,
-      "showInList": true,
-      "showInForm": true
-    }
-  ]
-}
-```
+**GET** `/api/permissions/{id}` — 详情  
+
+**POST** `/api/permissions` / **PUT** `/api/permissions/{id}` / **DELETE** `/api/permissions/{id}` — 维护（需 `ROLE_MANAGE`）
+
+---
+
+### 12.6 通知接口（`/api/notifications`）
+
+- **GET** `/api/notifications/my` — 我的通知列表
+- **PUT** `/api/notifications/{id}/read` — 单条标已读
+- **PUT** `/api/notifications/read-all` — 全部标已读
+- **PUT** `/api/notifications/{id}/important` — 重要标记切换
+- **DELETE** `/api/notifications/{id}` — 删除单条
+- **DELETE** `/api/notifications/my` — 清空我的通知
+
+---
+
+### 12.7 系统管理接口（`/api/system`）
+
+主要用于系统配置与运维观测（权限通常要求管理员）：
+
+- **GET/POST** `/api/system/configs` — 读取/保存系统配置
+- **GET** `/api/system/monitor` — 运行状态/监控信息
+- **GET** `/api/system/operation-logs` — 系统侧操作日志
+- **GET** `/api/system/login-history` — 登录历史
+- **GET** `/api/system/sessions` — 在线会话
+- **DELETE** `/api/system/sessions/{id}`、`/api/system/sessions` — 会话剔除
+- **POST** `/api/system/email/test`、`/api/system/sms/test` — 通道连通性测试
+
+---
+
+### 12.8 外部对接合同接口（`/api/external/contracts`）
+
+用于第三方系统写入/查询合同，控制器包含授权校验：
+
+- **POST** `/api/external/contracts` — 创建单合同
+- **POST** `/api/external/contracts/batch` — 批量创建
+- **GET** `/api/external/contracts` — 条件分页查询
+- **GET** `/api/external/contracts/{id}` — 合同详情
+- **PUT** `/api/external/contracts/{id}` — 更新
+- **DELETE** `/api/external/contracts/{id}` — 删除
+- **GET** `/api/external/contracts/next-number` — 下一个合同编号
+- **GET** `/api/external/contracts/health` — 健康检查
+
+---
+
+### 12.9 合同分类接口（`/api/contract-categories` 与 `/api/categories`）
+
+`ContractCategoryController` 支持双基路径别名，能力一致：
+
+- **GET** `/api/contract-categories`（或 `/api/categories`）— 启用分类列表
+- **GET** `/api/contract-categories/all` — 管理页分页列表
+- **GET** `/api/contract-categories/{id}` — 分类详情
+- **POST** `/api/contract-categories` — 创建
+- **PUT** `/api/contract-categories/{id}` — 更新
+- **DELETE** `/api/contract-categories/{id}` — 删除/禁用（系统默认分类会走禁用策略）
+
+---
+
+### 12.10 条款库接口（`/api/clauses`）
+
+- **GET** `/api/clauses` — 列表（支持 `keyword`、`category`、`status`）
+- **GET** `/api/clauses/references` — 条款引用统计（模板侧）
+- **GET** `/api/clauses/{id}` — 详情
+- **POST** `/api/clauses` — 创建
+- **PUT** `/api/clauses/{id}` — 更新
+- **DELETE** `/api/clauses/{id}` — 删除
+
+---
+
+### 12.11 合同相对方接口（`/api/contract-counterparties`）
+
+- **GET** `/api/contract-counterparties/contract/{contractId}` — 按合同查询
+- **POST** `/api/contract-counterparties` — 创建单条
+- **PUT** `/api/contract-counterparties/{id}` — 更新单条
+- **DELETE** `/api/contract-counterparties/{id}` — 删除单条
+- **DELETE** `/api/contract-counterparties/contract/{contractId}` — 清空合同下全部相对方
+- **POST** `/api/contract-counterparties/batch` — 批量覆盖保存（body 含 `contractId` 与 `counterparties`）
+
+---
+
+### 12.12 变更日志接口（`/api/contracts/{contractId}/change-logs`、`/api/change-logs`）
+
+- **GET** `/api/contracts/{contractId}/change-logs` — 某合同变更记录
+- **POST** `/api/contracts/{contractId}/change-logs` — 新增变更记录
+- **GET** `/api/change-logs/recent` — 最近变更（`limit`）
+- **GET** `/api/change-logs/my` — 我的变更（`limit`）
+
+---
+
+### 12.13 到期预警接口
+
+- **GET** `/api/contracts/expiring` — 即将到期合同列表
+- **GET** `/api/contracts/statistics/expiration` — 到期统计
 
 ---
 
@@ -1154,16 +1361,16 @@ Authorization: Bearer <token>
 
 ### 13.1 快速代码头列表
 
-**GET** `/api/quick-codes`
+**GET** `/api/quick-codes` — 下拉用精简列表（受 `Accept-Language` 影响展示名，无分页参数）
 
-#### 请求参数
+**GET** `/api/quick-codes/all` — 管理页分页列表  
+
+#### 请求参数（`/all`）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | page | int | 页码 |
 | pageSize | int | 每页条数 |
-| keyword | string | 关键词搜索 |
-| status | int | 状态（默认1） |
 
 ---
 
@@ -1205,23 +1412,15 @@ Authorization: Bearer <token>
 
 **DELETE** `/api/quick-codes/{id}`
 
----
+**PUT** `/api/quick-codes/{id}/toggle` — 启用/停用  
 
-### 13.6 快速代码项列表
-
-**GET** `/api/quick-codes/{headerId}/items`
-
-#### 请求参数
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| enabled | boolean | 只返回启用的代码项 |
+**GET** `/api/quick-codes/{id}/impact` — 引用影响面（管理用）
 
 ---
 
-### 13.7 创建快速代码项
+### 13.6 创建快速代码项
 
-**POST** `/api/quick-codes/{headerId}/items`
+**POST** `/api/quick-codes/{id}/items`
 
 #### 请求参数
 
@@ -1242,9 +1441,9 @@ Authorization: Bearer <token>
 
 ---
 
-### 13.8 更新快速代码项
+### 13.7 更新快速代码项
 
-**PUT** `/api/quick-codes/{headerId}/items/{itemId}`
+**PUT** `/api/quick-codes/items/{itemId}`
 
 #### 请求参数
 
@@ -1252,15 +1451,15 @@ Authorization: Bearer <token>
 
 ---
 
-### 13.9 删除快速代码项
+### 13.8 删除快速代码项
 
-**DELETE** `/api/quick-codes/{headerId}/items/{itemId}`
+**DELETE** `/api/quick-codes/items/{itemId}`
 
 ---
 
-### 13.10 根据代码获取快速代码项
+### 13.9 根据代码获取快速代码项
 
-**GET** `/api/quick-codes/by-code/{code}`
+**GET** `/api/quick-codes/code/{code}`
 
 获取指定代码的所有启用的代码项。
 
@@ -1284,7 +1483,31 @@ Authorization: Bearer <token>
 
 ---
 
-## 📝 附录
+## 14. 附录
+
+### 其它已注册路由（未全文展开）
+
+| 模块 | 基础路径 | 说明 |
+|------|----------|------|
+| AI | `/api/ai` | 分析、模板分析、Ollama 模型列表等（`AiController`） |
+| 通知 | `/api/notifications` | 我的通知、已读、删除等（`NotificationController`） |
+| 系统 | `/api/system` | 配置、监控、操作日志（另一套）、会话、登录历史等（`SystemController`） |
+| 外部合同 | `/api/external/contracts` | 对外集成（`ExternalContractController`） |
+| 合同分类 | `/api/contract-categories`、`/api/categories` | 别名双路径（`ContractCategoryController`） |
+| 条款库 | `/api/clauses` | `ContractClauseController` |
+| 相对方 | `/api/contract-counterparties` | `ContractCounterpartyController` |
+| 变更记录 | `/api/contracts/{contractId}/change-logs`、`/api/change-logs` | `ContractChangeLogController` |
+| 到期预警 | `/api/contracts/expiring`、`/api/contracts/statistics/expiration` | `ExpirationWarningController` |
+| 管理初始化 | `/api/admin/init-permissions` | `AdminController` |
+
+### 文档维护清单（防再次偏差）
+
+1. 新增或修改 REST 接口时，同步更新本文对应小节，或至少在「附录」表中增加一行指向 `*Controller`。  
+2. 路径以编译后的 `@RequestMapping` + 方法映射为准，不要用前端 axios 的字符串反向猜测。  
+3. 响应结构以 `ApiResponse` + 各方法返回值为准；示例 JSON 仅作演示。  
+4. 同一业务若存在「合同下子资源」与「全局列表」两套路径（如续约），两类都需在文档中写明。  
+5. 可运行仓库内脚本 **`python3 scripts/scan-controller-routes.py`** 生成「方法 + 路径 + 源文件」清单，用于与本文对账（启发式解析，极少数注解写法需人工复核）。  
+6. CI 会校验 `scripts/controller-routes.baseline.tsv` 与当前扫描结果一致；接口路径变化后请同步更新该基线文件。  
 
 ### 错误码对照表
 
@@ -1302,4 +1525,4 @@ Authorization: Bearer <token>
 
 ---
 
-*API文档最后更新：2026-04-11*
+*API文档最后更新：2026-04-21（第四轮：通知/系统/外部合同/分类/条款/相对方/变更日志/到期预警 与续签状态流转补齐）*

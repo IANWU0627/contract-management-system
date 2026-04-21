@@ -60,8 +60,8 @@
 #### 数据库
 | 技术 | 版本 | 用途 | 选型理由 |
 |------|------|------|----------|
-| H2 Database | 2.2.224 | 开发数据库 | 内存数据库，快速启动，适合开发测试，无需额外配置 |
-| MySQL | 8.x | 生产数据库 | 稳定可靠，性能优异，生态成熟，适合企业级应用 |
+| MySQL | 8.x | 开发/生产数据库 | 与当前仓库默认配置一致，便于联调与环境一致性 |
+| H2 Database | 2.2.224 | 历史/可选开发数据库 | 仅作为历史兼容方案，默认流程不再依赖 |
 
 #### 安全与认证
 | 技术 | 版本 | 用途 | 选型理由 |
@@ -804,8 +804,8 @@ permission
          │
          ▼
 ┌─────────────────┐
-│  H2 Database    │  ← 文件存储
-│  (内存/文件)     │
+│   MySQL 8.x     │  ← 本地实例
+│ (默认开发配置)   │
 └─────────────────┘
 ```
 
@@ -832,69 +832,56 @@ permission
 
 ### 7.3 环境配置
 
-#### application-dev.yml
+#### application.yml（当前默认开发配置）
 ```yaml
 server:
   port: 8081
-  servlet:
-    context-path: /
 
 spring:
   datasource:
-    url: jdbc:h2:file:./data/contractdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-  
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-
-  jackson:
-    date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
-
-jwt:
-  secret: dev-secret-key
-  expiration: 7200000  # 2小时
-  refresh-expiration: 604800000  # 7天
-
-cors:
-  origins: http://localhost:3000
-
-rate:
-  limit: 60  # 每分钟请求次数限制
-```
-
-#### application-prod.yml
-```yaml
-server:
-  port: 8081
-  servlet:
-    context-path: /
-
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/contract_db
+    url: jdbc:mysql://localhost:3306/contract_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-  
-  jackson:
-    date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
 
 jwt:
   secret: ${JWT_SECRET}
-  expiration: 7200000
+  expiration: 86400000  # 24小时
+  refresh-expiration: 604800000  # 7天
+
+cors:
+  allowed-origins: ${CORS_ORIGINS}
+
+rate-limit:
+  enabled: false
+  max-requests-per-minute: 60
+```
+
+> 说明：上方示例使用环境变量占位，避免在文档中保留敏感默认值；本地开发可通过 `.env`/启动参数/IDE 环境变量注入。
+
+#### application-prod.yml（示例）
+```yaml
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000
   refresh-expiration: 604800000
 
 cors:
-  origins: ${CORS_ORIGINS}
+  allowed-origins: ${CORS_ORIGINS}
 
-rate:
-  limit: 60
+rate-limit:
+  enabled: true
+  max-requests-per-minute: 60
 ```
 
 ### 7.4 部署步骤
@@ -1132,16 +1119,16 @@ A: 在系统设置的"合同类型字段配置"中，为不同的合同类型定
 | 配置项 | 说明 | 默认值 | 生产环境建议值 |
 |--------|------|--------|----------------|
 | server.port | 应用服务器端口 | 8081 | 8081 |
-| spring.datasource.url | 数据库连接URL | jdbc:h2:file:./data/contractdb | jdbc:mysql://master_ip:3306/contract_db |
-| spring.datasource.username | 数据库用户名 | sa | contract_user |
-| spring.datasource.password | 数据库密码 | - | 强密码 |
-| jwt.secret | JWT密钥 | dev-secret-key | 32位随机字符串 |
-| jwt.expiration | Access Token有效期 | 7200000 (2小时) | 7200000 |
+| spring.datasource.url | 数据库连接URL | jdbc:mysql://localhost:3306/contract_db... | jdbc:mysql://master_ip:3306/contract_db |
+| spring.datasource.username | 数据库用户名 | ${DB_USERNAME:root} | ${DB_USERNAME} |
+| spring.datasource.password | 数据库密码 | ${DB_PASSWORD:root} | ${DB_PASSWORD} |
+| jwt.secret | JWT密钥 | ${JWT_SECRET} | ${JWT_SECRET}（强随机值） |
+| jwt.expiration | Access Token有效期 | 86400000 (24小时) | 86400000 |
 | jwt.refresh-expiration | Refresh Token有效期 | 604800000 (7天) | 604800000 |
-| cors.origins | 跨域白名单 | http://localhost:3000 | https://your-domain.com |
-| rate.limit | API速率限制 | 60 (次/分钟) | 60 |
-| spring.servlet.multipart.max-file-size | 文件上传大小限制 | 10MB | 50MB |
-| spring.servlet.multipart.max-request-size | 请求大小限制 | 10MB | 50MB |
+| cors.allowed-origins | 跨域白名单 | ${CORS_ORIGINS} | 生产域名白名单 |
+| rate-limit.max-requests-per-minute | API速率限制 | 60 (次/分钟) | 60 |
+| spring.servlet.multipart.max-file-size | 文件上传大小限制 | 40MB | 按业务评估（建议 40-100MB） |
+| spring.servlet.multipart.max-request-size | 请求大小限制 | 40MB | 按业务评估（建议 40-100MB） |
 
 #### 15.2.2 前端核心配置
 | 配置项 | 说明 | 默认值 | 生产环境建议值 |
@@ -1465,6 +1452,17 @@ A: 在系统设置的"合同类型字段配置"中，为不同的合同类型定
 - **故障文档**：记录常见故障和解决方案
 - **变更文档**：记录系统变更历史
 
+### 19.4 文档单点维护流程（当前执行口径）
+
+- **入口优先**：接口变更先更新分域入口文档
+  - 业务域：`API_BUSINESS.md`
+  - 系统/运维域：`API_SYSTEM.md`
+- **完整收口**：`API_DOC.md` 作为全量参考，在迭代收口时统一回填。
+- **路由对账**：控制器路由变化后，更新并提交基线文件：
+  - `python3 scripts/scan-controller-routes.py > scripts/controller-routes.baseline.tsv`
+- **索引联动**：若新增文档或职责说明，同步更新 `README.md` 与 `docs/README.md`。
+- **变更验收**：文档收口后至少执行一次前后端编译，避免文档指令与实际流程偏离。
+
 ## 20. 附录
 
 ### 20.1 技术文档
@@ -1524,6 +1522,6 @@ A: 在系统设置的"合同类型字段配置"中，为不同的合同类型定
 
 ---
 
-**文档版本**：v1.3.0
-**最后更新**：2026-04-01
+**文档版本**：v1.3.1
+**最后更新**：2026-04-21
 **作者**：合同管理系统开发团队

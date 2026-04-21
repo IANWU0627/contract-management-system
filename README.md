@@ -30,41 +30,18 @@
 ### 环境要求
 
 - **Node.js**: 18.x 或更高
-- **Java**: 17 或更高
+- **Java**: 21 或更高
 - **Maven**: 3.6+（或使用项目自带的mvnw）
-- **MySQL**: 8.0+（可选，内置H2数据库可用于开发）
+- **MySQL**: 8.0+（当前默认开发配置）
 
-### 方式一：使用内置H2数据库（推荐开发用）
-
-1. **启动后端**
-   ```bash
-   cd backend
-   ./mvnw spring-boot:run
-   ```
-   或Windows:
-   ```bash
-   cd backend
-   mvnw.cmd spring-boot:run
-   ```
-2. **启动前端**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-3. **访问应用**
-   - 前端地址: <http://localhost:3000>
-   - 后端地址: <http://localhost:8081>
-   - 默认账号: admin / admin123
-
-### 方式二：使用MySQL数据库
+### 默认方式：使用 MySQL（与当前代码配置一致）
 
 1. **创建数据库**
    ```sql
    CREATE DATABASE contract_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
-2. **修改配置**
-   编辑 `backend/src/main/resources/application.yml`，配置数据库连接
+2. **按需修改配置**
+   编辑 `backend/src/main/resources/application.yml`，确认数据库连接参数
 3. **启动后端**
    ```bash
    cd backend
@@ -76,6 +53,13 @@
    npm install
    npm run dev
    ```
+
+5. **访问应用**
+   - 前端地址: <http://localhost:3000>
+   - 后端地址: <http://localhost:8081>
+   - 默认账号: admin / admin123
+
+> 说明：历史版本曾提供 H2 本地开发方案；当前仓库默认配置为 MySQL。若需启用 H2，请以实际 profile 配置和代码为准，不建议直接按旧文档操作。
 
 详细说明请参考 [QUICKSTART.md](./QUICKSTART.md)
 
@@ -93,7 +77,7 @@
 
 ### 后端
 
-- Java 17
+- Java 21
 - Spring Boot
 - Spring Security + JWT
 - MyBatis Plus
@@ -132,6 +116,9 @@ contract-management-system/
 
 - [文档索引](./docs/README.md)
 - [快速启动指南](./QUICKSTART.md)
+- [业务 API 入口](./docs/API_BUSINESS.md)
+- [系统/运维 API 入口](./docs/API_SYSTEM.md)
+- [控制器分层说明](./docs/CONTROLLER_LAYERING.md)
 - [API 文档](./docs/API_DOC.md)
 - [数据库说明](./docs/DATABASE.md)
 - [技术规格](./docs/SPEC.md)
