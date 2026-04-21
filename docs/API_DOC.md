@@ -1354,6 +1354,7 @@ Query：`status`、`page`、`pageSize`（实现见 `RenewalListController`）。
 
 - **GET** `/api/contracts/expiring` — 即将到期合同列表
 - **GET** `/api/contracts/statistics/expiration` — 到期统计
+- **GET** `/api/contracts/workbench/expiring-summary` — 工作台到期聚合（1/7/30 天分桶 + owner 视图）
 
 ---
 
@@ -1497,7 +1498,7 @@ Query：`status`、`page`、`pageSize`（实现见 `RenewalListController`）。
 | 条款库 | `/api/clauses` | `ContractClauseController` |
 | 相对方 | `/api/contract-counterparties` | `ContractCounterpartyController` |
 | 变更记录 | `/api/contracts/{contractId}/change-logs`、`/api/change-logs` | `ContractChangeLogController` |
-| 到期预警 | `/api/contracts/expiring`、`/api/contracts/statistics/expiration` | `ExpirationWarningController` |
+| 到期预警 | `/api/contracts/expiring`、`/api/contracts/statistics/expiration`、`/api/contracts/workbench/expiring-summary` | `ExpirationWarningController` |
 | 管理初始化 | `/api/admin/init-permissions` | `AdminController` |
 
 ### 文档维护清单（防再次偏差）
@@ -1525,4 +1526,4 @@ Query：`status`、`page`、`pageSize`（实现见 `RenewalListController`）。
 
 ---
 
-*API文档最后更新：2026-04-21（第四轮：通知/系统/外部合同/分类/条款/相对方/变更日志/到期预警 与续签状态流转补齐）*
+*API文档最后更新：2026-04-21（第五轮：补齐到期工作台聚合接口 `/api/contracts/workbench/expiring-summary`）*

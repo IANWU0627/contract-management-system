@@ -25,6 +25,7 @@
 8. 收藏与标签：`/api/favorites/*`、`/api/tags/*`
 9. 文件夹：`/api/contract-folders/*`
 10. 统计报表：`/api/statistics/*`
+11. 到期预警与工作台：`/api/contracts/expiring`、`/api/contracts/statistics/expiration`、`/api/contracts/workbench/expiring-summary`
 
 ---
 
@@ -38,7 +39,7 @@
 
 ## 详细内容位置
 
-- 认证、合同、模板、变量、用户、角色、提醒、收藏标签、文件夹、统计：
+- 认证、合同、模板、变量、用户、角色、提醒、收藏标签、文件夹、统计、到期预警：
   - 见 `API_DOC.md` 第 2 到第 11 章与第 13 章相关内容
 - 若需要系统/运维类接口：
   - 见 `API_SYSTEM.md`
