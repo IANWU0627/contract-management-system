@@ -32,10 +32,6 @@ export type UserListData = PageData<User>
 export const getUserList = (params?: UserListQuery, options?: { signal?: AbortSignal }) =>
   get<ApiResponse<UserListData>>('/users', { params, ...(options?.signal ? { signal: options.signal } : {}) })
 
-// 用户详情
-export const getUser = (id: number) => 
-  get(`/users/${id}`)
-
 // 创建用户
 export const createUser = (data: Partial<User>) => 
   post('/users', data)

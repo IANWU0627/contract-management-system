@@ -55,9 +55,6 @@ export async function fetchAllTemplateVariables(
   return all
 }
 
-export const getTemplateVariable = (id: number) =>
-  get<ApiResponse<TemplateVariableItem>>(`/template-variables/${id}`)
-
 export const getVariableCategories = () =>
   get<ApiResponse<Array<{ value: string; label: string }>>>('/template-variables/categories')
 

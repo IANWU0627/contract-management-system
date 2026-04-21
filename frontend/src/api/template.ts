@@ -41,16 +41,6 @@ export const deleteTemplate = (id: number) => del(`/templates/${id}`)
 export const previewTemplate = (id: number, params?: Record<string, string>) => 
   post(`/templates/${id}/preview`, params || {})
 
-export const substituteTemplate = (id: number, data: {
-  contractNo?: string
-  counterparties?: Array<{ type: string; name: string; idNumber?: string }>
-  startDate?: string
-  endDate?: string
-  amount?: number
-  productName?: string
-  [key: string]: any
-}) => post(`/templates/${id}/substitute`, data)
-
 export const getTemplateVariables = (id: number) => 
   get(`/templates/variables/${id}`)
 
@@ -75,9 +65,6 @@ export interface TemplateVariable {
   options?: string
   defaultValue?: string
 }
-
-export const getAvailableVariables = (contractType?: string) =>
-  get('/templates/variables/list', contractType ? { params: { contractType } } : {})
 
 export const extractTemplateVariables = (content: string) =>
   get<ApiResponse<string[]>>('/templates/variables/extract', { params: { content } })

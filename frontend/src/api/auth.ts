@@ -1,4 +1,4 @@
-import { get, post, put, del } from './index'
+import { get, post, put } from './index'
 
 // 登录
 export const login = (data: { username: string; password: string }) => 
@@ -7,9 +7,6 @@ export const login = (data: { username: string; password: string }) =>
 // 注册
 export const register = (data: { username: string; password: string; email?: string }) => 
   post('/auth/register', data)
-
-// 刷新Token
-export const refreshToken = () => post('/auth/refresh', {})
 
 // 获取用户信息
 export const getUserInfo = () => get('/users/me')

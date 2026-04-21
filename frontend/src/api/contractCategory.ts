@@ -24,9 +24,6 @@ export const getContractCategories = () => get('/contract-categories')
 export const getAllContractCategories = (page: number = 1, pageSize: number = 10) => 
   get('/contract-categories/all', { params: { page, pageSize } })
 
-// 获取单个分类
-export const getContractCategory = (id: number) => get(`/contract-categories/${id}`)
-
 // 创建分类
 export const createContractCategory = (data: Partial<ContractCategory>) => 
   post('/contract-categories', data)

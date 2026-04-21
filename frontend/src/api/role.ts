@@ -32,6 +32,4 @@ export const deleteRole = (id: number) => del(`/roles/${id}`)
 
 export const toggleRole = (id: number) => put(`/roles/${id}/toggle`)
 
-export const getPermissions = () => get('/roles/permissions')
-
 export const getActivePermissions = () => get('/roles/permissions')

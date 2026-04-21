@@ -32,8 +32,6 @@ export const getClauseList = (params?: {
   status?: number
 }) => get('/clauses', { params })
 
-export const getClause = (id: number) => get(`/clauses/${id}`)
-
 export const getClauseReferences = () =>
   get<Record<string, ClauseReferenceSummary>>('/clauses/references')
 

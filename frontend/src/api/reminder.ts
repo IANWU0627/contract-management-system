@@ -1,4 +1,4 @@
-import { get, post, put, del } from './index'
+import { get, post, put } from './index'
 
 export interface Reminder {
   id?: number
@@ -21,17 +21,15 @@ export const getMyReminders = (params?: {
   status?: number | ''
 }) => get('/reminders/my', { params })
 
-// 获取所有提醒
-export const getAllReminders = () => get('/reminders')
-
 // 标记为已读
 export const markReminderRead = (id: number) => put(`/reminders/${id}/read`)
 
 // 批量标记已读
 export const markReminderBatchRead = (ids: number[]) => put('/reminders/read-batch', { ids })
 
-// 删除提醒
-export const deleteReminder = (id: number) => del(`/reminders/${id}`)
-
 // 手动触发检查
 export const triggerReminderCheck = () => post('/reminders/check')
+
+// 创建提醒
+export const createReminder = (data: Partial<Reminder> & { recipientUserId?: number }) =>
+  post('/reminders', data)

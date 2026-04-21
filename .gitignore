@@ -38,6 +38,8 @@ backend/.DS_Store
 *.tmp
 *.temp
 *.cache
+__pycache__/
+*.pyc
 
 # 数据库文件
 *.db

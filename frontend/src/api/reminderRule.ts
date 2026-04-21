@@ -12,9 +12,6 @@ export interface ReminderRule {
   isPublic?: boolean
 }
 
-export const getReminderRules = () =>
-  get('/reminder-rules')
-
 export const getMyReminderRules = () =>
   get('/reminder-rules/my')
 

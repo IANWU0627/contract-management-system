@@ -37,9 +37,3 @@ export const addTagToContract = (contractId: number, tagId: number) =>
 
 export const removeTagFromContract = (contractId: number, tagId: number) =>
   del(`/tags/contract/${contractId}/${tagId}`)
-
-export const updateContractTags = (contractId: number, tags: Tag[]) =>
-  put(`/tags/contract/${contractId}`, { tags })
-
-export const getContractsByTag = (tagId: number) =>
-  get(`/tags/${tagId}/contracts`)

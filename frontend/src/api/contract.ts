@@ -72,10 +72,6 @@ export const getContractPayload = (id: number) =>
 export const getContractSnapshots = (id: number) =>
   get(`/contracts/${id}/snapshots`)
 
-// 合同快照详情
-export const getContractSnapshotDetail = (id: number, snapshotId: number) =>
-  get(`/contracts/${id}/snapshots/${snapshotId}`)
-
 // 审批摘要卡片（查询）
 export const getApprovalSummary = (id: number) =>
   get(`/contracts/${id}/approval-summary`)
@@ -90,10 +86,6 @@ export const getPerformanceMilestones = (id: number) =>
 
 export const extractPerformanceMilestones = (id: number) =>
   post(`/contracts/${id}/performance-milestones/extract`)
-
-// 合同关联信息（主合同/补充协议）
-export const getRelatedContracts = (id: number) =>
-  get(`/contracts/${id}/related`)
 
 // 创建合同
 export const createContract = (data: Partial<Contract>) => 
@@ -175,11 +167,6 @@ export const uploadContractFile = (file: File, contractId?: number) => {
   })
 }
 
-// 删除合同附件
-export const deleteContractAttachment = (fileName: string) => {
-  return del(`/contracts/attachments/${encodeURIComponent(fileName)}`)
-}
-
 // 批量更新状态
 export const batchUpdateStatus = (ids: number[], status: string) =>
   post('/contracts/batch-status', { ids, status })
@@ -200,21 +187,6 @@ export const batchEdit = (ids: number[], data: { type?: string; counterparty?: s
 export const getApprovalHistory = (contractId: number) =>
   get(`/contracts/${contractId}/approvals`)
 
-// 下载Word
-export const downloadContractWord = (id: number) => {
-  const baseURL = import.meta.env.VITE_API_URL || ''
-  const token = localStorage.getItem('token')
-  const url = `${baseURL}/api/contracts/${id}/word`
-  const link = document.createElement('a')
-  link.href = url
-  if (token) {
-    link.setAttribute('Authorization', `Bearer ${token}`)
-  }
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-}
-
 // 获取到期预警列表
 export const getExpiringContracts = (params: {
   days?: number
@@ -222,8 +194,8 @@ export const getExpiringContracts = (params: {
   status?: string
 }) => get('/contracts/expiring', { params })
 
-// 获取到期预警统计
-export const getExpirationStats = () => get('/contracts/statistics/expiration')
+// 到期工作台聚合数据（30/7/1天）
+export const getExpiringWorkbenchSummary = () => get('/contracts/workbench/expiring-summary')
 
 // 获取下一个合同编号
 export const getNextContractNo = () => get('/contracts/next-number')
