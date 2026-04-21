@@ -75,6 +75,7 @@ POST	/api/contracts/generate-pdf	ContractController.java
 GET	/api/contracts/next-number	ContractController.java
 GET	/api/contracts/statistics/expiration	ExpirationWarningController.java
 POST	/api/contracts/upload	ContractController.java
+GET	/api/contracts/workbench/expiring-summary	ExpirationWarningController.java
 GET	/api/contracts/{contractId}/change-logs	ContractChangeLogController.java
 POST	/api/contracts/{contractId}/change-logs	ContractChangeLogController.java
 GET	/api/contracts/{contractId}/renewals	RenewalController.java
