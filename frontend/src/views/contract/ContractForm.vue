@@ -66,7 +66,7 @@
         />
 
         <div class="form-actions">
-          <el-button v-if="isEdit" type="warning" :loading="aiAnalyzing" @click="handleEditAiAnalyze">
+          <el-button type="info" plain :loading="aiAnalyzing || savingDraft" @click="handleAiAnalyze">
             {{ $t('ai.analyze') }}
           </el-button>
           <el-button v-if="isEdit" type="info" :loading="savingDraft" @click="handleSaveDraft">{{ $t('common.saveDraft') }}</el-button>
@@ -199,7 +199,8 @@ const {
   aiAnalyzing,
   aiConfigSnapshot,
   aiResult,
-  handleEditAiAnalyze
+  handleEditAiAnalyze,
+  handleAiAnalyzeById
 } = useContractFormAi(form, isEdit, contractId)
 
 const savingDraft = ref(false)
@@ -397,10 +398,10 @@ const fetchContract = async () => {
   }
 }
 
-const handleSaveDraft = async () => {
+const handleSaveDraft = async (options?: { silentSuccess?: boolean }): Promise<number | null> => {
   if (form.relationType === 'SUPPLEMENT' && !form.parentContractId) {
     ElMessage.error(t('contract.error.parentContract'))
-    return
+    return null
   }
   savingDraft.value = true
   try {
@@ -477,12 +478,48 @@ const handleSaveDraft = async () => {
       }
     }
 
-    ElMessage.success(t('common.success'))
+    if (!options?.silentSuccess) {
+      ElMessage.success(t('common.success'))
+    }
+    return savedContractId || null
   } catch {
     ElMessage.error(t('common.error'))
+    return null
   } finally {
     savingDraft.value = false
   }
+}
+
+const handleAiAnalyze = async () => {
+  const missingFields: string[] = []
+  if (!form.title?.trim()) missingFields.push(t('ai.precheckFieldTitle'))
+  if (!form.type?.trim()) missingFields.push(t('ai.precheckFieldType'))
+  if (!form.startDate) missingFields.push(t('ai.precheckFieldStartDate'))
+  if (!form.endDate) missingFields.push(t('ai.precheckFieldEndDate'))
+  if (form.counterparties.length < 2) {
+    missingFields.push(t('ai.precheckFieldCounterparties'))
+  } else if (form.counterparties.some(cp => !cp.name?.trim())) {
+    missingFields.push(t('ai.precheckFieldCounterpartyName'))
+  }
+  if (form.relationType === 'SUPPLEMENT' && !form.parentContractId) {
+    missingFields.push(t('ai.precheckFieldParentContract'))
+  }
+  if (missingFields.length > 0) {
+    ElMessage.warning(
+      t('ai.precheckMissingFields', {
+        fields: missingFields.join('、')
+      })
+    )
+    return
+  }
+
+  if (isEdit.value) {
+    await handleEditAiAnalyze()
+    return
+  }
+  const savedContractId = await handleSaveDraft({ silentSuccess: true })
+  if (!savedContractId) return
+  await handleAiAnalyzeById(savedContractId)
 }
 
 const handleSubmit = async () => {

@@ -171,6 +171,89 @@ public class ExpirationWarningController {
         return ApiResponse.success(result);
     }
 
+    @GetMapping("/workbench/expiring-summary")
+    public ApiResponse<Map<String, Object>> getExpiringWorkbenchSummary() {
+        LocalDate today = LocalDate.now();
+        LocalDate d1 = today.plusDays(1);
+        LocalDate d7 = today.plusDays(7);
+        LocalDate d30 = today.plusDays(30);
+
+        List<Contract> contracts = queryContractsWithin(today, d30);
+        List<Map<String, Object>> bucket1d = new ArrayList<>();
+        List<Map<String, Object>> bucket7d = new ArrayList<>();
+        List<Map<String, Object>> bucket30d = new ArrayList<>();
+
+        for (Contract contract : contracts) {
+            LocalDate endDate = contract.getEndDate();
+            if (endDate == null) {
+                continue;
+            }
+            long daysRemaining = ChronoUnit.DAYS.between(today, endDate);
+            Map<String, Object> item = toWorkbenchItem(contract, daysRemaining);
+            if (!endDate.isAfter(d1)) {
+                bucket1d.add(item);
+            }
+            if (!endDate.isAfter(d7)) {
+                bucket7d.add(item);
+            }
+            bucket30d.add(item);
+        }
+
+        Map<String, Object> overview = new HashMap<>();
+        overview.put("today", bucket1d.size());
+        overview.put("within7Days", bucket7d.size());
+        overview.put("within30Days", bucket30d.size());
+        overview.put("totalAmount", bucket30d.stream()
+                .map(i -> i.get("amount"))
+                .filter(Number.class::isInstance)
+                .map(Number.class::cast)
+                .mapToDouble(Number::doubleValue)
+                .sum());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("overview", overview);
+        result.put("oneDay", bucket1d);
+        result.put("sevenDays", bucket7d);
+        result.put("thirtyDays", bucket30d);
+        return ApiResponse.success(result);
+    }
+
+    private List<Contract> queryContractsWithin(LocalDate start, LocalDate end) {
+        QueryWrapper<Contract> wrapper = new QueryWrapper<>();
+        wrapper.isNotNull("end_date")
+                .ge("end_date", start)
+                .le("end_date", end)
+                .orderByAsc("end_date");
+        applyRoleIsolation(wrapper);
+        return contractMapper.selectList(wrapper);
+    }
+
+    private Map<String, Object> toWorkbenchItem(Contract contract, long daysRemaining) {
+        Map<String, Object> item = new HashMap<>();
+        item.put("id", contract.getId());
+        item.put("contractNo", contract.getContractNo());
+        item.put("title", contract.getTitle());
+        item.put("type", contract.getType());
+        item.put("status", contract.getStatus());
+        item.put("amount", contract.getAmount());
+        item.put("endDate", contract.getEndDate());
+        item.put("daysRemaining", daysRemaining);
+        item.put("counterparty", resolveCounterpartyText(contract));
+        item.put("creatorId", contract.getCreatorId());
+        item.put("currentApproverName", contract.getCurrentApproverName());
+
+        String recommendedAction;
+        if ("SIGNED".equals(contract.getStatus()) || "APPROVED".equals(contract.getStatus())) {
+            recommendedAction = "startRenewal";
+        } else if ("DRAFT".equals(contract.getStatus())) {
+            recommendedAction = "submit";
+        } else {
+            recommendedAction = "view";
+        }
+        item.put("recommendedAction", recommendedAction);
+        return item;
+    }
+
     private void applyRoleIsolation(QueryWrapper<Contract> wrapper) {
         contractDataScopeService.applyContractVisibilityFilter(wrapper);
     }

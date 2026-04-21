@@ -96,8 +96,8 @@ export function useContractFormAi(
     }
   }
 
-  const handleEditAiAnalyze = async () => {
-    if (!isEdit.value || !contractId.value) {
+  const runAiAnalyze = async (targetContractId: number) => {
+    if (!targetContractId) {
       ElMessage.warning('请先保存合同后再进行 AI 分析')
       return
     }
@@ -105,7 +105,7 @@ export function useContractFormAi(
     aiAnalyzing.value = true
     try {
       const aiConfig = await loadAiRuntimeConfig()
-      const res = await analyzeContract(contractId.value, aiConfig)
+      const res = await analyzeContract(targetContractId, aiConfig)
       aiResult.value = normalizeAiResult(res.data)
     } catch (error: unknown) {
       aiResult.value = createAiFallbackResult()
@@ -115,11 +115,24 @@ export function useContractFormAi(
     }
   }
 
+  const handleEditAiAnalyze = async () => {
+    if (!isEdit.value || !contractId.value) {
+      ElMessage.warning('请先保存合同后再进行 AI 分析')
+      return
+    }
+    await runAiAnalyze(contractId.value)
+  }
+
+  const handleAiAnalyzeById = async (targetContractId: number) => {
+    await runAiAnalyze(targetContractId)
+  }
+
   return {
     aiDialogVisible,
     aiAnalyzing,
     aiConfigSnapshot,
     aiResult,
-    handleEditAiAnalyze
+    handleEditAiAnalyze,
+    handleAiAnalyzeById
   }
 }

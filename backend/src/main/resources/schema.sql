@@ -237,6 +237,9 @@ CREATE TABLE IF NOT EXISTS contract_reminder (
     updated_at TIMESTAMP
 );
 
+ALTER TABLE contract_reminder
+    ADD COLUMN recipient_user_id BIGINT NULL;
+
 -- 创建合同续约表
 CREATE TABLE IF NOT EXISTS contract_renewal (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -533,6 +536,23 @@ CREATE TABLE IF NOT EXISTS template_variable (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 创建通知中心消息表
+CREATE TABLE IF NOT EXISTS notification_message (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    type VARCHAR(64) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT,
+    data TEXT,
+    is_read BOOLEAN DEFAULT FALSE,
+    is_important BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+ALTER TABLE notification_message
+    ADD COLUMN IF NOT EXISTS is_important BOOLEAN DEFAULT FALSE;
+
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_comment_contract ON contract_comment(contract_id);
 CREATE INDEX IF NOT EXISTS idx_comment_user ON contract_comment(user_id);
@@ -541,3 +561,7 @@ CREATE INDEX IF NOT EXISTS idx_type_field_type ON contract_type_field(contract_t
 CREATE UNIQUE INDEX IF NOT EXISTS idx_type_field_key ON contract_type_field(contract_type, field_key);
 CREATE INDEX IF NOT EXISTS idx_cfv_contract ON contract_field_value(contract_id);
 CREATE INDEX IF NOT EXISTS idx_cfv_field ON contract_field_value(contract_id, field_key);
+CREATE INDEX IF NOT EXISTS idx_notification_user_created ON notification_message(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notification_user_read ON notification_message(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notification_user_important ON notification_message(user_id, is_important);
+CREATE INDEX IF NOT EXISTS idx_reminder_recipient_created ON contract_reminder(recipient_user_id, created_at DESC);

@@ -16,23 +16,33 @@
    CREATE DATABASE contract_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
 
-2. **修改配置**
-   编辑 `backend/src/main/resources/application.yml`，确认数据库连接参数
+2. **设置后端环境变量（必填）**
+   可参考 `backend/.env.example`，并在启动命令前注入环境变量。
+   至少需要配置：`DB_URL`、`DB_USERNAME`、`DB_PASSWORD`、`JWT_SECRET`、`CORS_ORIGINS`、`EXTERNAL_API_KEY`。
 
-3. **启动后端**
+3. **按需修改配置**
+   编辑 `backend/src/main/resources/application.yml`，确认数据库连接参数（如 `DB_URL`）。
+
+4. **启动后端**
    ```bash
    cd backend
+   DB_URL="jdbc:mysql://localhost:3306/contract_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true" \
+   DB_USERNAME=root \
+   DB_PASSWORD=root \
+   JWT_SECRET=replace-me \
+   CORS_ORIGINS=http://localhost:3000 \
+   EXTERNAL_API_KEY=replace-with-a-strong-random-key \
    ./mvnw spring-boot:run
    ```
 
-4. **启动前端**
+5. **启动前端**
    ```bash
    cd frontend
    npm install
    npm run dev
    ```
 
-5. **访问应用**
+6. **访问应用**
    - 前端地址: http://localhost:3000
    - 后端地址: http://localhost:8081
    - 默认账号: admin / admin123
@@ -77,6 +87,25 @@ cd backend
 # 跳过测试打包
 ./mvnw clean package -DskipTests
 ```
+
+### 数据修复脚本（提醒去重）
+```bash
+cd /path/to/contract-management-system
+
+# 仅预览（默认）
+DB_URL="jdbc:mysql://localhost:3306/contract_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true" \
+DB_USERNAME=root \
+DB_PASSWORD=root \
+python3 scripts/cleanup-duplicate-reminders.py
+
+# 执行清理（保留每组最新一条 active 提醒）
+DB_URL="jdbc:mysql://localhost:3306/contract_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true" \
+DB_USERNAME=root \
+DB_PASSWORD=root \
+python3 scripts/cleanup-duplicate-reminders.py --apply
+```
+
+> `--apply` 会先自动导出待删除行到 `scripts/cleanup-backups/*.tsv`，再执行删除，便于回滚排查。
 
 ## 📋 项目结构
 
@@ -131,7 +160,7 @@ contract-management-system/
 ## 💡 开发建议
 
 1. **使用Git进行版本控制**
-2. **先在H2数据库上开发**
+2. **本地开发使用 MySQL 并通过环境变量注入敏感配置**
 3. **提交前运行类型检查**
 4. **遵循代码规范**
 

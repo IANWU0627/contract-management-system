@@ -76,6 +76,8 @@ public class ReminderSchedulerService {
                     log.info("合同匹配规则: {}", rule.getName());
                     createOrUpdateReminder(contract, daysRemaining);
                     matched = true;
+                    // 单次调度内同一合同只处理一次，避免命中多条规则时重复提醒
+                    break;
                 } else {
                     log.info("合同不匹配规则: {}", rule.getName());
                 }
@@ -135,11 +137,13 @@ public class ReminderSchedulerService {
     }
     
     private void createOrUpdateReminder(Contract contract, int daysRemaining) {
-        // 检查是否已经存在针对该合同的提醒（不考虑具体天数）
+        // 检查是否已经存在针对该合同的提醒（历史数据可能有重复，取最新一条）
         QueryWrapper<ContractReminder> wrapper = new QueryWrapper<>();
         wrapper.eq("contract_id", contract.getId());
-        
-        ContractReminder existing = reminderMapper.selectOne(wrapper);
+        wrapper.orderByDesc("id");
+        wrapper.last("LIMIT 1");
+        List<ContractReminder> existingList = reminderMapper.selectList(wrapper);
+        ContractReminder existing = existingList.isEmpty() ? null : existingList.get(0);
         
         if (existing == null) {
             ContractReminder reminder = new ContractReminder();

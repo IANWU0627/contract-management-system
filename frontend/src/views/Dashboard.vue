@@ -235,6 +235,130 @@
             </div>
           </div>
         </el-card>
+
+        <el-card shadow="hover" class="expiring-workbench-card">
+          <template #header>
+            <div class="card-header">
+              <el-icon><Bell /></el-icon>
+              <span>{{ t('dashboard.expirationReminder') }}</span>
+            </div>
+          </template>
+          <div class="expiring-overview">
+            <div class="overview-pill danger">
+              <span class="label">{{ t('dashboard.workbench.within1Day') }}</span>
+              <span class="value">{{ expiringOverview.today }}</span>
+            </div>
+            <div class="overview-pill warning">
+              <span class="label">{{ t('dashboard.workbench.within7Days') }}</span>
+              <span class="value">{{ expiringOverview.within7Days }}</span>
+            </div>
+            <div class="overview-pill default">
+              <span class="label">{{ t('dashboard.workbench.within30Days') }}</span>
+              <span class="value">{{ expiringOverview.within30Days }}</span>
+            </div>
+          </div>
+          <el-segmented
+            v-model="expiringBucket"
+            :options="[
+              { label: t('dashboard.workbench.bucket1Day'), value: 'oneDay' },
+              { label: t('dashboard.workbench.bucket7Days'), value: 'sevenDays' },
+              { label: t('dashboard.workbench.bucket30Days'), value: 'thirtyDays' }
+            ]"
+            size="small"
+            class="expiring-bucket-switch"
+          />
+          <div class="expiring-actions">
+            <el-radio-group v-model="workbenchViewMode" size="small">
+              <el-radio-button value="list">{{ t('dashboard.workbench.listView') }}</el-radio-button>
+              <el-radio-button value="owner">{{ t('dashboard.workbench.ownerView') }}</el-radio-button>
+            </el-radio-group>
+            <div class="expiring-filters">
+              <el-switch v-model="workbenchOnlyMine" inline-prompt :active-text="t('dashboard.workbench.onlyMine')" />
+              <el-switch
+                v-model="workbenchOnlyExecutable"
+                inline-prompt
+                :active-text="t('dashboard.workbench.onlyExecutable')"
+              />
+              <el-tag size="small" type="success">
+                {{ t('dashboard.workbench.executableRenewalCount', { count: executableRenewalCount }) }}
+              </el-tag>
+              <el-tag size="small" type="warning">
+                {{ t('dashboard.workbench.executableReminderCount', { count: executableReminderCount }) }}
+              </el-tag>
+            </div>
+            <div class="batch-actions" v-if="workbenchViewMode === 'list'">
+              <el-checkbox
+                :model-value="allVisibleSelected"
+                :indeterminate="isVisiblePartiallySelected"
+                @change="toggleSelectAllVisible"
+              >
+                {{ t('dashboard.workbench.selectAll') }}
+              </el-checkbox>
+              <el-button size="small" :disabled="selectedExpiringIds.length === 0" @click="handleBatchRenewal">
+                {{ t('dashboard.workbench.batchRenewal') }}
+              </el-button>
+              <el-button size="small" :disabled="selectedExpiringIds.length === 0" @click="handleBatchReminder">
+                {{ t('dashboard.workbench.batchReminder') }}
+              </el-button>
+            </div>
+          </div>
+          <div class="expiring-list" v-loading="expiringLoading">
+            <div v-if="activeExpiringList.length === 0" class="expiring-empty">
+              {{ t('dashboard.workbench.empty') }}
+            </div>
+            <template v-else-if="workbenchViewMode === 'owner'">
+              <div v-for="group in groupedExpiringByOwner" :key="group.ownerKey" class="owner-group">
+                <div class="owner-header">
+                  <span class="owner-name">{{ group.ownerName }}</span>
+                  <span class="owner-count">{{ group.items.length }} 条</span>
+                </div>
+                <div v-for="item in group.items.slice(0, 3)" :key="item.id" class="expiring-item grouped">
+                  <div class="expiring-main" @click="$router.push(`/contracts/${item.id}`)">
+                    <div class="expiring-title">{{ item.title || item.contractNo }}</div>
+                    <div class="expiring-meta">
+                      <span class="contract-no">{{ item.contractNo }}</span>
+                      <span :class="['remaining-days', item.daysRemaining <= 1 ? 'danger' : item.daysRemaining <= 7 ? 'warning' : '']">
+                        {{ t('dashboard.workbench.remainingDays', { days: item.daysRemaining }) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div
+              v-else
+              v-for="item in activeExpiringList.slice(0, 8)"
+              :key="item.id"
+              :class="['expiring-item', { 'just-processed': recentlyProcessedIds.has(item.id) }]"
+            >
+              <el-checkbox :model-value="selectedExpiringIds.includes(item.id)" @change="toggleSelectItem(item.id)" />
+              <div class="expiring-main" @click="$router.push(`/contracts/${item.id}`)">
+                <div class="expiring-title">{{ item.title || item.contractNo }}</div>
+                <div class="expiring-meta">
+                  <span class="contract-no">{{ item.contractNo }}</span>
+                  <span :class="['remaining-days', item.daysRemaining <= 1 ? 'danger' : item.daysRemaining <= 7 ? 'warning' : '']">
+                    {{ t('dashboard.workbench.remainingDays', { days: item.daysRemaining }) }}
+                  </span>
+                </div>
+              </div>
+              <el-button
+                v-if="item.recommendedAction === 'startRenewal'"
+                type="primary"
+                link
+                size="small"
+                @click="handleStartRenewalFromDashboard(item)"
+              >
+                {{ t('dashboard.workbench.startRenewal') }}
+              </el-button>
+              <el-button v-else type="primary" link size="small" @click="$router.push(`/contracts/${item.id}`)">
+                {{ t('common.view') }}
+              </el-button>
+            </div>
+          </div>
+          <div class="expiring-footer">
+            <el-button type="primary" link @click="$router.push('/dashboard/expiration')">{{ t('common.viewAll') }}</el-button>
+          </div>
+        </el-card>
         
         <!-- 合同分析 -->
         <el-card shadow="hover" class="chart-card">
@@ -260,6 +384,71 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-dialog
+      v-model="batchResultDialogVisible"
+      :title="batchResultDialogTitle"
+      width="560px"
+      destroy-on-close
+    >
+      <div class="batch-result-summary">
+        <el-tag type="success">{{ t('dashboard.workbench.resultSuccess', { count: batchResult.success.length }) }}</el-tag>
+        <el-tag type="warning">{{ t('dashboard.workbench.resultReused', { count: batchResult.reused.length }) }}</el-tag>
+        <el-tag type="info">{{ t('dashboard.workbench.resultSkipped', { count: batchResult.skipped.length }) }}</el-tag>
+        <el-tag type="danger">{{ t('dashboard.workbench.resultFailed', { count: batchResult.failed.length }) }}</el-tag>
+      </div>
+      <div v-if="batchResult.success.length > 0" class="batch-result-section">
+        <div class="section-title">{{ t('dashboard.workbench.resultSuccessList') }}</div>
+        <div class="section-list">{{ batchResult.success.join('、') }}</div>
+      </div>
+      <div v-if="batchResult.reused.length > 0" class="batch-result-section">
+        <div class="section-title">{{ t('dashboard.workbench.resultReusedList') }}</div>
+        <div class="section-list">{{ batchResult.reused.join('、') }}</div>
+      </div>
+      <div v-if="batchResult.skipped.length > 0" class="batch-result-section">
+        <div class="section-title">{{ t('dashboard.workbench.resultSkippedList') }}</div>
+        <div class="section-list">{{ batchResult.skipped.join('、') }}</div>
+      </div>
+      <div v-if="batchResult.failed.length > 0" class="batch-result-section">
+        <div class="section-title with-action">
+          <span>{{ t('dashboard.workbench.resultFailedList') }}</span>
+          <el-button link type="primary" @click="copyBatchFailedList">
+            {{ t('dashboard.workbench.copyFailedList') }}
+          </el-button>
+        </div>
+        <div v-if="failedReasonGroups.length > 0" class="failed-reason-groups">
+          <button
+            class="reason-chip"
+            :class="{ active: !selectedFailedReason }"
+            @click="selectedFailedReason = ''"
+          >
+            {{ t('dashboard.workbench.failedReasonAll') }}：{{ batchResult.failed.length }}
+          </button>
+          <button
+            v-for="group in failedReasonGroups"
+            :key="group.reason"
+            class="reason-chip"
+            :class="{ active: selectedFailedReason === group.reason }"
+            @click="selectedFailedReason = group.reason"
+          >
+            {{ group.reason }}：{{ group.count }}
+          </button>
+        </div>
+        <div class="section-list">
+          <div v-for="entry in filteredFailedEntries" :key="entry.id" class="failed-item-row">
+            <span>{{ entry.name }}</span>
+            <el-button
+              link
+              type="primary"
+              :loading="retryingFailedIds.has(entry.id)"
+              @click="retrySingleFailedReminder(entry)"
+            >
+              {{ t('dashboard.workbench.retrySingle') }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -270,14 +459,18 @@ import { useI18n } from 'vue-i18n'
 import { get } from '@/api'
 import { getContractCategories } from '@/api/contractCategory'
 import { addFavorite, removeFavorite, getFavorites } from '@/api/favorite'
-import { ElMessage } from 'element-plus'
+import { getExpiringWorkbenchSummary, startRenewalFlow } from '@/api/contract'
+import { createReminder, getMyReminders } from '@/api/reminder'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import rough from 'roughjs'
 import { Lightning, DataAnalysis, Search, Star, StarFilled, Document, Money, Timer, Bell, Plus, FolderOpened, RefreshRight, MoreFilled, ArrowDown } from '@element-plus/icons-vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { DEFAULT_CURRENCY, formatAmountByLocale, getCurrencySymbol } from '@/utils/currency'
+import { useUserStore } from '@/stores/user'
 
 const { t, locale } = useI18n()
 const router = useRouter()
+const userStore = useUserStore()
 
 const loading = ref(true)
 
@@ -357,6 +550,119 @@ watch(currentRoughPreset, () => {
   })
 })
 const searchLoading = ref(false)
+const expiringLoading = ref(false)
+const WORKBENCH_FILTER_PREF_KEY = 'dashboard_workbench_filter_pref'
+const expiringBucket = ref<'oneDay' | 'sevenDays' | 'thirtyDays'>('sevenDays')
+const workbenchViewMode = ref<'list' | 'owner'>('list')
+const workbenchOnlyMine = ref(false)
+const workbenchOnlyExecutable = ref(false)
+const selectedExpiringIds = ref<number[]>([])
+const recentlyProcessedIds = ref<Set<number>>(new Set())
+const batchResultDialogVisible = ref(false)
+const batchResultDialogTitle = ref('')
+const selectedFailedReason = ref('')
+type FailedItemDetail = { name: string; reason: string }
+type FailedReminderEntry = {
+  id: number
+  name: string
+  contractNo?: string
+  contractTitle?: string
+  expireDate?: string
+  remindDays?: number
+  reason: string
+}
+const retryingFailedIds = ref<Set<number>>(new Set())
+const batchResult = ref<{
+  success: string[]
+  reused: string[]
+  skipped: string[]
+  failed: string[]
+  failedDetails: FailedItemDetail[]
+  failedEntries: FailedReminderEntry[]
+}>({
+  success: [],
+  reused: [],
+  skipped: [],
+  failed: [],
+  failedDetails: [],
+  failedEntries: []
+})
+const failedReasonGroups = computed(() => {
+  const grouped = new Map<string, number>()
+  ;(batchResult.value.failedDetails || []).forEach((detail) => {
+    grouped.set(detail.reason, (grouped.get(detail.reason) || 0) + 1)
+  })
+  return Array.from(grouped.entries()).map(([reason, count]) => ({ reason, count }))
+})
+const filteredFailedEntries = computed(() => {
+  const entries = (batchResult.value.failedEntries && batchResult.value.failedEntries.length > 0)
+    ? batchResult.value.failedEntries
+    : (batchResult.value.failedDetails || []).map((detail, idx) => ({
+        id: -(idx + 1),
+        name: detail.name,
+        reason: detail.reason
+      }))
+  if (!selectedFailedReason.value) return entries
+  return entries.filter((entry) => entry.reason === selectedFailedReason.value)
+})
+const expiringOverview = ref({
+  today: 0,
+  within7Days: 0,
+  within30Days: 0
+})
+const expiringWorkbench = ref<Record<'oneDay' | 'sevenDays' | 'thirtyDays', any[]>>({
+  oneDay: [],
+  sevenDays: [],
+  thirtyDays: []
+})
+const activeReminderContractIds = ref<Set<number>>(new Set())
+const currentUserId = computed(() => Number(userStore.userInfo?.id || 0))
+const activeExpiringList = computed(() => {
+  let items = expiringWorkbench.value[expiringBucket.value] || []
+  if (workbenchOnlyMine.value && currentUserId.value > 0) {
+    items = items.filter((item: any) => Number(item.creatorId) === currentUserId.value)
+  }
+  if (workbenchOnlyExecutable.value) {
+    items = items.filter((item: any) => (
+      item.recommendedAction === 'startRenewal'
+      || !activeReminderContractIds.value.has(Number(item.id))
+    ))
+  }
+  return items
+})
+const executableRenewalCount = computed(() => {
+  return activeExpiringList.value.filter((item: any) => item.recommendedAction === 'startRenewal').length
+})
+const executableReminderCount = computed(() => {
+  return activeExpiringList.value.filter(
+    (item: any) => !activeReminderContractIds.value.has(Number(item.id))
+  ).length
+})
+const groupedExpiringByOwner = computed(() => {
+  const grouped = new Map<string, { ownerKey: string; ownerName: string; items: any[] }>()
+  activeExpiringList.value.forEach((item: any) => {
+    const ownerName = item.currentApproverName
+      || (item.creatorId
+        ? t('dashboard.workbench.creatorOwner', { id: item.creatorId })
+        : t('dashboard.workbench.unassignedOwner'))
+    const ownerKey = item.currentApproverName ? `approver:${item.currentApproverName}` : `creator:${item.creatorId || 'unknown'}`
+    if (!grouped.has(ownerKey)) {
+      grouped.set(ownerKey, { ownerKey, ownerName, items: [] })
+    }
+    grouped.get(ownerKey)!.items.push(item)
+  })
+  return Array.from(grouped.values()).sort((a, b) => b.items.length - a.items.length)
+})
+const allVisibleSelected = computed(() => {
+  const visibleIds = activeExpiringList.value.slice(0, 8).map((item: any) => item.id)
+  return visibleIds.length > 0 && visibleIds.every(id => selectedExpiringIds.value.includes(id))
+})
+const isVisiblePartiallySelected = computed(() => {
+  const visibleIds = activeExpiringList.value.slice(0, 8).map((item: any) => item.id)
+  if (visibleIds.length === 0) return false
+  const selectedCount = visibleIds.filter(id => selectedExpiringIds.value.includes(id)).length
+  return selectedCount > 0 && selectedCount < visibleIds.length
+})
 
 const statusChartCanvasRef = ref<HTMLCanvasElement>()
 const typeChartCanvasRef = ref<HTMLCanvasElement>()
@@ -715,6 +1021,374 @@ const fetchData = async () => {
   }
 }
 
+const fetchExpiringWorkbench = async () => {
+  expiringLoading.value = true
+  try {
+    const res = await getExpiringWorkbenchSummary()
+    expiringOverview.value = res?.data?.overview || {
+      today: 0,
+      within7Days: 0,
+      within30Days: 0
+    }
+    expiringWorkbench.value = {
+      oneDay: res?.data?.oneDay || [],
+      sevenDays: res?.data?.sevenDays || [],
+      thirtyDays: res?.data?.thirtyDays || []
+    }
+    await refreshActiveReminderContractIds()
+    selectedExpiringIds.value = []
+  } catch (_err) {
+    expiringOverview.value = { today: 0, within7Days: 0, within30Days: 0 }
+    expiringWorkbench.value = { oneDay: [], sevenDays: [], thirtyDays: [] }
+    activeReminderContractIds.value = new Set()
+  } finally {
+    expiringLoading.value = false
+  }
+}
+
+const refreshActiveReminderContractIds = async () => {
+  try {
+    const res = await getMyReminders({ page: 1, pageSize: 1000 })
+    const list = res?.data?.list || []
+    activeReminderContractIds.value = new Set(
+      list
+        .filter((item: any) => (item.status ?? 0) === 0)
+        .map((item: any) => Number(item.contractId))
+        .filter((id: number) => Number.isFinite(id))
+    )
+  } catch (_err) {
+    activeReminderContractIds.value = new Set()
+  }
+}
+
+const loadWorkbenchFilterPref = () => {
+  try {
+    const raw = localStorage.getItem(WORKBENCH_FILTER_PREF_KEY)
+    if (!raw) return
+    const pref = JSON.parse(raw)
+    workbenchOnlyMine.value = Boolean(pref?.onlyMine)
+    workbenchOnlyExecutable.value = Boolean(pref?.onlyExecutable)
+  } catch (_err) {
+    // ignore invalid local preference
+  }
+}
+
+watch([workbenchOnlyMine, workbenchOnlyExecutable], () => {
+  localStorage.setItem(
+    WORKBENCH_FILTER_PREF_KEY,
+    JSON.stringify({
+      onlyMine: workbenchOnlyMine.value,
+      onlyExecutable: workbenchOnlyExecutable.value
+    })
+  )
+})
+
+const toggleSelectItem = (id: number) => {
+  const set = new Set(selectedExpiringIds.value)
+  if (set.has(id)) set.delete(id)
+  else set.add(id)
+  selectedExpiringIds.value = Array.from(set)
+}
+
+const toggleSelectAllVisible = (checked: boolean | string | number) => {
+  const shouldSelect = Boolean(checked)
+  const visibleIds = activeExpiringList.value.slice(0, 8).map((item: any) => item.id)
+  const set = new Set(selectedExpiringIds.value)
+  if (shouldSelect) {
+    visibleIds.forEach(id => set.add(id))
+  } else {
+    visibleIds.forEach(id => set.delete(id))
+  }
+  selectedExpiringIds.value = Array.from(set)
+}
+
+const handleBatchRenewal = async () => {
+  const selectedItems = activeExpiringList.value.filter((item: any) => selectedExpiringIds.value.includes(item.id))
+  if (selectedItems.length === 0) return
+  try {
+    const renewableItems = selectedItems.filter((item: any) => item.recommendedAction === 'startRenewal')
+    const blockedItems = selectedItems.filter((item: any) => item.recommendedAction !== 'startRenewal')
+    if (renewableItems.length === 0) {
+      ElMessage.warning(t('dashboard.workbench.batchRenewalUnavailable'))
+      return
+    }
+    if (blockedItems.length > 0) {
+      const sample = blockedItems.slice(0, 3).map((item: any) => item.contractNo || item.title).join('、')
+      await ElMessageBox.confirm(
+        t('dashboard.workbench.batchRenewalPartialConfirm', {
+          total: selectedItems.length,
+          blocked: blockedItems.length,
+          sample,
+          renewable: renewableItems.length
+        }),
+        t('dashboard.workbench.batchRenewal'),
+        { type: 'warning' }
+      )
+    } else {
+      await ElMessageBox.confirm(
+        t('dashboard.workbench.batchRenewalConfirm', { count: renewableItems.length }),
+        t('dashboard.workbench.batchRenewal'),
+        { type: 'warning' }
+      )
+    }
+    let success = 0
+    const successIds: number[] = []
+    const successNos: string[] = []
+    const failedNos: string[] = []
+    for (const item of renewableItems) {
+      try {
+        await startRenewalFlow(item.id, t('dashboard.workbench.batchRenewalReason'))
+        success++
+        successIds.push(item.id)
+        successNos.push(contractDisplayName(item))
+      } catch (_err) {
+        failedNos.push(contractDisplayName(item))
+      }
+    }
+    ElMessage.success(t('dashboard.workbench.batchRenewalSuccess', { success, total: renewableItems.length }))
+    selectedExpiringIds.value = []
+    if (successIds.length > 0) {
+      markRecentlyProcessed(successIds)
+    }
+    showBatchResultDialog(t('dashboard.workbench.batchRenewalResultTitle'), {
+      success: successNos,
+      reused: [],
+      skipped: blockedItems.map((item: any) => contractDisplayName(item)),
+      failed: failedNos
+    })
+    await fetchExpiringWorkbench()
+    await fetchData()
+  } catch (_err) {
+    // ignore cancel
+  }
+}
+
+const handleBatchReminder = async () => {
+  const selectedItems = activeExpiringList.value.filter((item: any) => selectedExpiringIds.value.includes(item.id))
+  if (selectedItems.length === 0) return
+  try {
+    const existingRes = await getMyReminders({ page: 1, pageSize: 1000 })
+    const existingList = existingRes?.data?.list || []
+    const existingContractIds = new Set(
+      existingList
+        .filter((r: any) => (r.status ?? 0) === 0)
+        .map((r: any) => Number(r.contractId))
+        .filter((id: number) => Number.isFinite(id))
+    )
+    const executableItems = selectedItems.filter((item: any) => !existingContractIds.has(Number(item.id)))
+    const skippedItems = selectedItems.filter((item: any) => existingContractIds.has(Number(item.id)))
+    if (executableItems.length === 0) {
+      ElMessage.warning(t('dashboard.workbench.batchReminderUnavailable'))
+      return
+    }
+    if (skippedItems.length > 0) {
+      const sample = skippedItems.slice(0, 3).map((item: any) => item.contractNo || item.title).join('、')
+      await ElMessageBox.confirm(
+        t('dashboard.workbench.batchReminderPartialConfirm', {
+          total: selectedItems.length,
+          skipped: skippedItems.length,
+          sample,
+          executable: executableItems.length
+        }),
+        t('dashboard.workbench.batchReminder'),
+        { type: 'warning' }
+      )
+    }
+    let success = 0
+    const failedNos: string[] = []
+    const failedDetails: FailedItemDetail[] = []
+    const failedEntries: FailedReminderEntry[] = []
+    const successIds: number[] = []
+    const successNos: string[] = []
+    const reusedNos: string[] = []
+    for (const item of executableItems) {
+      try {
+        const resp = await createReminder({
+          contractId: item.id,
+          contractNo: item.contractNo,
+          contractTitle: item.title,
+          expireDate: item.endDate,
+          remindDays: Math.max(0, Number(item.daysRemaining) || 0),
+          reminderType: 0,
+          status: 0
+        })
+        success++
+        successIds.push(item.id)
+        if (resp?.data?.existed) {
+          reusedNos.push(contractDisplayName(item))
+        } else {
+          successNos.push(contractDisplayName(item))
+        }
+      } catch (err: any) {
+        const displayName = contractDisplayName(item)
+        const reason = normalizeReminderErrorReason(err)
+        failedNos.push(displayName)
+        failedDetails.push({
+          name: displayName,
+          reason
+        })
+        failedEntries.push({
+          id: Number(item.id),
+          name: displayName,
+          contractNo: item.contractNo,
+          contractTitle: item.title,
+          expireDate: item.endDate,
+          remindDays: Math.max(0, Number(item.daysRemaining) || 0),
+          reason
+        })
+      }
+    }
+    selectedExpiringIds.value = []
+    if (successIds.length > 0) {
+      markRecentlyProcessed(successIds)
+    }
+    showBatchResultDialog(t('dashboard.workbench.batchReminderResultTitle'), {
+      success: successNos,
+      reused: reusedNos,
+      skipped: skippedItems.map((item: any) => contractDisplayName(item)),
+      failed: failedNos,
+      failedDetails,
+      failedEntries
+    })
+    if (failedNos.length > 0) {
+      ElMessage.warning(
+        t('dashboard.workbench.batchReminderPartialFailed', {
+          success,
+          total: executableItems.length,
+          sample: failedNos.slice(0, 3).join('、')
+        })
+      )
+    } else {
+      ElMessage.success(
+        t('dashboard.workbench.batchReminderSuccessDetailed', {
+          success,
+          total: executableItems.length,
+          created: successNos.length,
+          reused: reusedNos.length
+        })
+      )
+    }
+  } catch (_err) {
+    ElMessage.error(t('dashboard.workbench.batchReminderFailed'))
+  }
+}
+
+const markRecentlyProcessed = (ids: number[]) => {
+  const next = new Set(recentlyProcessedIds.value)
+  ids.forEach(id => next.add(id))
+  recentlyProcessedIds.value = next
+  setTimeout(() => {
+    const after = new Set(recentlyProcessedIds.value)
+    ids.forEach(id => after.delete(id))
+    recentlyProcessedIds.value = after
+  }, 3500)
+}
+
+const contractDisplayName = (item: any) => item.contractNo || item.title || String(item.id)
+
+const normalizeReminderErrorReason = (err: any): string => {
+  const messageKey = err?.response?.data?.messageKey
+  if (messageKey === 'error.forbidden') return t('dashboard.workbench.failureReasonPermission')
+  if (messageKey === 'error.auth.unauthorized') return t('dashboard.workbench.failureReasonUnauthorized')
+  if (messageKey === 'error.reminder.createFailed') return t('dashboard.workbench.failureReasonCreateRejected')
+
+  const status = Number(err?.response?.status)
+  if (status === 401) return t('dashboard.workbench.failureReasonUnauthorized')
+  if (status === 403) return t('dashboard.workbench.failureReasonPermission')
+  if (status >= 500) return t('dashboard.workbench.failureReasonServer')
+
+  if (err?.message && String(err.message).toLowerCase().includes('network')) {
+    return t('dashboard.workbench.failureReasonNetwork')
+  }
+  return t('dashboard.workbench.failureReasonUnknown')
+}
+
+const copyBatchFailedList = async () => {
+  const list = filteredFailedEntries.value.map((entry) => entry.name)
+  if (list.length === 0) {
+    ElMessage.warning(t('dashboard.workbench.copyFailedListEmpty'))
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(list.join('\n'))
+    ElMessage.success(t('dashboard.workbench.copyFailedListSuccess'))
+  } catch (_err) {
+    ElMessage.error(t('dashboard.workbench.copyFailedListError'))
+  }
+}
+
+const retrySingleFailedReminder = async (entry: FailedReminderEntry) => {
+  const next = new Set(retryingFailedIds.value)
+  next.add(entry.id)
+  retryingFailedIds.value = next
+  try {
+    const resp = await createReminder({
+      contractId: entry.id,
+      contractNo: entry.contractNo,
+      contractTitle: entry.contractTitle,
+      expireDate: entry.expireDate,
+      remindDays: entry.remindDays ?? 0,
+      reminderType: 0,
+      status: 0
+    })
+    if (resp?.data?.existed) {
+      batchResult.value.reused = [...batchResult.value.reused, entry.name]
+    } else {
+      batchResult.value.success = [...batchResult.value.success, entry.name]
+    }
+    batchResult.value.failedEntries = (batchResult.value.failedEntries || []).filter((item) => item.id !== entry.id)
+    batchResult.value.failedDetails = (batchResult.value.failedDetails || []).filter((item) => item.name !== entry.name)
+    batchResult.value.failed = (batchResult.value.failed || []).filter((name) => name !== entry.name)
+    markRecentlyProcessed([entry.id])
+    ElMessage.success(t('dashboard.workbench.retrySingleSuccess'))
+  } catch (_err) {
+    ElMessage.error(t('dashboard.workbench.retrySingleFailed'))
+  } finally {
+    const after = new Set(retryingFailedIds.value)
+    after.delete(entry.id)
+    retryingFailedIds.value = after
+  }
+}
+
+const showBatchResultDialog = (
+  title: string,
+  payload: {
+    success: string[]
+    reused: string[]
+    skipped: string[]
+    failed: string[]
+    failedDetails?: FailedItemDetail[]
+    failedEntries?: FailedReminderEntry[]
+  }
+) => {
+  batchResultDialogTitle.value = title
+  batchResult.value = {
+    ...payload,
+    failedDetails: payload.failedDetails || [],
+    failedEntries: payload.failedEntries || []
+  }
+  selectedFailedReason.value = ''
+  batchResultDialogVisible.value = true
+}
+
+const handleStartRenewalFromDashboard = async (item: any) => {
+  try {
+    await ElMessageBox.confirm(
+      t('dashboard.workbench.startRenewalConfirm', { title: item.title || item.contractNo }),
+      t('dashboard.workbench.startRenewal'),
+      { type: 'warning' }
+    )
+    await startRenewalFlow(item.id, t('dashboard.workbench.startRenewalReason'))
+    ElMessage.success(t('dashboard.workbench.startRenewalSuccess'))
+    await fetchExpiringWorkbench()
+    await fetchData()
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      ElMessage.error(err?.message || t('dashboard.workbench.startRenewalFailed'))
+    }
+  }
+}
+
 const refreshDashboardLayout = () => {
   const viewportHeight = window.innerHeight || 900
   dashboardTableMaxHeight.value = Math.max(240, Math.min(420, Math.floor(viewportHeight * 0.36)))
@@ -794,7 +1468,9 @@ const handleMoreAction = async (command: string, row: any) => {
 }
 
 onMounted(async () => {
+  loadWorkbenchFilterPref()
   await fetchData()
+  await fetchExpiringWorkbench()
   refreshDashboardLayout()
   window.addEventListener('resize', refreshDashboardLayout)
 })
@@ -1134,6 +1810,210 @@ onUnmounted(() => {
     }
   }
 
+  .expiring-workbench-card {
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+
+    :deep(.el-card__header) {
+      padding: 6px 12px;
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+    }
+
+    :deep(.el-card__body) {
+      padding: 12px;
+    }
+
+    .card-header .el-icon {
+      font-size: 15px;
+      padding: 4px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #fb7185, #f97316);
+
+      svg {
+        color: #fff;
+      }
+    }
+
+    .expiring-overview {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+
+      .overview-pill {
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 8px;
+        background: var(--bg-hover);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+
+        .label {
+          font-size: 11px;
+          color: var(--text-secondary);
+        }
+
+        .value {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--text-primary);
+          line-height: 1.1;
+        }
+
+        &.danger {
+          border-color: rgba(245, 108, 108, 0.25);
+          background: rgba(245, 108, 108, 0.08);
+        }
+
+        &.warning {
+          border-color: rgba(230, 162, 60, 0.28);
+          background: rgba(230, 162, 60, 0.08);
+        }
+      }
+    }
+
+    .expiring-bucket-switch {
+      margin-bottom: 10px;
+      width: 100%;
+    }
+
+    .expiring-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .batch-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .expiring-filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .expiring-list {
+      min-height: 110px;
+    }
+
+    .expiring-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: var(--bg-hover);
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      &.grouped {
+        padding: 6px 8px;
+      }
+
+      &.just-processed {
+        border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color));
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 25%, transparent);
+        animation: workbenchPulse 0.9s ease;
+      }
+    }
+
+    .owner-group {
+      margin-bottom: 10px;
+    }
+
+    .owner-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 12px;
+
+      .owner-name {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      .owner-count {
+        color: var(--text-secondary);
+      }
+    }
+
+    .expiring-main {
+      min-width: 0;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .expiring-title {
+      font-size: 13px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .expiring-meta {
+      display: flex;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      align-items: center;
+      flex-wrap: wrap;
+
+      .contract-no {
+        max-width: 130px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .remaining-days {
+        border-radius: 999px;
+        padding: 1px 8px;
+        background: var(--info-bg);
+        color: var(--text-secondary);
+
+        &.warning {
+          color: #e6a23c;
+          background: rgba(230, 162, 60, 0.12);
+        }
+
+        &.danger {
+          color: #f56c6c;
+          background: rgba(245, 108, 108, 0.12);
+        }
+      }
+    }
+
+    .expiring-empty {
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 10px 0;
+    }
+
+    .expiring-footer {
+      margin-top: 6px;
+      text-align: right;
+    }
+  }
+
   .chart-card {
     :deep(.el-card__header) {
       padding: 3px 12px;
@@ -1155,6 +2035,86 @@ onUnmounted(() => {
         border-radius: 8px;
       }
     }
+  }
+}
+
+.batch-result-summary {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.batch-result-section {
+  margin-bottom: 10px;
+
+  .section-title {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .section-title.with-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .failed-reason-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .reason-chip {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+
+  .reason-chip.active {
+    color: #fff;
+    background: var(--el-color-primary);
+    border-color: var(--el-color-primary);
+  }
+
+  .section-list {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    word-break: break-word;
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .failed-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .failed-item-row + .failed-item-row {
+    margin-top: 4px;
+  }
+}
+
+@keyframes workbenchPulse {
+  0% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-1px);
+  }
+  100% {
+    transform: translateY(0);
   }
 }
 

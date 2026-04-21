@@ -1,7 +1,6 @@
 package com.contracthub.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.contracthub.dto.ApiResponse;
 import com.contracthub.entity.ContractReminder;
 import com.contracthub.mapper.ContractReminderMapper;
@@ -42,23 +41,30 @@ public class ReminderController {
             if (currentUserId == null) {
                 return ApiResponse.error("用户未登录", "error.auth.notLogin");
             }
-            QueryWrapper<ContractReminder> wrapper = new QueryWrapper<>();
-            wrapper.eq("recipient_user_id", currentUserId);
-            if (keyword != null && !keyword.isBlank()) {
-                String kw = keyword.trim();
-                wrapper.and(w -> w.like("contract_no", kw).or().like("contract_title", kw));
+            String normalizedKeyword = keyword != null ? keyword.trim() : null;
+            if (normalizedKeyword != null && normalizedKeyword.isBlank()) {
+                normalizedKeyword = null;
             }
+            Integer statusValue = null;
             if (status != null && !status.isBlank()) {
-                wrapper.eq("status", Integer.parseInt(status));
+                statusValue = Integer.parseInt(status);
             }
-            wrapper.orderByDesc("created_at");
-            
-            Page<ContractReminder> pagination = new Page<>(page, pageSize);
-            Page<ContractReminder> resultPage = contractReminderMapper.selectPage(pagination, wrapper);
-            
+            int safePage = Math.max(page, 1);
+            int safePageSize = Math.max(pageSize, 1);
+            int offset = (safePage - 1) * safePageSize;
+
+            List<ContractReminder> pageRecords = contractReminderMapper.selectMyDeduplicatedPage(
+                    currentUserId,
+                    normalizedKeyword,
+                    statusValue,
+                    safePageSize,
+                    offset
+            );
+            long total = contractReminderMapper.countMyDeduplicated(currentUserId, normalizedKeyword, statusValue);
+
             List<Map<String, Object>> myReminders = new ArrayList<>();
-            
-            for (ContractReminder reminder : resultPage.getRecords()) {
+
+            for (ContractReminder reminder : pageRecords) {
                 Map<String, Object> map = new HashMap<>();
                 map.put("id", reminder.getId());
                 map.put("contractNo", reminder.getContractNo());
@@ -72,16 +78,13 @@ public class ReminderController {
                 myReminders.add(map);
             }
             
-            QueryWrapper<ContractReminder> countWrapper = new QueryWrapper<>();
-            countWrapper.eq("recipient_user_id", currentUserId)
-                    .and(w -> w.eq("is_read", false).or().isNull("is_read"));
-            long totalUnread = contractReminderMapper.selectCount(countWrapper);
+            long totalUnread = contractReminderMapper.countMyUnreadDeduplicated(currentUserId);
             
             Map<String, Object> result = new HashMap<>();
             result.put("list", myReminders);
-            result.put("total", resultPage.getTotal());
-            result.put("page", resultPage.getCurrent());
-            result.put("pageSize", resultPage.getSize());
+            result.put("total", total);
+            result.put("page", safePage);
+            result.put("pageSize", safePageSize);
             result.put("unreadCount", totalUnread);
             return ApiResponse.success(result);
         } catch (Exception e) {
@@ -96,14 +99,14 @@ public class ReminderController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
         try {
-            QueryWrapper<ContractReminder> wrapper = new QueryWrapper<>();
-            wrapper.orderByDesc("created_at");
-            
-            Page<ContractReminder> pagination = new Page<>(page, pageSize);
-            Page<ContractReminder> resultPage = contractReminderMapper.selectPage(pagination, wrapper);
-            
+            int safePage = Math.max(page, 1);
+            int safePageSize = Math.max(pageSize, 1);
+            int offset = (safePage - 1) * safePageSize;
+            List<ContractReminder> pageRecords = contractReminderMapper.selectAllDeduplicatedPage(safePageSize, offset);
+            long total = contractReminderMapper.countAllDeduplicated();
+
             List<Map<String, Object>> reminders = new ArrayList<>();
-            for (ContractReminder reminder : resultPage.getRecords()) {
+            for (ContractReminder reminder : pageRecords) {
                 Map<String, Object> map = new HashMap<>();
                 map.put("id", reminder.getId());
                 map.put("contractNo", reminder.getContractNo());
@@ -118,9 +121,9 @@ public class ReminderController {
             
             Map<String, Object> result = new HashMap<>();
             result.put("list", reminders);
-            result.put("total", resultPage.getTotal());
-            result.put("page", resultPage.getCurrent());
-            result.put("pageSize", resultPage.getSize());
+            result.put("total", total);
+            result.put("page", safePage);
+            result.put("pageSize", safePageSize);
             return ApiResponse.success(result);
         } catch (Exception e) {
             log.error("获取提醒列表失败", e);
@@ -220,7 +223,11 @@ public class ReminderController {
             } else {
                 reminder.setRecipientUserId(currentUserId);
             }
-            reminder.setContractId((Long) reminderMap.get("contractId"));
+            if (reminderMap.get("contractId") instanceof Number contractIdObj) {
+                reminder.setContractId(contractIdObj.longValue());
+            } else {
+                return ApiResponse.error("合同ID不能为空", "error.reminder.contractIdRequired");
+            }
             reminder.setContractNo((String) reminderMap.get("contractNo"));
             reminder.setContractTitle((String) reminderMap.get("contractTitle"));
             
@@ -231,28 +238,54 @@ public class ReminderController {
             LocalDateTime expireDate = LocalDateTime.parse(expireDateStr + " 00:00:00", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             reminder.setExpireDate(expireDate);
             
-            reminder.setRemindDays((Integer) reminderMap.getOrDefault("remindDays", 0));
-            reminder.setReminderType((Integer) reminderMap.getOrDefault("reminderType", 0));
-            reminder.setStatus((Integer) reminderMap.getOrDefault("status", 0));
-            
+            reminder.setRemindDays(toInt(reminderMap.getOrDefault("remindDays", 0), 0));
+            reminder.setReminderType(toInt(reminderMap.getOrDefault("reminderType", 0), 0));
+            reminder.setStatus(toInt(reminderMap.getOrDefault("status", 0), 0));
+
+            // 幂等保护：同合同+同接收人存在未处理提醒时复用已有记录，避免重复插入
+            QueryWrapper<ContractReminder> existingWrapper = new QueryWrapper<>();
+            existingWrapper.eq("contract_id", reminder.getContractId())
+                    .eq("recipient_user_id", reminder.getRecipientUserId())
+                    .and(w -> w.eq("is_read", false).or().isNull("is_read"))
+                    .orderByDesc("id")
+                    .last("LIMIT 1");
+            List<ContractReminder> existingList = contractReminderMapper.selectList(existingWrapper);
+            if (!existingList.isEmpty()) {
+                Map<String, Object> result = buildReminderResponse(existingList.get(0));
+                result.put("existed", true);
+                return ApiResponse.success(result);
+            }
+
             contractReminderMapper.insert(reminder);
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("id", reminder.getId());
-            result.put("contractNo", reminder.getContractNo());
-            result.put("contractTitle", reminder.getContractTitle());
-            result.put("expireDate", reminder.getExpireDate() != null ? reminder.getExpireDate().format(formatter) : "");
-            result.put("remindDays", reminder.getRemindDays());
-            result.put("status", reminder.getStatus());
-            result.put("contractId", reminder.getContractId());
-            result.put("isRead", false);
-            result.put("createdAt", reminder.getCreatedAt() != null ? reminder.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "");
-            
+
+            Map<String, Object> result = buildReminderResponse(reminder);
+            result.put("existed", false);
             return ApiResponse.success(result);
         } catch (Exception e) {
             log.error("创建提醒失败", e);
             return ApiResponse.error("创建提醒失败", "error.reminder.createFailed");
         }
+    }
+
+    private int toInt(Object value, int defaultValue) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return defaultValue;
+    }
+
+    private Map<String, Object> buildReminderResponse(ContractReminder reminder) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", reminder.getId());
+        result.put("contractNo", reminder.getContractNo());
+        result.put("contractTitle", reminder.getContractTitle());
+        result.put("expireDate", reminder.getExpireDate() != null ? reminder.getExpireDate().format(formatter) : "");
+        result.put("remindDays", reminder.getRemindDays());
+        result.put("status", reminder.getStatus());
+        result.put("contractId", reminder.getContractId());
+        result.put("isRead", reminder.getIsRead() != null && reminder.getIsRead());
+        result.put("createdAt", reminder.getCreatedAt() != null ? reminder.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "");
+        return result;
     }
     
     @PostMapping("/check")

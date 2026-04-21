@@ -585,56 +585,8 @@ public class ContractController {
     
     @PostMapping("/generate-pdf")
     @PreAuthorize("hasAuthority('CONTRACT_MANAGE')")
-    public void generatePdf(@RequestBody Map<String, Object> data, HttpServletResponse response) throws Exception {
-        String content = (String) data.get("content");
-        String contractNo = (String) data.getOrDefault("contractNo", "contract");
-        String watermark = (String) data.getOrDefault("watermark", "");
-        
-        response.setContentType("application/pdf");
-        response.setCharacterEncoding("UTF-8");
-        response.setHeader("Content-Disposition", "attachment; filename=" + contractNo + ".pdf");
-        
-        if (content == null || content.isEmpty()) {
-            content = "<p>No content</p>";
-        }
-        
-        String watermarkHtml = "";
-        if (watermark != null && !watermark.isEmpty()) {
-            watermarkHtml = "<div style='position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); opacity: 0.15; font-size: 48px; font-weight: bold; color: #ccc; pointer-events: none; z-index: 9999;'>" + watermark + "</div>";
-        }
-        
-        String fullHtml = "<!DOCTYPE html>" +
-            "<html>" +
-            "<head>" +
-            "<meta charset='UTF-8'>" +
-            "<style>" +
-            "@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC&amp;display=swap'); " +
-            "body { font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimSun', sans-serif; font-size: 14px; line-height: 1.8; padding: 40px; margin: 0; color: #333; } " +
-            "h1 { font-size: 24px; text-align: center; color: #333; margin: 20px 0; } h2 { font-size: 18px; color: #333; margin: 16px 0; } h3 { font-size: 16px; color: #333; } " +
-            "p { margin: 12px 0; text-indent: 2em; } table { border-collapse: collapse; width: 100%; margin: 16px 0; page-break-inside: avoid; } " +
-            "th, td { border: 1px solid #333; padding: 10px; text-align: left; } " +
-            "th { background-color: #f5f5f5; font-weight: bold; text-align: center; } " +
-            "img { max-width: 100%; height: auto; } " +
-            "ul, ol { margin: 12px 0; padding-left: 30px; } " +
-            "li { margin: 6px 0; } " +
-            "strong, b { font-weight: bold; } " +
-            "em, i { font-style: italic; } " +
-            "u { text-decoration: underline; } " +
-            "s, strike { text-decoration: line-through; } " +
-            ".uploaded-file-preview { text-align: center; margin: 20px 0; } " +
-            ".watermark-fixed { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); opacity: 0.15; font-size: 48px; font-weight: bold; color: #ccc; pointer-events: none; z-index: 9999; } " +
-            "</style>" +
-            "</head>" +
-            "<body>" +
-            watermarkHtml +
-            content +
-            "</body>" +
-            "</html>";
-        
-        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-        com.itextpdf.html2pdf.HtmlConverter.convertToPdf(fullHtml, baos);
-        response.getOutputStream().write(baos.toByteArray());
-        response.getOutputStream().flush();
+    public void generatePdf(@RequestBody Map<String, Object> data, HttpServletResponse response) throws IOException {
+        contractExportService.generatePdf(data, response);
     }
 
 }
